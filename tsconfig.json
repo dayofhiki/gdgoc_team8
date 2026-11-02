@@ -23,8 +23,13 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@shared/*": [
+        "./supabase/functions/_shared/*"
       ]
-    }
+    },
+    "allowJs": true,
+    "skipLibCheck": true
   },
   "include": [
     "next-env.d.ts",
@@ -33,6 +38,7 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "supabase/functions"
   ]
 }
