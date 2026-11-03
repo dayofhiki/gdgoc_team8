@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test supabase/functions/_shared/logic_test.ts"
+    "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test supabase/functions/_shared/logic_test.ts",
+    "test:e2e": "node supabase/tests/e2e.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
