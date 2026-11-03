@@ -5,18 +5,25 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "start": "next start -H 0.0.0.0 -p 3000",
+    "typecheck": "tsc --noEmit",
+    "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test supabase/functions/_shared/logic_test.ts",
+    "test:e2e": "node supabase/tests/e2e.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.0",
+    "@electric-sql/pglite": "^0.3.16",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

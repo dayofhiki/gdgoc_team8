@@ -2,16 +2,23 @@
 뻐끄미와 함께 AI 보이스피싱 대처법을 연습하고, 가족과 퀴즈·가족 암호로 함께 대비하는 **모바일 웹 서비스**입니다.
 
 ## 실행
-Node.js 20 이상 권장.
-1. git clone https://github.com/dayofhiki/gdgoc_team8.git
-2. cd gdgoc_team8
-3. npm install
-4. npm run dev
-5. http://localhost:3000 접속
+Node.js 20 이상 권장. 백엔드는 팀 공용 Supabase 클라우드 프로젝트 1개를 씁니다 (Docker 불필요).
+1. git clone https://github.com/dayofhiki/gdgoc_team8.git && cd gdgoc_team8
+2. npm install
+3. `.env.example`을 `.env.local`로 복사하고 Supabase URL·anon key 입력
+4. npm run dev → http://localhost:3000
+
+백엔드 담당 (최초 1회 / 변경 시):
+- `npx supabase login` → `npx supabase link --project-ref <ref>`
+- 대시보드 Authentication > Sign In / Providers에서 **Anonymous sign-ins 활성화**
+- `npx supabase db push --remote --include-seed` (마이그레이션 + 미션 시드. CLI v3는 `--remote` 없으면 로컬로 감)
+- `npx supabase functions deploy invite-join chat-turn session-end --use-api` (Docker 불필요)
+- 클라우드 E2E: `npm run test:e2e` (`.env.local` 필요)
+- 백엔드 검사 (Supabase 없이 실행): `npm run test:backend` — 마이그레이션·RLS·입장 규칙 20개 + 판정 로직 테스트
 
 PC에서는 Chrome 개발자 도구(F12 → Ctrl+Shift+M)에서 **iPhone 16 Pro (402×874)** 로 보면 Figma 시안과 같은 크기입니다.
 
-## 현재 구현 (Figma "만든화면 - 피드백 반영" 기준)
+## 현재 화면 (Figma "만든화면 - 피드백 반영" 기준)
 | 경로 | 화면 |
 |---|---|
 | `/onboarding` | 온보딩 1~3 → 별명 입력 (혼자 / 가족과 함께 시작) |
@@ -30,18 +37,30 @@ PC에서는 Chrome 개발자 도구(F12 → Ctrl+Shift+M)에서 **iPhone 16 Pro 
 - 이미지 에셋: `public/images` (Figma에서 내보냄)
 
 ## 중요한 제한
-**아직 Gemini·Firebase·카카오 SDK·실제 ARS 전화는 연동되지 않았습니다.**
+**화면은 아직 Supabase 백엔드와 연결 전입니다. Gemini·카카오 SDK·실제 ARS 전화도 미연동입니다.**
 - 별명과 가족 암호 질문은 브라우저 localStorage에만 저장합니다. 가족 암호 답은 기획대로 저장하지 않습니다.
 - 채팅 상황극은 고정 시나리오이며 실제 AI 호출이 아닙니다.
 - "카카오톡 공유하기"는 카카오 JavaScript 키 발급 전까지 기기 공유 시트(또는 링크 복사)로 동작합니다.
 - 전화 연습의 "대화 중단 / 다른 번호로 확인" 결과는 AI 통화 분석 연동 전까지 고정 문구입니다.
 
+## 백엔드 (Supabase)
+- Next.js App Router 웹 (레포 루트 `src/`)
+- Supabase: 테이블 6개 + RLS (`supabase/migrations`), Edge Functions `invite-join`·`chat-turn`·`session-end`
+- 보호자 초대 링크 생성 → 시니어 익명 입장 → 미션 선택 → 채팅 상황극 → 결과 저장
+- AI는 mock (`supabase/functions/_shared/ai.ts`, 미션별 기본 대사 + 키워드 판정)
+- Gemini 연동·보호자 진행 현황(Realtime)·안전 약속 저장은 아직 없습니다 (BE_FLOW Phase 2·3).
+
+**Gemini 연동·보호자 진행 현황(Realtime)·안전 약속 저장은 아직 없습니다** (BE_FLOW Phase 2·3). 안전 약속은 화면에서만 보입니다.
+
 ## 연결 자료
 - [전체 화면 기능 명세](docs/SCREEN_FLOW.md)
-- [API 계약 초안](docs/API_CONTRACT.md)
+- [백엔드 인수인계 (현재 상태·다음 할 일)](docs/HANDOFF.md)
+- [역할별 개발 시작 가이드 (FE·AI·BE)](docs/ONBOARDING.md)
+- [백엔드 설계](docs/BE_FLOW.md)
+- [API 계약](docs/API_CONTRACT.md)
 - [Git 협업 규칙](docs/COLLABORATION.md)
 - Figma Design: https://www.figma.com/design/N0cMsK4GaxHGvCahJURbin
 - FigJam: https://www.figma.com/board/CKjLATOtuQVCTifOT6Lbqf
 
-공개 저장소에 API 키, Firebase Admin 키, 실제 피해자 정보, 실계좌번호를 절대 올리지 마세요.
+공개 저장소에 API 키, Supabase service role 키, 실제 피해자 정보, 실계좌번호를 절대 올리지 마세요.
 개발 담당자 배정은 화면 흐름 승인 후 진행합니다.
