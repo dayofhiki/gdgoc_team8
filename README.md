@@ -1,5 +1,5 @@
-# 안심연습 · GDGoC Team 8
-가족/교육기관이 초대하고 시니어가 가입 없이 링크로 참여하는 **모바일 웹 AI 사기 예방 훈련 서비스**의 협업 시작 프로젝트입니다.
+# 미끼주의보 · GDGoC Team 8
+뻐끄미와 함께 AI 보이스피싱 대처법을 연습하고, 가족과 퀴즈·가족 암호로 함께 대비하는 **모바일 웹 서비스**입니다.
 
 ## 실행
 Node.js 20 이상 권장. 백엔드는 팀 공용 Supabase 클라우드 프로젝트 1개를 씁니다 (Docker 불필요).
@@ -16,13 +16,40 @@ Node.js 20 이상 권장. 백엔드는 팀 공용 Supabase 클라우드 프로�
 - 클라우드 E2E: `npm run test:e2e` (`.env.local` 필요)
 - 백엔드 검사 (Supabase 없이 실행): `npm run test:backend` — 마이그레이션·RLS·입장 규칙 20개 + 판정 로직 테스트
 
-## 현재 구현
+PC에서는 Chrome 개발자 도구(F12 → Ctrl+Shift+M)에서 **iPhone 16 Pro (402×874)** 로 보면 Figma 시안과 같은 크기입니다.
+
+## 현재 화면 (Figma "만든화면 - 피드백 반영" 기준)
+| 경로 | 화면 |
+|---|---|
+| `/onboarding` | 온보딩 1~3 → 별명 입력 (혼자 / 가족과 함께 시작) |
+| `/home` | 홈: 오늘의 추천 미션, 혼자 연습하기, 가족과 함께하기 |
+| `/quiz` | OX 퀴즈 10문제 (힌트, 정답/오답, 결과, 틀린 문제 다시 풀기) |
+| `/roleplay` → `/roleplay/mode` | AI 상황극 시작 전 확인 → 채팅/전화 방식 선택 |
+| `/roleplay/chat` → `/review` | 관찰형 채팅 연습 (자동 진행, 잠깐 멈추기, 위험 순간, 중단 확인, 리뷰) |
+| `/roleplay/phone` → `/done` | 전화 연습 (현재는 모의 통화 + 통화 시간 측정) |
+| `/family-code/*` | 가족 암호: 인트로 → 소개 → 질문 고르기 → 답 정하기 → 완료 |
+| `/invite` | 가족 초대·공유 (공유 시트 / 링크 복사) |
+| `/challenge?from=별명` | 초대 링크로 들어온 가족이 가입 없이 푸는 3문제 도전 |
+| `/error/link`, `/error/network` | 초대 링크 오류, 연결 불안정 |
+
+- 공통 UI: `src/components/ui.tsx`, 아이콘: `src/components/Icons.tsx`, 디자인 토큰: `src/app/globals.css`
+- 콘텐츠 데이터: `src/lib/quiz.ts`(OX 문제), `src/lib/chatScript.ts`(채팅 시나리오)
+- 이미지 에셋: `public/images` (Figma에서 내보냄)
+
+## 중요한 제한
+**화면은 아직 Supabase 백엔드와 연결 전입니다. Gemini·카카오 SDK·실제 ARS 전화도 미연동입니다.**
+- 별명과 가족 암호 질문은 브라우저 localStorage에만 저장합니다. 가족 암호 답은 기획대로 저장하지 않습니다.
+- 채팅 상황극은 고정 시나리오이며 실제 AI 호출이 아닙니다.
+- "카카오톡 공유하기"는 카카오 JavaScript 키 발급 전까지 기기 공유 시트(또는 링크 복사)로 동작합니다.
+- 전화 연습의 "대화 중단 / 다른 번호로 확인" 결과는 AI 통화 분석 연동 전까지 고정 문구입니다.
+
+## 백엔드 (Supabase)
 - Next.js App Router 웹 (레포 루트 `src/`)
 - Supabase: 테이블 6개 + RLS (`supabase/migrations`), Edge Functions `invite-join`·`chat-turn`·`session-end`
 - 보호자 초대 링크 생성 → 시니어 익명 입장 → 미션 선택 → 채팅 상황극 → 결과 저장
 - AI는 mock (`supabase/functions/_shared/ai.ts`, 미션별 기본 대사 + 키워드 판정)
+- Gemini 연동·보호자 진행 현황(Realtime)·안전 약속 저장은 아직 없습니다 (BE_FLOW Phase 2·3).
 
-## 중요한 제한
 **Gemini 연동·보호자 진행 현황(Realtime)·안전 약속 저장은 아직 없습니다** (BE_FLOW Phase 2·3). 안전 약속은 화면에서만 보입니다.
 
 ## 연결 자료
