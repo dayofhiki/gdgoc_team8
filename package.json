@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "tsc --noEmit",
     "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test supabase/functions/_shared/logic_test.ts",
     "test:e2e": "node supabase/tests/e2e.mjs"
@@ -22,5 +22,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
