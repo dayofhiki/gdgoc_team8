@@ -5,3 +5,9 @@ node_modules/
 .env.*.local
 *.tsbuildinfo
 .DS_Store
+
+# ai_lab (Python 실험)
+.venv/
+__pycache__/
+.pytest_cache/
+ai_lab/results/
