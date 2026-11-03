@@ -69,12 +69,13 @@ Supabase 연결 전에는 화면 레이아웃 작업만 가능하고, 백엔드 
 
 **처리하지 않아도 되는 것**: 8초 타임아웃, 실패 시 기본 대사, 개인정보 가리기는 `chat-turn`이 이미 합니다. 오류가 나면 그냥 throw하세요.
 
-**LLM 호출 (공급자 자동 전환)**: `_shared/llm.ts`의 `complete()`를 쓰면 Gemini → Groq → OpenRouter 순으로 시도하고, 한도 초과(429)·5xx·시간 초과·형식 오류면 다음 공급자로 넘어갑니다. 키가 등록된 공급자만 씁니다. (현재 `ai.ts`는 Gemini를 직접 호출 중이며 아직 연결 전)
+**LLM 호출 (공급자 자동 전환)**: `_shared/llm.ts`의 `complete()`를 쓰면 Gemini → Groq → OpenRouter 순으로 시도하고, 한도 초과(429)·5xx·시간 초과·형식 오류면 다음 공급자로 넘어갑니다. 키가 등록된 공급자만 씁니다. `ai.ts`의 `generateReply`가 이걸로 호출합니다.
 ```ts
 import { complete } from "./llm.ts";
 const { value, provider } = await complete(messages, {
   temperature: 0.8,
   json: true,                                  // 프롬프트에 "JSON"이라는 단어가 있어야 Groq·OpenRouter가 받아줌
+  schema: OUT_SCHEMA,                          // 지원 공급자(Gemini·Groq gpt-oss)는 이 스키마로 형식 강제
   parse: (t) => { const o = JSON.parse(t); if (!INTENTS.includes(o.intent)) throw new Error("bad"); return o; },
   budgetMs: 7000,                              // 전체 시간 예산 (chat-turn 8초 안)
 });
@@ -82,14 +83,16 @@ const { value, provider } = await complete(messages, {
 - `messages`는 OpenAI 형식: `{ role: "system" | "user" | "assistant", content }`. Gemini의 `model` 역할은 `assistant`로.
 - `parse`가 throw하면 그 공급자 응답은 버리고 다음으로. 전부 실패하면 throw → 지금처럼 mock 대사로 대체.
 - 공급자마다 모델이 달라 말투·판정이 조금씩 다릅니다. `/api/lab`에서 Groq 응답도 확인하세요.
-- 모델 변경: `GEMINI_MODEL` · `GROQ_MODEL` · `OPENROUTER_MODEL`. 키: 운영은 Supabase Secrets(아래 6번), 로컬은 `.env.local`.
+- 모델 변경: `GEMINI_MODEL`(기본 `gemini-3.6-flash`) · `GROQ_MODEL`(기본 `openai/gpt-oss-120b`, 더 빠르게는 `openai/gpt-oss-20b`) · `OPENROUTER_MODEL`. 키: 운영은 Supabase Secrets(아래 6번), 로컬은 `.env.local`.
+- 공급자 고르기·순서 바꾸기: Secret `LLM_PROVIDERS=groq` (Groq만) · `groq,gemini` (순서 변경). 없으면 Gemini → Groq → OpenRouter. 재배포 없이 바로 적용.
+- 배포된 함수로 확인: `npm run test:ai` (무료 한도를 쓰므로 필요할 때만). 어느 공급자가 답했는지는 대시보드 함수 Logs의 `llm: <공급자> → <intent>`.
 
 ## BE 담당
 
 1. 클라우드 프로젝트 생성 → URL·anon key 팀 공유
 2. 대시보드 Authentication에서 **Anonymous sign-ins 활성화**
 3. `npx supabase login` → `npx supabase link --project-ref <ref>`
-4. `npx supabase db push --remote --include-seed` → `npx supabase functions deploy invite-join chat-turn session-end --use-api` (CLI v3는 `--remote` 없으면 로컬 대상)
+4. `npx supabase db push --remote --include-seed` → `npx supabase functions deploy invite-join chat-turn session-end practice-chat --use-api --remote=<ref> --yes` (CLI v3는 `--remote` 없으면 로컬 대상)
 5. 확인: `npm run test:e2e`
 6. Phase 2: `npx supabase secrets set GROQ_API_KEY=... GEMINI_API_KEY=... OPENROUTER_API_KEY=...` (있는 것만 등록. `_shared/llm.ts`가 Gemini → Groq → OpenRouter 순으로 자동 전환)
 

@@ -8,7 +8,7 @@
 |---|---|
 | **Phase 0** Setup | ✅ 완료 · Supabase 프로젝트 `pedmhdnmhmzsezerrzvk` 연결 |
 | **Phase 1** E2E | ✅ 완료 · 클라우드에서 `npm run test:e2e` 20개 통과 |
-| **Phase 2** AI | ⬜ 시작 전 (현재 mock) |
+| **Phase 2** AI | 🔶 진행 중 · `chat-turn`·`practice-chat`이 실제 LLM으로 답함 (Gemini → Groq 자동 전환) |
 | **Phase 3** 보호자 | ⬜ 시작 전 |
 | **Phase 4** 시연 | ⬜ 시작 전 |
 
@@ -54,12 +54,13 @@
 | # | 문제 | 해결 방향 | 시점 |
 |---|---|---|---|
 | E | `session-end`가 키워드(`classify`)로 결과를 다시 계산 → Gemini 판정과 결과 화면이 달라짐 | `chat-turn`이 턴마다 판정을 저장, `session-end`는 모으기만 | Phase 2 |
-| F | `withTimeout`은 기다림만 멈추고 Gemini 요청은 계속됨 (비용) | `AbortController` signal을 fetch에 전달 | Phase 2 |
+| F | ~~`withTimeout`은 기다림만 멈추고 Gemini 요청은 계속됨 (비용)~~ | ✅ `llm.ts`가 시도마다 `AbortSignal.timeout`, 전체 7초 예산 | 완료 |
 | G | ~~`maskPii`가 숫자만 가림 → AI 답변의 URL·링크 통과~~ | ✅ ko-pii 규칙 이식으로 URL·이메일 가림 | 완료 |
 
 ### AI — Phase 2
-- [ ] `supabase/functions/_shared/ai.ts`만 Gemini로 교체 ([ONBOARDING](ONBOARDING.md#ai-담당))
-- [ ] `test:backend`를 deno로 전환 (Gemini 코드가 `Deno.env`를 쓰면 Node 실행이 깨짐)
+- [x] `ai.ts`를 LLM으로 교체 (`llm.ts` 경유, [ONBOARDING](ONBOARDING.md#ai-담당))
+- [x] ~~`test:backend`를 deno로 전환~~ → `llm.ts`가 `Deno.env`·`process.env` 둘 다 읽어 Node 그대로 실행
+- [x] `test:e2e` LLM 배포 후 20개 통과 (2026-11-04). 단 "3턴 → ended"는 LLM 판정에 달림 → 여기서 실패하면 버그가 아니라 판정 품질 신호 ("직접 전화해서 확인할게"를 verify_independent로 못 잡은 것)
 - [ ] 키 제거 시 `used_fallback: true` 확인
 
 ### FE
