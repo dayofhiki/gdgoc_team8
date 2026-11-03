@@ -33,7 +33,7 @@
 | 확인 항목 | 결과 | 방법 |
 |---|---|---|
 | FE 타입·빌드 | ✅ 통과 | `npm run typecheck` · `npm run build` |
-| DB·권한 규칙 20개 | ✅ 통과 | `npm run test:backend` (PGlite, Supabase 불필요) |
+| DB·권한 규칙 21개 | ✅ 통과 | `npm run test:backend` (PGlite, Supabase 불필요) |
 | 판정·개인정보 로직 4개 | ✅ 통과 | 같은 명령 |
 | Edge Function 타입 | ✅ 통과 | `npx deno check supabase/functions/*/index.ts` |
 | Edge Function 실제 실행 | ✅ 통과 | `npm run test:e2e` (클라우드) |
@@ -126,7 +126,7 @@ supabase/
 │  ├─ invite-join/             링크 입장
 │  ├─ chat-turn/               대화 1턴 (+ decide.ts 판정)
 │  └─ session-end/             종료·결과
-├─ tests/db_check.mjs          DB·권한 검사 20개 (Supabase 불필요)
+├─ tests/db_check.mjs          DB·권한 검사 21개 (Supabase 불필요)
 └─ tests/e2e.mjs               클라우드 E2E 20개 (npm run test:e2e)
 src/
 ├─ lib/supabase.ts             FE용 클라이언트 (ensureAnon · callFn)
