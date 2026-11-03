@@ -55,7 +55,7 @@
 |---|---|---|---|
 | E | `session-end`가 키워드(`classify`)로 결과를 다시 계산 → Gemini 판정과 결과 화면이 달라짐 | `chat-turn`이 턴마다 판정을 저장, `session-end`는 모으기만 | Phase 2 |
 | F | `withTimeout`은 기다림만 멈추고 Gemini 요청은 계속됨 (비용) | `AbortController` signal을 fetch에 전달 | Phase 2 |
-| G | `maskPii`가 숫자만 가림 → AI 답변의 URL·링크 통과 | 민감정보 작업(이메일·한글 숫자·URL)에서 한 번에 | 민감정보 작업 |
+| G | ~~`maskPii`가 숫자만 가림 → AI 답변의 URL·링크 통과~~ | ✅ ko-pii 규칙 이식으로 URL·이메일 가림 | 완료 |
 
 ### AI — Phase 2
 - [ ] `supabase/functions/_shared/ai.ts`만 Gemini로 교체 ([ONBOARDING](ONBOARDING.md#ai-담당))
@@ -103,7 +103,7 @@
 | 한계 | 영향 | 해결 시점 |
 |---|---|---|
 | 답변 판정이 키워드 기반 | "안 확인할래요" 같은 부정문 오판 | Phase 2 (Gemini) |
-| 개인정보 탐지가 숫자 정규식만 | "공일공…"처럼 한글 숫자는 통과 | 음성 모드 도입 시 |
+| 개인정보 탐지: ko-pii(MIT) 규칙 이식 (전화·주민/외국인번호·카드 Luhn·계좌·이메일·URL·전각/띄어쓴 숫자) | 한글 숫자("공일공…")·이름·주소는 통과 (ko-pii에도 없음) | 음성 모드 도입 시 재검토 |
 | 안전 약속 저장 안 됨 | 새로고침하면 사라짐 | Phase 3 |
 | 보호자가 진행 상황을 못 봄 | 대기 화면은 안내 문구만 | Phase 3 |
 | 시니어 화면에 초대자 이름 없음 | "가족이 초대했어요"로 고정 | 필요 시 `invites`에 컬럼 추가 |
