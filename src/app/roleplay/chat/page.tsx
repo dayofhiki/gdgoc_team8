@@ -64,16 +64,16 @@ export default function ChatPractice() {
   return (
     <Screen>
       <Header title="AI 채팅 연습" onClose={() => router.push("/home")} />
-      <section className="screen__body">
+      <section className="screen__body" style={{ minHeight: 0 }}>
         <div className="stack" style={{ marginTop: 12, gap: 8 }}>
           <span className="chip">가족·지인 사칭 · 실시간 대화</span>
           <h2 className="title">수상한 문자가 도착했어요</h2>
           <p className="desc">직접 답장하면서 연습해 보세요. 실제 개인정보는 입력하지 마세요.</p>
         </div>
-        <div className="chat-card" style={{ marginTop: 24 }} aria-live="polite">
+        <div className="chat-card" style={{ marginTop: 20, flex: 1, minHeight: 260, overflowY: "auto", marginBottom: 12 }} aria-live="polite">
           {messages.map((m, i) => (
             <div className={m.role === "senior" ? "msg msg--me" : "msg"} key={i}>
-              <div className="msg__col"><p className={m.role === "senior" ? "bubble bubble--me" : "bubble"} style={{ whiteSpace: "pre-wrap" }}>{m.text}</p></div>
+              {m.role === "senior" ? <p className="bubble bubble--me" style={{ whiteSpace: "pre-wrap" }}>{m.text}</p> : <div className="msg__col"><p className="bubble" style={{ whiteSpace: "pre-wrap" }}>{m.text}</p></div>}
             </div>
           ))}
           {busy && <p className="desc">응답을 기다리고 있어요…</p>}
@@ -90,9 +90,9 @@ export default function ChatPractice() {
       </section>
       <BottomCTA>
         {!ended && messages.length < 24 ? (
-          <form onSubmit={(e) => { e.preventDefault(); void send(); }} style={{ display: "flex", gap: 8, width: "100%" }}>
-            <input aria-label="답장 입력" value={input} onChange={(e) => setInput(e.target.value)} maxLength={500} placeholder="답장을 입력하세요" disabled={busy || messages.length === 0} style={{ flex: 1, minWidth: 0, padding: 12, border: "1px solid #ccc", borderRadius: 12, fontSize: 16 }} />
-            <button type="submit" className="btn btn--primary" disabled={busy || !input.trim()}>보내기</button>
+          <form onSubmit={(e) => { e.preventDefault(); void send(); }} style={{ display: "flex", gap: 8, width: "100%", alignItems: "center" }}>
+            <input aria-label="답장 입력" value={input} onChange={(e) => setInput(e.target.value)} maxLength={500} placeholder="답장을 입력하세요" disabled={busy || messages.length === 0} style={{ flex: "1 1 0%", width: 0, minWidth: 0, height: 56, background: "#fff", padding: 12, border: "1px solid #ccc", borderRadius: 12, fontSize: 16 }} />
+            <button type="submit" className="btn btn--primary" style={{ flex: "0 0 88px", width: 88, borderRadius: 14 }} disabled={busy || !input.trim()}>보내기</button>
           </form>
         ) : (
           <button className="btn btn--primary" onClick={() => window.location.reload()}>다시 연습하기</button>
