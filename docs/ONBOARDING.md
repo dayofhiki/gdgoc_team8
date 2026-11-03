@@ -69,21 +69,29 @@ Supabase 연결 전에는 화면 레이아웃 작업만 가능하고, 백엔드 
 
 **처리하지 않아도 되는 것**: 8초 타임아웃, 실패 시 기본 대사, 개인정보 가리기는 `chat-turn`이 이미 합니다. 오류가 나면 그냥 throw하세요.
 
-**API 키**: `generateReply` 함수 **안에서** `Deno.env.get("GEMINI_API_KEY")`로 읽습니다. 레포·`.env`에 넣지 않고, 배포 시 BE가 `npx supabase secrets set GEMINI_API_KEY=...`로 등록합니다.
+**LLM 호출**: API 키를 직접 다루지 말고 `ai.ts`의 `llm()`을 쓰세요. 내부 `llm-gateway` 함수가 Groq → Gemini → OpenRouter 순으로 시도하고, 한도 초과(429)·오류·4초 무응답이면 다음 공급자로 자동 전환합니다.
+```ts
+const reply = await llm([
+  { role: "system", content: `너는 ${input.mission.persona} 역할이다. 한두 문장으로 답해라.` },
+  ...input.history.map((m) => ({ role: m.role === "senior" ? "user" : "assistant", content: m.text }) as const),
+  { role: "user", content: input.user_text },
+]);
+```
+- 반환값: 답장 문자열. 공급자가 전부 실패하면 throw → `chat-turn`이 기본 대사로 대체.
+- 공급자마다 모델이 달라 말투·형식이 조금씩 다릅니다. 판정처럼 형식이 중요한 출력은 반드시 검증하세요.
+- 무료 한도(대략): 하루 LLM 호출 약 400회 ≈ 훈련 50회, 동시 사용자 10명 안팎.
+- 모델 변경: `GROQ_MODEL` · `GEMINI_MODEL` · `OPENROUTER_MODEL` secret (기본값은 `llm-gateway/providers.ts`).
+- 키 등록은 BE가 합니다 (아래 6번). 레포·`.env`에 넣지 않습니다.
 
-**로컬 테스트** (Supabase 없이): `supabase/functions/_shared/logic_test.ts`와 같은 방식으로 테스트를 작성하고
-```
-GEMINI_API_KEY=... npx deno test --allow-env --allow-net supabase/functions
-```
-주의: 현재 `npm run test:backend`는 Node로 실행되어 `Deno.env`를 쓰면 실패합니다. Gemini로 바꿀 때 BE와 함께 스크립트를 deno로 전환합니다.
+**로컬 테스트**: `llm()`은 배포된 게이트웨이를 부르므로 로컬 단위 테스트에서는 mock 하거나, 로직만 `logic_test.ts`처럼 테스트하세요 (`npm run test:backend`).
 
 ## BE 담당
 
 1. 클라우드 프로젝트 생성 → URL·anon key 팀 공유
 2. 대시보드 Authentication에서 **Anonymous sign-ins 활성화**
 3. `npx supabase login` → `npx supabase link --project-ref <ref>`
-4. `npx supabase db push --remote --include-seed` → `npx supabase functions deploy invite-join chat-turn session-end --use-api` (CLI v3는 `--remote` 없으면 로컬 대상)
+4. `npx supabase db push --remote --include-seed` → `npx supabase functions deploy invite-join chat-turn session-end llm-gateway --use-api` (CLI v3는 `--remote` 없으면 로컬 대상)
 5. 확인: `npm run test:e2e`
-6. Phase 2: `npx supabase secrets set GEMINI_API_KEY=...`
+6. Phase 2: `npx supabase secrets set GROQ_API_KEY=... GEMINI_API_KEY=... OPENROUTER_API_KEY=...` (있는 것만. `llm-gateway`가 Groq → Gemini → OpenRouter 순으로 자동 전환, `ai.ts`의 `llm()`으로 호출)
 
 스키마 변경은 새 마이그레이션 파일로 `ADD COLUMN` · `CREATE TABLE`만 합니다 (기존 컬럼 rename·drop 금지).
