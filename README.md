@@ -11,8 +11,9 @@ Node.js 20 이상 권장. 백엔드는 팀 공용 Supabase 클라우드 프로�
 백엔드 담당 (최초 1회 / 변경 시):
 - `npx supabase login` → `npx supabase link --project-ref <ref>`
 - 대시보드 Authentication > Sign In / Providers에서 **Anonymous sign-ins 활성화**
-- `npx supabase db push --include-seed` (마이그레이션 + 미션 시드)
-- `npx supabase functions deploy invite-join chat-turn session-end`
+- `npx supabase db push --remote --include-seed` (마이그레이션 + 미션 시드. CLI v3는 `--remote` 없으면 로컬로 감)
+- `npx supabase functions deploy invite-join chat-turn session-end --use-api` (Docker 불필요)
+- 클라우드 E2E: `npm run test:e2e` (`.env.local` 필요)
 - 백엔드 검사 (Supabase 없이 실행): `npm run test:backend` — 마이그레이션·RLS·입장 규칙 20개 + 판정 로직 테스트
 
 ## 현재 구현

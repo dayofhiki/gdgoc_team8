@@ -82,7 +82,8 @@ GEMINI_API_KEY=... npx deno test --allow-env --allow-net supabase/functions
 1. 클라우드 프로젝트 생성 → URL·anon key 팀 공유
 2. 대시보드 Authentication에서 **Anonymous sign-ins 활성화**
 3. `npx supabase login` → `npx supabase link --project-ref <ref>`
-4. `npx supabase db push --include-seed` → `npx supabase functions deploy invite-join chat-turn session-end`
-5. Phase 2: `npx supabase secrets set GEMINI_API_KEY=...`
+4. `npx supabase db push --remote --include-seed` → `npx supabase functions deploy invite-join chat-turn session-end --use-api` (CLI v3는 `--remote` 없으면 로컬 대상)
+5. 확인: `npm run test:e2e`
+6. Phase 2: `npx supabase secrets set GEMINI_API_KEY=...`
 
 스키마 변경은 새 마이그레이션 파일로 `ADD COLUMN` · `CREATE TABLE`만 합니다 (기존 컬럼 rename·drop 금지).

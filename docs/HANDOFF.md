@@ -6,13 +6,13 @@
 
 | | 상태 |
 |---|---|
-| **Phase 0** Setup | ✅ 코드 완료 · ⏳ Supabase 프로젝트 연결 필요 |
-| **Phase 1** E2E | ✅ 코드 완료 · ⏳ 배포 후 실제 동작 확인 필요 |
+| **Phase 0** Setup | ✅ 완료 · Supabase 프로젝트 `pedmhdnmhmzsezerrzvk` 연결 |
+| **Phase 1** E2E | ✅ 완료 · 클라우드에서 `npm run test:e2e` 18개 통과 |
 | **Phase 2** AI | ⬜ 시작 전 (현재 mock) |
 | **Phase 3** 보호자 | ⬜ 시작 전 |
 | **Phase 4** 시연 | ⬜ 시작 전 |
 
-**한 줄 요약**: 초대 → 입장 → 채팅 → 결과까지 코드는 다 있고 Supabase 없이 검사도 통과했습니다. **아직 실제 Supabase에 올려 본 적은 없습니다.**
+**한 줄 요약**: 초대 → 입장 → 채팅 → 결과가 **실제 Supabase 클라우드에서 동작**합니다. 다음은 AI(Gemini)와 보호자 화면입니다.
 
 ---
 
@@ -36,19 +36,18 @@
 | DB·권한 규칙 20개 | ✅ 통과 | `npm run test:backend` (PGlite, Supabase 불필요) |
 | 판정·개인정보 로직 4개 | ✅ 통과 | 같은 명령 |
 | Edge Function 타입 | ✅ 통과 | `npx deno check supabase/functions/*/index.ts` |
-| Edge Function 실제 실행 | ❌ 미확인 | Supabase 배포 필요 |
-| 동시 입장 경합 (잠금) | ❌ 미확인 | PGlite는 연결 1개라 재현 불가 → 배포 후 E2E |
-| Phase 1 완료 기준 (3턴 → messages 7행, results 1행) | ❌ 미확인 | 배포 후 브라우저 2개 |
+| Edge Function 실제 실행 | ✅ 통과 | `npm run test:e2e` (클라우드) |
+| 동시 입장 경합 (잠금) | ✅ 통과 (3회 반복) | 정원 2 링크에 3명 동시 → 2명 성공·1명 `INVITE_FULL`, 다른 링크끼리는 서로 안 막음 |
+| Phase 1 완료 기준 (3턴 → messages 7행, results 1행) | ✅ 통과 | 같은 명령. 브라우저 화면 확인은 아직 |
 
 ## 3. 다음에 할 일
 
 ### BE — 바로 다음
-- [ ] Supabase 클라우드 프로젝트 생성 → URL·anon key 팀 공유
-- [ ] 대시보드에서 **Anonymous sign-ins 활성화**
-- [ ] `npx supabase link` → `db push --include-seed` → `functions deploy invite-join chat-turn session-end`
-- [ ] E2E 확인: 새 링크 입장 → 3턴 → `messages` 7행, `results` 1행
-- [ ] 동시 입장 확인: 인원 2명 링크에 3명이 동시에 입장 → 1명만 `INVITE_FULL`
-- [ ] E2E 스크립트 작성 (공유·회귀 확인용)
+- [x] Supabase 클라우드 프로젝트 생성, 익명 로그인 활성화
+- [x] 마이그레이션·시드 push, Edge Function 3개 배포
+- [x] E2E 스크립트 (`npm run test:e2e`): 입장·동시 입장·3턴 7행·결과 1행·권한 18개 통과
+- [ ] URL·anon key 팀 공유 (팀원은 `.env.local`에 입력)
+- [ ] 브라우저 2개로 화면 흐름 직접 확인
 
 ### AI — Phase 2
 - [ ] `supabase/functions/_shared/ai.ts`만 Gemini로 교체 ([ONBOARDING](ONBOARDING.md#ai-담당))
@@ -114,7 +113,8 @@ supabase/
 │  ├─ invite-join/             링크 입장
 │  ├─ chat-turn/               대화 1턴 (+ decide.ts 판정)
 │  └─ session-end/             종료·결과
-└─ tests/db_check.mjs          DB·권한 검사 20개
+├─ tests/db_check.mjs          DB·권한 검사 20개 (Supabase 불필요)
+└─ tests/e2e.mjs               클라우드 E2E 18개 (npm run test:e2e)
 src/
 ├─ lib/supabase.ts             FE용 클라이언트 (ensureAnon · callFn)
 └─ app/page.tsx                전체 화면 (분리 예정)
