@@ -1,0 +1,19 @@
+[project]
+name = "baitlab"
+version = "0.1.0"
+description = "자녀 사칭 사기 예방 훈련 AI 로컬 실험"
+requires-python = ">=3.11"
+dependencies = [
+    "google-genai",
+    "pydantic>=2",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
