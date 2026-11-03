@@ -12,8 +12,11 @@ export default function Onboarding() {
   const { setNickname } = useAppState();
   const router = useRouter();
 
+  // 별명은 필수: 공백만 입력한 경우도 시작할 수 없음
+  const trimmed = nick.trim();
   const finish = (to: string) => {
-    setNickname(nick.trim() || DEFAULT_NICKNAME);
+    if (!trimmed) return;
+    setNickname(trimmed);
     router.push(to);
   };
 
@@ -86,10 +89,11 @@ export default function Onboarding() {
               className="nick__input"
               value={nick}
               onChange={(e) => setNick(e.target.value.slice(0, 12))}
-              placeholder={DEFAULT_NICKNAME}
+              placeholder={`예: ${DEFAULT_NICKNAME}`}
               autoComplete="off"
               autoFocus
               enterKeyHint="done"
+              aria-required="true"
             />
           </div>
         )}
@@ -103,10 +107,10 @@ export default function Onboarding() {
         </BottomCTA>
       ) : (
         <BottomCTA>
-          <button className="btn btn--primary btn--lg" style={{ fontWeight: 600 }} onClick={() => finish("/home")}>
+          <button className="btn btn--primary btn--lg" style={{ fontWeight: 600 }} disabled={!trimmed} onClick={() => finish("/home")}>
             나 혼자 시작하기
           </button>
-          <button className="btn btn--outline" onClick={() => finish("/family-code")}>
+          <button className="btn btn--outline" disabled={!trimmed} onClick={() => finish("/family-code")}>
             가족과 함께 시작하기
           </button>
         </BottomCTA>
