@@ -1,6 +1,6 @@
 import { generateReply, nextStage } from "../_shared/ai.ts";
 import { handle, HttpError, must } from "../_shared/http.ts";
-import { hasPii, maskPii } from "../_shared/pii.ts";
+import { detectPii, maskPii } from "../_shared/pii.ts";
 import type { AiOutput, ChatTurnRequest, ChatTurnResponse, Message, Mission, Stage } from "../_shared/types.ts";
 import { decideNext } from "./decide.ts";
 
@@ -48,7 +48,12 @@ Deno.serve(handle<ChatTurnRequest>(async ({ body, user, admin }): Promise<ChatTu
     return { reply, stage, ended: false, used_fallback: false };
   }
 
-  if (hasPii(text)) throw new HttpError(422, "PII_BLOCKED", "전화번호·계좌번호 같은 실제 정보는 입력하지 마세요");
+  const pii = detectPii(text);
+  if (pii.length) {
+    throw new HttpError(422, "PII_BLOCKED", "전화번호·계좌번호 같은 실제 정보는 입력하지 마세요", {
+      types: [...new Set(pii.map((p) => p.type))],
+    });
+  }
 
   const ai: AiOutput = await withTimeout(
     generateReply({

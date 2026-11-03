@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { classify, generateReply } from "./ai.ts";
-import { hasPii, maskPii } from "./pii.ts";
+import { detectPii, hasPii, maskPii } from "./pii.ts";
 import { decideNext, MAX_TURNS } from "../chat-turn/decide.ts";
 import type { Mission } from "./types.ts";
 
@@ -26,6 +26,16 @@ test("pii", () => {
   for (const t of allowed) assert.ok(!hasPii(t), `통과해야 함: ${t}`);
   // 알려진 한계 (ko-pii에도 없음): 한글 숫자
   assert.ok(!hasPii("공일공 일이삼사 오육칠팔"));
+
+  // 생일: 키워드가 있을 때만
+  for (const t of ["제 생일은 1955년 3월 2일이에요", "생년월일 1955.03.02", "55년 3월 2일생", "태어난 날은 55-03-02"]) {
+    assert.ok(hasPii(t), `생일 차단: ${t}`);
+  }
+  for (const t of ["1955년 3월 2일에 이사했어", "회의는 2026.11.03", "생일 2099년 1월 1일"]) assert.ok(!hasPii(t), `생일 아님: ${t}`);
+
+  // 종류 반환 (경고·피드백용)
+  const types = new Set(detectPii("생일 1955년 3월 2일, 신한 110-123-456789, kim@a.io").map((p) => p.type));
+  assert.deepEqual([...types].sort(), ["account", "birth", "email", "number"]);
   assert.equal(maskPii("메일 kim@gmail.com 링크 https://x.io/a"), "메일 ***@*****.*** 링크 *****://*.**/*");
 });
 

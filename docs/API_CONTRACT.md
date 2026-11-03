@@ -133,7 +133,13 @@ const r = await callFn<InviteJoinResponse>("invite-join", { token });
 
 | 오류 | 상태 | 언제 | FE 처리 |
 |---|---|---|---|
-| `PII_BLOCKED` | 422 | 전화번호·주민번호·계좌번호 입력. **저장 안 됨** | 입력 유지 + 경고 |
+| `PII_BLOCKED` | 422 | 전화·주민/외국인번호·카드·계좌·이메일·링크·생일(키워드 동반) 입력. **저장 안 됨** | 입력 유지 + 경고 |
+
+`PII_BLOCKED`는 걸린 종류를 `types`로 함께 보냅니다 (경고 문구용, 선택 필드):
+```json
+{ "error": { "code": "PII_BLOCKED", "message": "전화번호·계좌번호 같은 실제 정보는 입력하지 마세요", "types": ["phone"] } }
+```
+`types` 값: `rrn` 주민·외국인번호 · `phone` · `card` · `account` · `email` · `url` · `birth` · `number`(은행명 없는 10자리 이상 숫자). 못 잡는 것: 한글 숫자("공일공")·이름·주소·비밀번호.
 | `SESSION_ENDED` | 409 | 이미 끝난 세션 | 결과 화면으로 |
 | `TURN_CONFLICT` | 409 | 같은 턴을 동시에 두 번 보냄 (연타). 먼저 온 요청만 저장 | 무시 (먼저 보낸 요청의 응답을 씀) |
 | `NOT_FOUND` | 404 | 없는 세션 또는 남의 세션 | 처음으로 |
@@ -286,7 +292,7 @@ await sb().from("results").update({ share_consent: true }).eq("session_id", id);
 | `INVITE_INVALID` | 404 | invite-join | E01 "유효하지 않은 링크" |
 | `INVITE_EXPIRED` | 410 | invite-join | E01 "유효기간 지남" |
 | `INVITE_FULL` | 409 | invite-join | E01 "인원 가득 참" |
-| `PII_BLOCKED` | 422 | chat-turn | 입력 유지 + 경고 |
+| `PII_BLOCKED` | 422 | chat-turn | 입력 유지 + 경고 (`types`로 종류 표시 가능) |
 | `SESSION_ENDED` | 409 | chat-turn | 결과 화면으로 |
 | `TURN_CONFLICT` | 409 | chat-turn | 무시 |
 | `NOT_FOUND` | 404 | chat-turn · session-end | 처음으로 |

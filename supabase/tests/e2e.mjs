@@ -17,7 +17,7 @@ const user = async () => {
 const call = async (c, name, body) => {
   const { data, error } = await c.functions.invoke(name, { body });
   if (!error) return { data };
-  try { return { code: (await error.context.json()).error.code }; } catch { return { code: error.message }; }
+  try { const e = (await error.context.json()).error; return { code: e.code, types: e.types }; } catch { return { code: error.message }; }
 };
 let failed = 0;
 const ok = (cond, msg) => { console.log((cond ? "PASS " : "FAIL ") + msg); if (!cond) failed++; };
@@ -52,7 +52,8 @@ const sid = sess.id;
 const [open, open2] = await Promise.all([1, 2].map(() => call(winner, "chat-turn", { session_id: sid })));
 ok(open.data?.reply.role === "scammer" && open.data.stage === "approach", "첫 대사 (approach)");
 ok(open.data?.reply.id === open2.data?.reply.id, "첫 대사 동시 2회 호출 → 같은 메시지 1개");
-ok((await call(winner, "chat-turn", { session_id: sid, text: "내 번호 010-1234-5678로 해" })).code === "PII_BLOCKED", "전화번호 입력 → PII_BLOCKED");
+const pii = await call(winner, "chat-turn", { session_id: sid, text: "내 번호 010-1234-5678로 해" });
+ok(pii.code === "PII_BLOCKED" && pii.types?.includes("phone"), "전화번호 입력 → PII_BLOCKED, types에 phone");
 // 연타: 같은 턴을 동시에 2번 → 1번만 저장, 나머지는 TURN_CONFLICT
 const dup = await Promise.all([1, 2].map(() => call(winner, "chat-turn", { session_id: sid, text: "누구세요?" })));
 const t1 = dup.find((r) => r.data) ?? {};

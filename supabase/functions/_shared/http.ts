@@ -8,7 +8,7 @@ const CORS = {
 };
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: ErrorCode, message: string) {
+  constructor(public status: number, public code: ErrorCode, message: string, public extra?: Record<string, unknown>) {
     super(message);
   }
 }
@@ -36,7 +36,7 @@ export function handle<B>(fn: (ctx: Ctx<B>) => Promise<unknown>) {
       const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       return json(200, await fn({ body, user: data.user, admin }));
     } catch (e) {
-      if (e instanceof HttpError) return json(e.status, { error: { code: e.code, message: e.message } });
+      if (e instanceof HttpError) return json(e.status, { error: { code: e.code, message: e.message, ...e.extra } });
       console.error(e);
       return json(500, { error: { code: "INTERNAL", message: "서버 오류" } });
     }
