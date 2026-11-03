@@ -70,7 +70,10 @@ alter table messages enable row level security;
 alter table results enable row level security;
 
 -- 쓰기 가능한 컬럼을 좁힘 (상태·카운터·판정은 Edge Function만 변경)
-revoke insert, update, delete on invites, participants, sessions, messages, results, missions from anon, authenticated;
+-- 권한을 명시: 대시보드의 "Automatically expose new tables" 설정과 무관하게 동작
+revoke all on invites, participants, sessions, messages, results, missions from anon, authenticated;
+grant select on invites, participants, sessions, messages, results, missions to authenticated;
+grant all on invites, participants, sessions, messages, results, missions to service_role;
 grant insert (senior_name, difficulty, max_participants) on invites to authenticated;
 grant insert (participant_id, mission_id, mode) on sessions to authenticated;
 grant update (share_consent) on results to authenticated;
@@ -120,3 +123,4 @@ begin
   return query select pid, inv.senior_name, inv.difficulty;
 end $$;
 revoke execute on function join_invite(text, uuid) from public, anon, authenticated;
+grant execute on function join_invite(text, uuid) to service_role;

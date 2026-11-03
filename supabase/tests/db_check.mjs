@@ -11,7 +11,7 @@ create schema auth; create table auth.users(id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
 create role anon; create role authenticated; create role service_role;
 grant usage on schema public to anon, authenticated, service_role;
-alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+-- 기본 권한을 주지 않음 = 대시보드 "Automatically expose new tables" 꺼짐. 마이그레이션의 명시 grant만으로 동작해야 함
 `);
 await db.exec(readFileSync(root + "/supabase/migrations/20261103000000_001_init.sql", "utf8"));
 await db.exec(readFileSync(root + "/supabase/seed.sql", "utf8"));
@@ -27,7 +27,8 @@ const [org] = await as(G, "insert into invites (senior_name, max_participants) v
 ok(!!(await err(as(G, "insert into invites (max_participants) values (500)"))), "인원 상한 200 초과 거부");
 ok(!!(await err(as(A, "insert into invites (created_by) values ($1)", [G]))), "남의 이름으로 초대 생성 불가");
 
-const join = (tok, u) => db.query("select * from join_invite($1,$2)", [tok, u]).then(r => r.rows[0]);
+// invite-join Edge Function과 같은 service_role로 호출
+const join = async (tok, u) => { await db.exec("set role service_role"); try { return (await db.query("select * from join_invite($1,$2)", [tok, u])).rows[0]; } finally { await db.exec("reset role"); } };
 const pa = await join(fam.token, A);
 ok((await join(fam.token, A)).participant_id === pa.participant_id, "같은 사용자 재입장 → 같은 참여자");
 ok((await err(join(fam.token, B))) === "INVITE_FULL", "가족 링크 2번째 사용자 → INVITE_FULL");
