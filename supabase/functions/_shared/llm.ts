@@ -28,7 +28,7 @@ const env = (k: string): string | undefined => {
 
 // 모델명은 env로 바꿀 수 있음. GEMINI_MODEL은 ai.ts와 같은 값을 공유.
 export function providers(get: (k: string) => string | undefined = env): Provider[] {
-  return [
+  const all: (Omit<Provider, "key"> & { key?: string })[] = [
     {
       name: "gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       key: get("GEMINI_API_KEY"), model: get("GEMINI_MODEL") || "gemini-3.6-flash",
@@ -43,7 +43,8 @@ export function providers(get: (k: string) => string | undefined = env): Provide
       name: "openrouter", url: "https://openrouter.ai/api/v1/chat/completions",
       key: get("OPENROUTER_API_KEY"), model: get("OPENROUTER_MODEL") || "meta-llama/llama-3.3-70b-instruct:free",
     },
-  ].filter((p): p is Provider => !!p.key);
+  ];
+  return all.filter((p): p is Provider => !!p.key);
 }
 
 // shortcut: 쿨다운이 인스턴스 메모리라 콜드스타트마다 초기화됨 → 한 번 더 429 맞고 다시 건너뜀. 트래픽 커지면 DB/KV로.
