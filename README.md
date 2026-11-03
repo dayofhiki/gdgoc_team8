@@ -26,6 +26,7 @@ Node.js 20 이상 권장. 백엔드는 팀 공용 Supabase 클라우드 프로�
 
 ## 연결 자료
 - [전체 화면 기능 명세](docs/SCREEN_FLOW.md)
+- [백엔드 인수인계 (현재 상태·다음 할 일)](docs/HANDOFF.md)
 - [역할별 개발 시작 가이드 (FE·AI·BE)](docs/ONBOARDING.md)
 - [백엔드 설계](docs/BE_FLOW.md)
 - [API 계약](docs/API_CONTRACT.md)
