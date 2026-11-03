@@ -415,7 +415,3 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
-
-# 내부 전용: service role 키를 함수 안에서 직접 검사 (새 sb_secret_ 키는 JWT가 아니라 플랫폼 검증 통과 못 함)
-[functions.llm-gateway]
-verify_jwt = false

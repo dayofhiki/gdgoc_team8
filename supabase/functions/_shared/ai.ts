@@ -150,15 +150,3 @@ export async function generateReply(input: AiInput): Promise<AiOutput> {
   }
 }
 
-// LLM 호출은 llm-gateway(Groq → Gemini → OpenRouter 자동 전환)를 거침. 전부 실패하면 throw →
-// chat-turn이 fallback_lines로 대체. 프롬프트·판정을 LLM으로 바꿀 때 generateReply 안에서 이걸 쓰면 됨.
-export async function llm(messages: { role: "system" | "user" | "assistant"; content: string }[]): Promise<string> {
-  const key = env("SUPABASE_SERVICE_ROLE_KEY");
-  const r = await fetch(`${env("SUPABASE_URL")}/functions/v1/llm-gateway`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
-  });
-  if (!r.ok) throw new Error(`LLM_GATEWAY_${r.status}`);
-  return (await r.json()).text;
-}
