@@ -3,12 +3,28 @@ import { useEffect, useState } from "react";
 import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 import { ClockIcon } from "@/components/Icons";
 import { BottomCTA, Header, Notice, Screen } from "@/components/ui";
+import { getInviteToken } from "@/lib/invite";
 import { copyText } from "@/lib/share";
 
 export default function Invite() {
   const { nickname } = useAppState();
   const name = nickname || DEFAULT_NICKNAME;
   const [toast, setToast] = useState("");
+  // 초대 토큰은 화면에 들어올 때 미리 준비 (공유 시트·복사는 클릭 직후 바로 실행돼야 해서)
+  const [token, setToken] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    getInviteToken().then((t) => {
+      if (!alive) return;
+      setToken(t);
+      setPreparing(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -16,7 +32,8 @@ export default function Invite() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const link = () => `${location.origin}/challenge?from=${encodeURIComponent(name)}`;
+  const link = () =>
+    `${location.origin}/challenge?${token ? `invite=${token}&` : ""}from=${encodeURIComponent(name)}`;
   const message = `${name}님이 보이스피싱 대처 연습에 초대했어요. 가입 없이 퀴즈 3문제, 1분이면 끝나요!`;
 
   // 카카오 SDK(JavaScript 키 필요) 연동 전까지는 기기의 공유 시트를 사용합니다.
@@ -64,8 +81,10 @@ export default function Invite() {
       {toast && <div className="toast" role="status">{toast}</div>}
 
       <BottomCTA>
-        <button className="btn btn--kakao" onClick={shareKakao}>카카오톡 공유하기</button>
-        <button className="btn btn--muted" onClick={copyLink}>링크 복사하기</button>
+        <button className="btn btn--kakao" onClick={shareKakao} disabled={preparing}>
+          {preparing ? "링크 준비 중…" : "카카오톡 공유하기"}
+        </button>
+        <button className="btn btn--muted" onClick={copyLink} disabled={preparing}>링크 복사하기</button>
       </BottomCTA>
     </Screen>
   );
