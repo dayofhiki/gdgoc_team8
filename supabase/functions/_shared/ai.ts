@@ -80,7 +80,12 @@ function systemPrompt(input: AiInput, target: Stage): string {
 
 type LlmOut = { intent: Intent; reply: string };
 
-// 공급자 공통 JSON 모드는 스키마를 강제하지 않음 → 형식을 프롬프트로 지시하고 parse에서 검증 (실패하면 다음 공급자)
+// schema 지원 공급자(Gemini·Groq gpt-oss)는 OUT_SCHEMA로 형식 강제, 나머지는 JSON 모드뿐 → 프롬프트에도 형식을 적고 parse에서 검증 (실패하면 다음 공급자)
+const OUT_SCHEMA = {
+  type: "object",
+  properties: { intent: { type: "string", enum: INTENTS }, reply: { type: "string" } },
+  required: ["intent", "reply"],
+};
 const JSON_RULE = `
 
 [출력 형식] 아래 JSON 객체 하나만 출력한다. 다른 글자를 붙이지 않는다.
@@ -101,7 +106,7 @@ async function callLlm(input: AiInput, target: Stage): Promise<LlmOut> {
     ...input.history.map((m): Msg => ({ role: m.role === "scammer" ? "assistant" : "user", content: m.text })),
     { role: "user", content: input.user_text ?? "" },
   ];
-  const { value, provider } = await complete(messages, { temperature: 0.8, json: true, parse: parseOut, budgetMs: LLM_BUDGET_MS });
+  const { value, provider } = await complete(messages, { temperature: 0.8, maxTokens: 1000, json: true, schema: OUT_SCHEMA, parse: parseOut, budgetMs: LLM_BUDGET_MS });
   console.log(`llm: ${provider} → ${value.intent}`);
   return value;
 }

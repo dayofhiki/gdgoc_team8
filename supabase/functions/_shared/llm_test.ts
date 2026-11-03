@@ -10,6 +10,11 @@ test("providers: 키 있는 것만, gemini → groq → openrouter 순", () => {
   const env: Record<string, string> = { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b", GEMINI_API_KEY: "c" };
   assert.deepEqual(providers((k) => env[k]).map((p) => p.name), ["gemini", "groq", "openrouter"]);
   assert.deepEqual(providers(() => undefined), []);
+  // LLM_PROVIDERS: 적힌 것만 그 순서로, 모르는 이름·키 없는 것은 무시
+  const pick = (v: string) => providers((k) => (k === "LLM_PROVIDERS" ? v : env[k])).map((p) => p.name);
+  assert.deepEqual(pick("groq"), ["groq"]);
+  assert.deepEqual(pick(" groq, gemini ,nope"), ["groq", "gemini"]);
+  assert.deepEqual(pick(""), ["gemini", "groq", "openrouter"]);
 });
 
 test("429·500·빈 응답이면 다음 공급자, 429는 쿨다운", async () => {
@@ -46,6 +51,19 @@ test("parse 실패(형식 오류)면 다음 공급자, json·temperature 옵션 
   assert.equal(r.value.intent, "refuse");
   assert.deepEqual(bodies[0].response_format, { type: "json_object" });
   assert.equal(bodies[0].temperature, 0.2);
+});
+
+test("schema: 지원 공급자만 json_schema, 나머지는 json_object", async () => {
+  cooldown.clear();
+  const bodies: Record<string, unknown>[] = [];
+  const f = (async (url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(init.body as string));
+    return url === "https://a" ? new Response("", { status: 500 }) : ok("{}");
+  }) as typeof fetch;
+  const schema = { type: "object" };
+  await complete(msgs, { json: true, schema }, { list: [{ ...P("a"), schema: true }, P("b")], fetch: f });
+  assert.deepEqual(bodies[0].response_format, { type: "json_schema", json_schema: { name: "out", schema } });
+  assert.deepEqual(bodies[1].response_format, { type: "json_object" });
 });
 
 test("시간 예산을 다 쓰면 남은 공급자는 시도하지 않음", async () => {

@@ -3,11 +3,12 @@
 //   Gemini(프롬프트를 이걸로 다듬음) → Groq(빠름·한도 넉넉) → OpenRouter(:free 모델)
 // 429 · 5xx · 시간 초과 · 빈 응답 · parse 실패면 다음 공급자로. 전부 실패하면 throw.
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
-export type Provider = { name: string; url: string; key: string; model: string; extra?: Record<string, unknown> };
+export type Provider = { name: string; url: string; key: string; model: string; schema?: boolean; extra?: Record<string, unknown> };
 export type Options<T> = {
   temperature?: number;
   maxTokens?: number;
-  json?: boolean; // response_format json_object. shortcut: 스키마 강제는 아님(Groq Llama 미지원) → parse에서 검증
+  json?: boolean; // response_format json_object (스키마 강제 아님) → parse에서 검증
+  schema?: Record<string, unknown>; // schema: true인 공급자(Gemini)에는 json_schema로 강제, 나머지는 json 모드. 그래도 parse는 함
   parse?: (text: string) => T; // throw하면 형식 오류로 보고 다음 공급자로
   budgetMs?: number; // 전체 시간 예산. chat-turn 타임아웃(8초)보다 짧게
 };
@@ -33,18 +34,23 @@ export function providers(get: (k: string) => string | undefined = env): Provide
       name: "gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       key: get("GEMINI_API_KEY"), model: get("GEMINI_MODEL") || "gemini-3.6-flash",
       // ai.ts의 thinkingLevel: minimal과 같은 의도 (생각 켜짐이면 최대 ~8초)
-      extra: { reasoning_effort: "minimal" },
+      schema: true, extra: { reasoning_effort: "minimal" },
     },
     {
       name: "groq", url: "https://api.groq.com/openai/v1/chat/completions",
-      key: get("GROQ_API_KEY"), model: get("GROQ_MODEL") || "llama-3.3-70b-versatile",
+      // llama-3.3-70b-versatile은 2026-08-16 종료 → Groq 권장 후속. 추론 모델이라 생각은 짧게
+      key: get("GROQ_API_KEY"), model: get("GROQ_MODEL") || "openai/gpt-oss-120b",
+      schema: true, extra: { reasoning_effort: "low" },
     },
     {
       name: "openrouter", url: "https://openrouter.ai/api/v1/chat/completions",
       key: get("OPENROUTER_API_KEY"), model: get("OPENROUTER_MODEL") || "meta-llama/llama-3.3-70b-instruct:free",
     },
   ];
-  return all.filter((p): p is Provider => !!p.key);
+  // LLM_PROVIDERS="groq,gemini"면 적힌 것만 그 순서로 (재배포 없이 Secret으로 순서 변경·공급자 단독 테스트)
+  const only = get("LLM_PROVIDERS")?.split(",").map((s) => s.trim()).filter(Boolean);
+  const picked = only?.length ? only.map((n) => all.find((p) => p.name === n)) : all;
+  return picked.filter((p): p is Provider => !!p?.key);
 }
 
 // shortcut: 쿨다운이 인스턴스 메모리라 콜드스타트마다 초기화됨 → 한 번 더 429 맞고 다시 건너뜀. 트래픽 커지면 DB/KV로.
@@ -78,7 +84,9 @@ export async function complete<T = string>(
           messages,
           max_tokens: opts.maxTokens ?? 300,
           ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
-          ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+          ...(opts.schema && p.schema
+            ? { response_format: { type: "json_schema", json_schema: { name: "out", schema: opts.schema } } }
+            : opts.json ? { response_format: { type: "json_object" } } : {}),
           ...p.extra,
         }),
         signal: AbortSignal.timeout(Math.min(PER_TRY_MS, left)),
