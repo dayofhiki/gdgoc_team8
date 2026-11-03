@@ -49,10 +49,14 @@ ok(missions?.length === 3, "미션 3개 조회");
 const { data: sess, error: sErr } = await winner.from("sessions").insert({ participant_id: pid, mission_id: "family" }).select("id").single();
 ok(!sErr, "세션 생성");
 const sid = sess.id;
-const open = await call(winner, "chat-turn", { session_id: sid });
+const [open, open2] = await Promise.all([1, 2].map(() => call(winner, "chat-turn", { session_id: sid })));
 ok(open.data?.reply.role === "scammer" && open.data.stage === "approach", "첫 대사 (approach)");
+ok(open.data?.reply.id === open2.data?.reply.id, "첫 대사 동시 2회 호출 → 같은 메시지 1개");
 ok((await call(winner, "chat-turn", { session_id: sid, text: "내 번호 010-1234-5678로 해" })).code === "PII_BLOCKED", "전화번호 입력 → PII_BLOCKED");
-const t1 = await call(winner, "chat-turn", { session_id: sid, text: "누구세요?" });
+// 연타: 같은 턴을 동시에 2번 → 1번만 저장, 나머지는 TURN_CONFLICT
+const dup = await Promise.all([1, 2].map(() => call(winner, "chat-turn", { session_id: sid, text: "누구세요?" })));
+const t1 = dup.find((r) => r.data) ?? {};
+ok(dup.filter((r) => r.data).length === 1 && dup.some((r) => r.code === "TURN_CONFLICT"), "보내기 연타 → 1번만 처리, 나머지 TURN_CONFLICT");
 const t2 = await call(winner, "chat-turn", { session_id: sid, text: "무슨 일인데?" });
 const t3 = await call(winner, "chat-turn", { session_id: sid, text: "직접 전화해서 확인할게" });
 ok(t1.data?.stage === "trust" && t2.data?.stage === "pressure" && t3.data?.ended === true, "3턴: trust → pressure → ended");

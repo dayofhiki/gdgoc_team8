@@ -17,6 +17,7 @@ export type ErrorCode =
   | "INVITE_FULL"
   | "PII_BLOCKED"
   | "AI_TIMEOUT"
+  | "TURN_CONFLICT"
   | "INTERNAL";
 
 export type Mission = {
@@ -60,6 +61,7 @@ export type Message = {
   role: Role;
   text: string;
   stage: Stage;
+  turn?: number | null; // 오프닝 0, 이후 1.. (002 이전 행은 null)
   created_at: string;
 };
 
