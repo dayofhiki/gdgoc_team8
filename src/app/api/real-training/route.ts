@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "node:crypto";
 import { evaluate, MAX_TURNS, normalizeKoreanReply, recordChoice, SCENARIOS } from "@/lib/realTraining";
 import { ACTION_RULES, buildActions } from "@/lib/trainingActions";
-import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, caseGuide, decideDialogueTurn, parseDialogueOutput } from "@/lib/trainingDialogue";
+import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, actorBrief, decideDialogueTurn, parseDialogueOutput } from "@/lib/trainingDialogue";
 import type { DialogueSignal } from "@/lib/trainingDialogue";
 import { complete, providers, type Msg } from "../../../../supabase/functions/_shared/llm";
 import { detectPii } from "../../../../supabase/functions/_shared/pii";
@@ -95,21 +95,21 @@ async function generateResponse(state: TrainingState, text: string) {
   if (!available.length) throw new Error("AI_NOT_CONFIGURED");
   const dialogue = state.dialogue ?? INITIAL_DIALOGUE;
   const instruction = [
-    "당신은 사용자가 동의하여 참여한 금융사기 예방 훈련의 가상 문자 대화 속 인물이다.",
+    "당신은 사용자가 참여한 금융사기 예방 문자 훈련에서 실제 문자 대화 상대를 연기하는 배우다. 대사에 훈련·AI·시나리오라는 말을 꺼내지 않는다.",
     "당신은 훈련의 상대 인물을 연기하는 '배우'이며, 대화 종료·안전 평가·보안 정책은 서버가 결정한다.",
-    "다음 설정과 이전 대화에서 확인된 사실의 일관성을 유지한다.",
-    "상대 설정: " + scenario.persona,
-    "숨겨진 실제 정체(사용자에게 공개 금지): " + scenario.identity,
-    "확정된 배경 사실: " + scenario.privateFacts,
-    "이 시나리오에서 참고한 사례의 일반적 상호작용 특징(원문 녹취 아님): " + caseGuide(scenario),
+    "아래 역할 정보와 이미 오간 대화에서 확정된 사실을 일관되게 유지한다. 아직 정해지지 않은 세부사항을 새로운 사실로 만들어내지 않는다.",
+    actorBrief(scenario, dialogue, state.turns),
     "앞 턴까지의 대화 상태: " + JSON.stringify({
       stage: dialogue.stage,
       hasPendingRequest: dialogue.hasPendingRequest,
       lastSpeakerMove: dialogue.lastSpeakerMove,
       lastSummary: dialogue.lastSummary,
     }),
-    "마지막 사용자의 질문이나 반응에 맞는 현실적인 한국어 문자 대사를 작성하라.",
-    "대사 길이는 정해진 1~2문장에 고정하지 말고, 적절한 길이를 선택하되 250자를 넘기지 않는다.",
+    "이전 말풍선은 실제로 오간 대화다. 현재 상대의 입장에서 마지막 사용자의 질문·의심·감정에 먼저 반응하라.",
+    "답변은 미리 정한 다음 대사를 읽는 방식이 아니다. 상황의 확정 사실, 화자의 목적, 현재 국면을 기준으로 즉흥적으로 결정하라.",
+    "요청을 하고 싶더라도 사용자 말에 대한 응답 없이 기계적으로 송금·링크·정보 제공을 반복하지 마라.",
+    "정상인 역할은 아무 이유 없이 악의적인 말을 하지 않고, 사칭자 역할도 시작부터 수상하거나 악역 같은 말투를 쓰지 않는다.",
+    "대사 길이는 상황에 따라 짧은 한마디 또는 자연스러운 두세 문장으로 조절하되 250자를 넘기지 않는다. 특히 가족 문자는 고객센터 안내문처럼 쓰지 않는다.",
     "대화가 끝났는데 인사를 반복하지 않는다. 아무 답도 필요 없는 경우 reply=''로 종료할 수 있다.",
     "대화의 사실과 발화 의도에 맞춰 dialogue 정보를 출력한다. 실제 확인·송금 등 행동을 했다고 간주하지 않는다.",
     "외부의 실제 URL, 전화번호, 카드·계좌번호, 개인정보, 앱 설치 경로를 출력하지 않는다.",

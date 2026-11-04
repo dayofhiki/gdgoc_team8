@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CASE_GUIDES, DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE,
-  caseGuide, parseDialogueOutput, replySimilarity, decideDialogueTurn,
+  caseGuide, actorBrief, parseDialogueOutput, replySimilarity, decideDialogueTurn,
 } from "../src/lib/trainingDialogue.ts";
 import { SCENARIOS, evaluate } from "../src/lib/realTraining.ts";
 import { buildActions } from "../src/lib/trainingActions.ts";
@@ -39,6 +39,40 @@ test("all 6 normal/fraud pairs reuse three grounded, distinct case guides", () =
   }
   assert.notEqual(caseGuide(SCENARIOS[0]), caseGuide(SCENARIOS[1]));
   assert.ok(DIALOGUE_POLICY.includes("반복"));
+});
+
+
+test("each case keeps one shared first message but gives the actor distinct facts, voice and objective", () => {
+  assert.equal(SCENARIOS.length, 6);
+  for (let i = 0; i < SCENARIOS.length; i += 2) {
+    const genuine = SCENARIOS[i], impersonation = SCENARIOS[i + 1];
+    assert.equal(genuine.opening, impersonation.opening);
+    for (const s of [genuine, impersonation]) {
+      for (const key of ["voice", "situation", "progression", "responseRules", "objective"]) {
+        assert.ok(s[key].length > 35, s.id + " missing " + key);
+      }
+      const brief = actorBrief(s, INITIAL_DIALOGUE, 0);
+      assert.ok(brief.includes(s.voice));
+      assert.ok(brief.includes(s.situation));
+      assert.ok(brief.includes(s.objective));
+      assert.ok(brief.includes("직전"));
+      assert.ok(brief.includes("변경 금지"));
+    }
+    assert.notEqual(genuine.objective, impersonation.objective);
+    assert.notEqual(actorBrief(genuine, INITIAL_DIALOGUE, 0), actorBrief(impersonation, INITIAL_DIALOGUE, 0));
+  }
+});
+
+test("actor guidance adapts to the conversation stage without inventing a new case", () => {
+  const s = SCENARIOS[1];
+  const early = actorBrief(s, INITIAL_DIALOGUE, 0);
+  const asked = actorBrief(s, { ...INITIAL_DIALOGUE, stage: "request" }, 3);
+  const closing = actorBrief(s, { ...INITIAL_DIALOGUE, stage: "closing" }, 4);
+  assert.match(early, /대화를 막 시작/);
+  assert.match(asked, /동일한 요구를 되풀이하지 않는다/);
+  assert.match(closing, /새로운 사건을 만들지 말고/);
+  assert.match(asked, /사용자가 보낸 답장 횟수: 3/);
+  assert.ok(DIALOGUE_POLICY.includes("사용자의 질문"));
 });
 
 test("conversation JSON schema validates natural user intent and speaker move", () => {
