@@ -441,7 +441,7 @@ export default function RealTraining() {
                     .filter((offer) => offer !== "link" && offer !== "call")
                     .map((offer) => (
                       <button
-                        className={offer === "call" ? "rt-message-link" : "rt-message-request"}
+                        className="rt-message-request"
                         type="button"
                         key={offer}
                         disabled={busy}
