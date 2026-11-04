@@ -266,10 +266,9 @@ export default function RealTraining() {
   async function shareFamilyPromises() {
     if (!result) return;
     const lines = result.behavior.promises.map((p, i) => (i + 1) + ". " + p.title);
-    const question = familyReady && familyQuestion.trim()
-      ? "\n이 기기에 저장한 확인 질문: " + familyQuestion.trim() + "\n답은 문자로 주고받지 않고 가족끼리 직접 정해요."
-      : "\n가족끼리 확인 질문을 미리 정하고 답은 문자로 보내지 않아요.";
-    const message = "우리 가족 안전 약속\n" + lines.join("\n") + question +
+    // 가족 확인 질문 자체도 상대가 악용할 수 있으므로 외부 공유 내용에서는 제외한다.
+    const message = "우리 가족 안전 약속\n" + lines.join("\n") +
+      "\n\n가족 확인 질문과 답은 공개하지 않고 직접 통화하거나 만나서 정해요." +
       "\n\n미끼주의보에서 함께 연습해요.";
     setShareNotice("");
     if (navigator.share) {
@@ -375,7 +374,7 @@ export default function RealTraining() {
             </div>
             <div className="rt-feedback-promise-action">
               <button type="button" onClick={() => void shareFamilyPromises()}>가족에게 안전 약속 공유하기</button>
-              <p>질문은 공유할 수 있지만, 답은 공유 메시지에 넣지 않아요.</p>
+              <p>안전 약속만 공유하고, 가족 확인 질문과 답은 외부로 보내지 않아요.</p>
             </div>
             <p className="rt-feedback-promise-focus"><strong>다음 연습의 목표</strong>{feedback.focus}</p>
           </section>
