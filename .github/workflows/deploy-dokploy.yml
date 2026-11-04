@@ -35,9 +35,9 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$DOKPLOY_URL" || -z "$DOKPLOY_API_KEY" || -z "$DOKPLOY_APPLICATION_ID" ]]; then
-            echo "::warning::Dokploy secrets not configured: deploy is not active."
-            echo "Configure DOKPLOY_URL, DOKPLOY_API_KEY, DOKPLOY_APPLICATION_ID in Repository Actions Secrets." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "::error::Dokploy deployment is not configured: set 3 required GitHub Actions secrets."
+            echo "Not deployed. Configure DOKPLOY_URL, DOKPLOY_API_KEY and DOKPLOY_APPLICATION_ID in Repository Actions Secrets." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           CURRENT_SHA="$(git rev-parse HEAD)"
           if [[ "$EVENT_NAME" == "workflow_run" && "$CURRENT_SHA" != "$VERIFIED_SHA" ]]; then
