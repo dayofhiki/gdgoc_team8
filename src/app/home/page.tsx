@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
 import { ChevronRight, LockIcon, SendIcon } from "@/components/Icons";
 import { Screen } from "@/components/ui";
+import { setShareResults, shareResults } from "@/lib/invite";
 
 export default function Home() {
   const { ready, nickname } = useAppState();
@@ -12,6 +13,15 @@ export default function Home() {
   useEffect(() => {
     if (ready && !nickname) router.replace("/onboarding");
   }, [ready, nickname, router]);
+  // 가족에 연결된 경우에만 보이는 결과 공유 동의 (기본 꺼짐)
+  const [share, setShare] = useState<boolean | null>(null);
+  useEffect(() => {
+    shareResults().then(setShare);
+  }, []);
+  const toggleShare = async (on: boolean) => {
+    setShare(on);
+    if (!(await setShareResults(on))) setShare(!on);
+  };
 
   return (
     <Screen>
@@ -75,6 +85,15 @@ export default function Home() {
               </span>
               <ChevronRight />
             </Link>
+            {share !== null && (
+              <label className="list-row">
+                <span className="list-row__text">
+                  <span className="list-row__title">가족에게 내 연습 결과 보여주기</span>
+                  <span className="list-row__desc">횟수·결과 요약만 보여요. 대화 내용은 보이지 않아요</span>
+                </span>
+                <input type="checkbox" checked={share} onChange={(e) => void toggleShare(e.target.checked)} style={{ width: 24, height: 24 }} />
+              </label>
+            )}
           </div>
         </section>
       </div>

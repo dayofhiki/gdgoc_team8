@@ -76,6 +76,13 @@ export async function getInviteToken(nickname = storedNickname()): Promise<strin
   }
 }
 
+/** 가족 공유 링크: 들어온 사람이 이 가족으로 묶이는 도전장 링크. 오프라인이면 안내 화면 링크 */
+export async function familyShareUrl(origin: string): Promise<string> {
+  const name = storedNickname();
+  const token = await getInviteToken(name);
+  return token ? `${origin}/challenge?invite=${token}&from=${encodeURIComponent(name || "가족")}` : `${origin}/family-code/guide`;
+}
+
 /** 가족 암호 질문을 가족에 저장 (같은 질문이 이미 있으면 그대로). 실패해도 화면 흐름은 계속 */
 export async function saveFamilyQuestion(question: string, nickname = storedNickname()): Promise<void> {
   if (!configured() || !question) return;
@@ -119,6 +126,21 @@ export async function familySize(): Promise<number | null> {
     const { count, error } = await sb().from("family_members").select("user_id", { count: "exact", head: true }).eq("family_id", fid);
     if (error) throw error;
     return count;
+  } catch {
+    return null;
+  }
+}
+
+/** 지금 이 가족에게 내 결과를 보여주는 중인지. 가족이 없거나 오프라인이면 null */
+export async function shareResults(): Promise<boolean | null> {
+  const fid = configured() ? load(KEY_FAMILY) : null;
+  if (!fid) return null;
+  try {
+    await ensureAnon();
+    const { data: me } = await sb().auth.getUser();
+    const { data, error } = await sb().from("family_members").select("share_results").eq("family_id", fid).eq("user_id", me.user!.id).maybeSingle();
+    if (error) throw error;
+    return data?.share_results ?? null;
   } catch {
     return null;
   }

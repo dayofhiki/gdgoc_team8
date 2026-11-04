@@ -225,15 +225,15 @@ const { count } = await sb().from("family_members").select("user_id", { count: "
 |---|---|---|---|
 | 1 | `/invite` 가족에게 퀴즈 보내기 | `getInviteToken()` (이미 호출 중) | ✅ 수정 불필요 — 백엔드 반영 후 자동으로 가족 링크 |
 | 2 | `/challenge` 링크 입장 | `joinInvite(token)` (이미 호출 중) | ✅ 수정 불필요 — 입장 시 가족 자동 등록 |
-| 3 | `/family-code/done` 가족에게 공유하기 | 공유 URL을 `/family-code/guide` → `getInviteToken()`으로 만든 `/challenge?invite=<token>&from=<별명>`로. 들어올 때 `saveFamilyQuestion(familyQuestion)` | ❌ 필수 |
-| 4 | `QuizRunner` 결과 화면 | `saveRecord({ kind: from ? "challenge" : "quiz", score, total, detail: { wrong } })` 1회 | ❌ 필수 (결과 기록) |
-| 5 | `/roleplay/chat` 결과 | `finish` 응답 후 `saveRecord({ kind: "training", title, safe: !result.dangerousAction, detail })` | ❌ 필수 (결과 기록) |
-| 6 | 공유 동의 (새 UI) | "가족에게 결과 보여주기" → `setShareResults(true)` | ❌ 필수 — 기본 꺼짐이라 없으면 보호자에게 아무것도 안 보임 |
-| 7 | 보호자 화면 (새 화면) | `familyOverview()` 결과를 그대로 렌더링 | ❌ 새 화면 |
+| 3 | `/family-code/done` 가족에게 공유하기 | `saveFamilyQuestion()` 후 `familyShareUrl()` 링크로 공유 | ✅ 완료 |
+| 4 | `/roleplay/chat` 안전 약속 공유 | `familyShareUrl()` 링크로 공유 | ✅ 완료 |
+| 5 | `QuizRunner` 결과 화면 | `saveRecord({ kind: quiz/challenge, score, total })` 1회 | ✅ 완료 |
+| 6 | `/roleplay/chat` 결과 | `saveRecord({ kind: "training", title, safe })` | ✅ 완료 |
+| 7 | 공유 동의 | 홈 "가족에게 내 연습 결과 보여주기" → `shareResults()` / `setShareResults()` (가족 연결 시에만 보임) | ✅ 완료 |
+| 8 | 보호자 화면 (새 화면) | `familyOverview()` 결과를 그대로 렌더링 | ❌ 새 화면 |
 | - | 홈 (선택) | `familySize()`로 "연결된 가족 N명" | 선택 |
 | - | 가족 질문 표시 (선택) | `familyQuestions()` → 우리 가족 질문 목록 (최신순) | 선택 |
 
-3~5번 구현 예시는 백엔드 담당에게 있는 패치(`fe-wiring.patch`)를 참고하세요.
 
 ### 연습 기록·가족 공유 — `practice_records` · `family_overview`
 

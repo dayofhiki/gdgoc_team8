@@ -8,6 +8,8 @@ import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
 import { actionChoice, type Action } from "@/lib/trainingActions";
 import { useAppState } from "@/components/AppState";
 import { copyText } from "@/lib/share";
+import { familyShareUrl } from "@/lib/invite";
+import { saveRecord } from "@/lib/records";
 import type { BehaviorFeedback } from "@/lib/trainingFeedback";
 
 type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
@@ -90,6 +92,8 @@ export default function RealTraining() {
   const [guess, setGuess] = useState<Guess>("uncertain");
   const [result, setResult] = useState<Result | null>(null);
   const [shareNotice, setShareNotice] = useState("");
+  // 결과가 나오면 미리 만들어 둠 (공유 시트는 클릭 직후 바로 열려야 해서). 준비 전이면 안내 화면 링크
+  const [shareUrl, setShareUrl] = useState("");
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [typingVisible, setTypingVisible] = useState(false);
   const [ending, setEnding] = useState<Ending | null>(null);
@@ -256,6 +260,14 @@ export default function RealTraining() {
       if (!answer.result) throw new Error("훈련 결과를 불러오지 못했습니다.");
       setResult(answer.result);
       setPhase("result");
+      const r = answer.result;
+      void saveRecord({
+        kind: "training",
+        title: (session.title ?? "").slice(0, 60),
+        safe: !r.dangerousAction,
+        detail: { identity: r.identity, guess, checked: r.checked, linkOpened: r.linkOpened, followedSenderNumber: r.followedSenderNumber },
+      });
+      void familyShareUrl(location.origin).then(setShareUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "결과를 불러오지 못했습니다.");
     } finally {
@@ -270,17 +282,18 @@ export default function RealTraining() {
     const message = "우리 가족 안전 약속\n" + lines.join("\n") +
       "\n\n가족 확인 질문과 답은 공개하지 않고 직접 통화하거나 만나서 정해요." +
       "\n\n미끼주의보에서 함께 연습해요.";
+    const url = shareUrl || location.origin + "/family-code/guide";
     setShareNotice("");
     if (navigator.share) {
       try {
-        await navigator.share({ title: "우리 가족의 안전 약속", text: message, url: location.origin + "/family-code/guide" });
+        await navigator.share({ title: "우리 가족의 안전 약속", text: message, url });
         setShareNotice("공유할 내용을 준비했어요.");
         return;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
       }
     }
-    const copied = await copyText(message + "\n" + location.origin + "/family-code/guide");
+    const copied = await copyText(message + "\n" + url);
     setShareNotice(copied ? "우리 가족 안전 약속을 복사했어요." : "공유하지 못했어요. 다시 시도해 주세요.");
   }
 
