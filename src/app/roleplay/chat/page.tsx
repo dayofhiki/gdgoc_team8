@@ -7,7 +7,7 @@ import { PersonIcon } from "@/components/Icons";
 import { BottomCTA, Dialog, Header, Progress, Screen } from "@/components/ui";
 
 type Message = { actor: "them" | "me" | "system"; text: string };
-type Choice = "verify" | "comply" | "share" | "stop";
+type Choice = "verify" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop";
 type Guess = "legitimate" | "fraud" | "uncertain";
 type Phase = "loading" | "chat" | "judge" | "result";
 type Session = {
@@ -48,6 +48,8 @@ async function request(payload: object): Promise<Reply> {
 
 const ACT_LABELS: Record<Choice, string> = {
   verify: "기존 번호·공식 채널로 확인",
+  verify_sender: "상대가 알려준 경로로 확인",
+  verify_chat: "현재 상대에게 다시 묻기",
   comply: "상대의 요청에 응하기",
   share: "개인정보 제공하기",
   stop: "대화 중단하기",
@@ -63,6 +65,7 @@ export default function RealTraining() {
   const [session, setSession] = useState<Session | null>(null);
   const [input, setInput] = useState("");
   const [confirm, setConfirm] = useState<Choice | null>(null);
+  const [verifySheet, setVerifySheet] = useState(false);
   const [guess, setGuess] = useState<Guess>("uncertain");
   const [result, setResult] = useState<Result | null>(null);
 
@@ -115,6 +118,7 @@ export default function RealTraining() {
   async function perform(choice: Choice) {
     if (!session || busy) return;
     setConfirm(null);
+    setVerifySheet(false);
     setBusy(true);
     setError("");
     try {
@@ -268,8 +272,8 @@ export default function RealTraining() {
       <BottomCTA>
         <div style={{ width: "100%", borderRadius: 18, padding: 10, background: "#fff", boxShadow: "0 -4px 20px #00000010", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-            <button className="btn btn--secondary" style={{ height: 45, fontSize: 13 }} disabled={busy || session?.verified} onClick={() => void perform("verify")}>
-              {session?.verified ? "독립 확인 완료" : "공식 경로로 확인"}
+            <button className="btn btn--secondary" style={{ height: 45, fontSize: 13 }} disabled={busy || session?.verified} onClick={() => setVerifySheet(true)}>
+              {session?.verified ? "독립 확인 완료" : "어떻게 확인할까요?"}
             </button>
             <button className="btn btn--gray" style={{ height: 45, fontSize: 13 }} disabled={busy} onClick={() => void perform("stop")}>대화 중단</button>
             <button className="btn btn--gray" style={{ height: 43, fontSize: 13 }} disabled={busy} onClick={() => setConfirm("comply")}>요청에 응하기 (가상)</button>
@@ -285,6 +289,18 @@ export default function RealTraining() {
           <button className="btn btn--muted" style={{ height: 38, fontSize: 14 }} disabled={busy} onClick={() => setPhase("judge")}>여기서 훈련 마치고 판단하기</button>
         </div>
       </BottomCTA>
+      {verifySheet && (
+        <Dialog onClose={() => setVerifySheet(false)}>
+          <div className="stack" style={{ gap: 8 }}>
+            <h2 className="title" style={{ fontSize: 20 }}>어떻게 신원을 확인하시겠어요?</h2>
+            <p className="desc" style={{ fontSize: 14 }}>확인 방법을 직접 골라 보세요. 각각 다른 결과가 나옵니다.</p>
+          </div>
+          <button className="btn btn--primary" disabled={busy} onClick={() => void perform("verify")}>기존 번호·공식 앱으로 확인</button>
+          <button className="btn btn--gray" disabled={busy} onClick={() => void perform("verify_sender")}>상대가 알려준 번호·링크로 확인</button>
+          <button className="btn btn--gray" disabled={busy} onClick={() => void perform("verify_chat")}>이 채팅에서 본인인지 다시 묻기</button>
+          <button className="btn btn--secondary" onClick={() => setVerifySheet(false)}>대화로 돌아가기</button>
+        </Dialog>
+      )}
       {confirm && (
         <Dialog onClose={() => setConfirm(null)}>
           <div className="stack" style={{ gap: 12 }}>

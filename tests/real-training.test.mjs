@@ -54,6 +54,17 @@ test("ending a genuine conversation is not incorrectly scored as fraud recogniti
   assert.equal(result.judgment, "실제 정체와 다름");
   assert.equal(result.checked, false);
 });
+test("sender-provided channels and in-chat questions do not complete independent verification", () => {
+  let s = state(1);
+  s = recordChoice(s, SCENARIOS[1], "verify_sender").state;
+  assert.equal(s.verification, "none");
+  assert.equal(evaluate(s, SCENARIOS[1], "uncertain").checked, false);
+  s = recordChoice(s, SCENARIOS[1], "verify_chat").state;
+  assert.equal(s.verification, "none");
+  s = recordChoice(s, SCENARIOS[1], "verify").state;
+  assert.equal(s.verification, "failed");
+  assert.equal(evaluate(s, SCENARIOS[1], "fraud").checked, true);
+});
 test("identity verification is recorded once and cannot be fabricated by a chat message", () => {
   const s = state(0);
   s.messages.push({ actor: "me", text: "원래 번호로 전화해 볼게요." });

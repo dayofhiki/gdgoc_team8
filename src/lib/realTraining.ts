@@ -5,7 +5,7 @@
  */
 export type Identity = "legitimate" | "fraud";
 export type Guess = "legitimate" | "fraud" | "uncertain";
-export type Choice = "verify" | "comply" | "share" | "stop";
+export type Choice = "verify" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop";
 export type Actor = "them" | "me" | "system";
 export type Message = { actor: Actor; text: string };
 export type Event = { choice: Choice; verifiedBefore: boolean; turn: number };
@@ -99,6 +99,7 @@ export type TrainingState = {
 
 export function recordChoice(state: TrainingState, scenario: Scenario, choice: Choice): { state: TrainingState; notice: string } {
   if (state.closed) throw new Error("이미 종료된 훈련입니다.");
+  if (state.events.length >= 6) throw new Error("확인 행동을 너무 많이 선택했습니다. 훈련을 마쳐 주세요.");
   if (choice === "verify" && state.verification !== "none") {
     throw new Error("이미 공식 경로로 확인했습니다.");
   }
@@ -107,6 +108,8 @@ export function recordChoice(state: TrainingState, scenario: Scenario, choice: C
     ? scenario.identity === "legitimate" ? "confirmed" : "failed"
     : state.verification;
   const notice = choice === "verify" ? scenario.verification
+    : choice === "verify_sender" ? "상대가 알려준 연락처·링크에서는 같은 주장을 반복했습니다. 상대가 제시한 경로는 독립적인 신원 확인이 아닙니다."
+    : choice === "verify_chat" ? "대화 상대는 자신이 맞다고 주장했습니다. 같은 채팅 안에서 되묻는 것만으로는 실제 신원을 확인할 수 없습니다."
     : choice === "comply" ? "상대방의 요청을 따른 것으로 기록했습니다. 실제 송금이나 정보 전송은 일어나지 않았습니다."
     : choice === "share" ? "개인정보를 제공한 것으로 가정했습니다. 실제 개인정보는 입력하거나 전송하지 않았습니다."
     : "상대와의 대화를 중단했습니다.";
@@ -137,6 +140,7 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
     checked ? "독립적으로 확인했어요" : "위험한 행동은 없었지만 확인 행동도 없었어요";
   const points: string[] = [];
   if (checked) points.push("상대가 알려준 경로가 아니라 원래 알고 있던 공식 경로로 직접 확인했습니다.");
+  if (state.events.some((event) => event.choice === "verify_sender" || event.choice === "verify_chat")) points.push("상대가 알려준 링크·번호나 같은 대화 안에서의 재확인은 독립 확인이 아니므로, 신뢰할 수 있는 별도 경로가 필요합니다.");
   else points.push("상대에게 확인하겠다고 말한 것만으로는 실제 확인이 끝나지 않습니다. 기존 번호나 공식 앱으로 별도로 확인해 보세요.");
   if (risk) points.push("신원이 검증되기 전에 상대 요구를 따르거나 개인정보를 제공하는 행동은 실제 피해로 이어질 수 있습니다.");
   else if (stopped && scenario.identity === "legitimate") points.push("대화 중단은 위험을 막지만 상대가 실제 가족·기관일 가능성까지 배제하진 못합니다. 이후 독립적인 경로로 확인하면 더 좋습니다.");
