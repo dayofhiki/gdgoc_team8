@@ -175,6 +175,7 @@ export function decideDialogueTurn(args: {
   primary: DialogueSignal;
   audit?: DialogueSignal;
   reply: string;
+  userText?: string;
   actions: Action[];
   nextTurn: number;
   maxTurns: number;
@@ -190,12 +191,16 @@ export function decideDialogueTurn(args: {
   const replyEnded = primary.speakerMove === "close" || primary.speakerMove === "none";
   const learnerDone = ["acknowledge", "decline", "verify_intent", "exit"].includes(primary.learnerMove) &&
     (!audit || ["acknowledge", "decline", "verify_intent", "exit"].includes(audit.learnerMove));
-  const activeRequest = actions.some(a => a.kind === "transfer" || a.kind === "provide_data" || a.kind === "link");
+  // 모의 행동 버튼이 화면에 보인다면 사용자가 눌러 볼 기회를 뺏지 않는다.
+  const activeRequest = actions.length > 0;
+  // 질문부호가 남은 발화를 두 모델이 실수로 맞장구로 분류하더라도 조기 종료하지 않는다.
+  const explicitQuestion = /[?？]/.test(args.userText ?? "");
+  if (explicitQuestion && primary.conversationComplete) issues.push("pending_user_question");
   const natural = nextTurn >= 2 && primary.conversationComplete && agree &&
-    !primary.hasPendingRequest && replyEnded && learnerDone && !activeRequest;
+    !primary.hasPendingRequest && replyEnded && learnerDone && !activeRequest && !explicitQuestion;
   const loop = nextTurn >= 4 && repeats >= 2 &&
     !primary.hasPendingRequest && !audit?.hasPendingRequest &&
-    learnerDone && !activeRequest;
+    learnerDone && !activeRequest && !explicitQuestion;
   const turnLimit = nextTurn >= maxTurns;
   const closed = natural || loop || turnLimit;
   const reason: EndReason | undefined = natural || loop ? "natural" : turnLimit ? "turn_limit" : undefined;
