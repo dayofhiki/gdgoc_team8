@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SCENARIOS, classifyOffer, evaluate, recordChoice } from "../src/lib/realTraining.ts";
+import { SCENARIOS, classifyOffer, evaluate, normalizeKoreanReply, recordChoice } from "../src/lib/realTraining.ts";
 
 function state(index) {
   return {
@@ -85,4 +85,31 @@ test("a text promise to verify or a lucky correct guess is not a verification ev
   const result = evaluate(s, SCENARIOS[1], "fraud");
   assert.equal(result.checked, false);
   assert.equal(result.judgment, "실제 정체와 일치");
+});
+
+
+test("natural Korean replies do not show stray English to senior learners", () => {
+  assert.equal(normalizeKoreanReply("official 앱이나 official website에서 확인해 주세요."), "공식 앱이나 공식 웹사이트에서 확인해 주세요.");
+  assert.equal(normalizeKoreanReply("official 택배 앱에서 직접 확인해 주세요."), "공식 택배 앱에서 직접 확인해 주세요.");
+  assert.equal(normalizeKoreanReply("이 link를 누르지 말고 app으로 확인하세요."), "이 링크를 누르지 말고 앱으로 확인하세요.");
+  assert.doesNotMatch(normalizeKoreanReply("official app에서 확인해 주세요."), /[A-Za-z]/);
+});
+test("feedback reveals truth prominently while strengths and improvements follow real behavior", () => {
+  const verified = evaluate(recordChoice(state(0), SCENARIOS[0], "verify").state, SCENARIOS[0], "legitimate");
+  assert.equal(verified.highlights.status, "안전 확인");
+  assert.equal(verified.identity, "legitimate");
+  assert.ok(verified.highlights.good.some((point) => point.keyword === "독립 확인"));
+  assert.equal(verified.highlights.improve.length, 0);
+
+  const noCheck = evaluate(state(1), SCENARIOS[1], "fraud");
+  assert.equal(noCheck.identity, "fraud");
+  assert.equal(noCheck.highlights.judgment, "판단 일치");
+  assert.ok(noCheck.highlights.improve.some((point) => point.keyword === "신원 확인"));
+  assert.ok(noCheck.highlights.good.every((point) => point.keyword !== "독립 확인"));
+
+  const offered = withOffer(state(1), "transfer");
+  const unsafe = evaluate(recordChoice(offered.state, SCENARIOS[1], "comply", offered.source).state, SCENARIOS[1], "uncertain");
+  assert.equal(unsafe.highlights.status, "위험 행동");
+  assert.ok(unsafe.highlights.improve.some((point) => point.keyword === "송금 위험"));
+  assert.equal(unsafe.highlights.good.some((point) => point.keyword === "정보 보호"), false);
 });
