@@ -10,7 +10,7 @@ import type { Action } from "./trainingActions.ts";
 import { RESPONSE_SCHEMA, type Proposed } from "./trainingActions.ts";
 
 export type Stage = "contact" | "context" | "request" | "closing";
-export type LearnerMove = "question" | "acknowledge" | "decline" | "verify_intent" | "engage" | "exit";
+export type LearnerMove = "question" | "acknowledge" | "decline" | "verify_intent" | "verified_claimed" | "claimed_action" | "suspect" | "engage" | "exit";
 export type SpeakerMove = "explain" | "ask" | "answer" | "smalltalk" | "close" | "none";
 export type DialogueSignal = {
   stage: Stage;
@@ -32,7 +32,7 @@ export type DialogueMemory = {
 export type EndReason = "natural" | "turn_limit" | "action";
 
 const STAGES: Stage[] = ["contact", "context", "request", "closing"];
-const LEARNER: LearnerMove[] = ["question", "acknowledge", "decline", "verify_intent", "engage", "exit"];
+const LEARNER: LearnerMove[] = ["question", "acknowledge", "decline", "verify_intent", "verified_claimed", "claimed_action", "suspect", "engage", "exit"];
 const SPEAKER: SpeakerMove[] = ["explain", "ask", "answer", "smalltalk", "close", "none"];
 
 export const DIALOGUE_SCHEMA = {
@@ -107,7 +107,8 @@ export const DIALOGUE_POLICY = [
   "독립 확인을 하겠다는 말은 실제로 확인했다는 뜻이 아니다. 확인 완료 사실은 서버의 행동 이벤트가 있을 때만 성립한다.",
   "정체와 답을 대화에 직접 공개하지 않는다. 정상 연락과 사칭 연락 모두 평범한 한국어 대화가 가능해야 한다.",
   "dialogue.stage는 contact(첫 접촉), context(사정 설명), request(진행 중인 요청), closing(요청이 해결되거나 대화를 끝내는 중) 중 하나다.",
-  "dialogue.learnerMove는 마지막 사용자 발화의 실제 의도다. question / acknowledge / decline / verify_intent / engage / exit.",
+  "dialogue.learnerMove는 마지막 사용자 발화의 맥락상 의도에 대한 추정이다. question=질문, acknowledge=맞장구, decline=요청 거절, verify_intent=상대가 알려준 수단이 아닌 기존 독립 연락처로 확인하겠다는 의사, verified_claimed=이미 다른 가족·기관에 확인했다고 말함(실제 확인 증거 아님), claimed_action=이미 돈을 보냈거나 링크를 눌렀다고 말함(실제 행동 증거 아님), suspect=사칭·피싱 의심, engage=일반 대화, exit=상대와 대화 종료. 단순히 '진짜 너 맞아?'는 의심 단정이 아니라 질문일 수 있다.",
+  "말로 '입금했다', '확인했다'고 해도 실제 행동이 발생했다고 확정하지 않는다. 서버 이벤트가 없으면 확인·송금 성공으로 채점하지 않는다. 상대방의 반응으로 성공/실패를 판정하지 않는다.",
   "dialogue.speakerMove는 현재 reply의 역할이다. explain / ask / answer / smalltalk / close / none.",
   "dialogue.hasPendingRequest는 대화 참가자가 아직 답하거나 수행하기를 기다리는 핵심 요청이 있는지 표시한다.",
   "dialogue.conversationComplete는 화자가 실제로 대화를 끝냈고 현재 더 할 말이 없을 때만 true다.",
@@ -295,8 +296,8 @@ export function decideDialogueTurn(args: {
   const agree = !!audit && audit.conversationComplete && !audit.hasPendingRequest &&
     (audit.speakerMove === "close" || audit.speakerMove === "none");
   const replyEnded = primary.speakerMove === "close" || primary.speakerMove === "none";
-  const learnerDone = ["acknowledge", "decline", "verify_intent", "exit"].includes(primary.learnerMove) &&
-    (!audit || ["acknowledge", "decline", "verify_intent", "exit"].includes(audit.learnerMove));
+  const learnerDone = ["acknowledge", "decline", "verify_intent", "verified_claimed", "claimed_action", "suspect", "exit"].includes(primary.learnerMove) &&
+    (!audit || ["acknowledge", "decline", "verify_intent", "verified_claimed", "claimed_action", "suspect", "exit"].includes(audit.learnerMove));
   // 모의 행동 버튼이 화면에 보인다면 사용자가 눌러 볼 기회를 뺏지 않는다.
   const activeRequest = actions.length > 0;
   // 질문부호가 남은 발화를 두 모델이 실수로 맞장구로 분류하더라도 조기 종료하지 않는다.
