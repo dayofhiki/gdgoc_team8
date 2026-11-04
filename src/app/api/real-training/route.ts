@@ -22,7 +22,7 @@ function apiOk(data: object) {
   return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
 }
 function getKey(): string {
-  const key = process.env.TRAINING_SESSION_SECRET || process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY;
+  const key = process.env.TRAINING_SESSION_SECRET || process.env.TRAINING_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("GEMINI_KEY_MISSING");
   return key;
 }
@@ -76,9 +76,14 @@ const hasSensitiveData = (s: string) =>
  * 양쪽 모두 공용 Gemini→Groq(→OpenRouter) 자동 전환을 사용한다.
  * 정책·행동 실행 결과는 모델이 아닌 서버 상태 머신이 결정한다.
  */
+function trainingProviders() {
+  return providers((key) => key === "GEMINI_API_KEY"
+    ? (process.env.TRAINING_GEMINI_API_KEY || process.env.GEMINI_API_KEY)
+    : process.env[key]);
+}
 async function generateResponse(state: TrainingState, text: string) {
   const scenario = SCENARIOS[state.scenario];
-  if (!providers().length) throw new Error("AI_NOT_CONFIGURED");
+  if (!trainingProviders().length) throw new Error("AI_NOT_CONFIGURED");
   const instruction = [
     "당신은 동의된 사기 예방 문자 대화 속 가상 상대방이다. 실제 정상인 또는 사칭범 여부를 먼저 공개하지 않는다.",
     "상대 설정: " + scenario.persona,
@@ -106,7 +111,7 @@ async function generateResponse(state: TrainingState, text: string) {
     schema: RESPONSE_SCHEMA,
     parse: parseResponse,
     budgetMs: 8500,
-  });
+  }, { list: trainingProviders() });
   const reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 320);
   if (!reply) throw new Error("INVALID_REPLY");
   let extracted = first.value.actions;
@@ -123,7 +128,7 @@ async function generateResponse(state: TrainingState, text: string) {
         ].join("\n"),
       },
       { role: "user", content: reply },
-    ], { temperature: 0, maxTokens: 460, json: true, schema: RESPONSE_SCHEMA, parse: parseResponse, budgetMs: 4800 });
+    ], { temperature: 0, maxTokens: 460, json: true, schema: RESPONSE_SCHEMA, parse: parseResponse, budgetMs: 4800 }, { list: trainingProviders() });
     // 한 모델이 하나의 행동을 누락해도 둘 중 하나가 찾아낸 구체적 행동을 기록한다.
     extracted = [...extracted, ...audit.value.actions];
   } catch (error) {
@@ -155,7 +160,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     getKey();
-    if (!providers().length) throw new Error("AI_NOT_CONFIGURED");
+    if (!trainingProviders().length) throw new Error("AI_NOT_CONFIGURED");
     if (body.action === "start") {
       const index = randomInt(SCENARIOS.length);
       const scenario = SCENARIOS[index];
