@@ -158,3 +158,22 @@ test("global menu offers family contact and ignore, not an unrelated official-ap
   assert.equal(familyVerified.verification, "confirmed");
   assert.equal(evaluate(familyVerified, SCENARIOS[0], "legitimate").checked, true);
 });
+
+
+test("delivery address change prompts expose official-app action, even if Gemini omits its offers", () => {
+  const screenshotReply = "운송장 번호에 적힌 주소가 명확하지 않아 배송이 지연되고 있습니다. 스마트폰에 설치된 택배사 공식 앱에서 배송지 주소를 변경해 주시겠어요";
+  assert.deepEqual(classifyOffers(screenshotReply, []), ["official_app"]);
+  assert.deepEqual(classifyOffers(screenshotReply, ["official_app"]), ["official_app"]);
+  assert.deepEqual(classifyOffers("택배사 공식 앱에서 배송지 정보를 수정해 주세요.", []), ["official_app"]);
+  assert.deepEqual(classifyOffers("은행 공식 앱에서 비밀번호를 변경해 주세요.", []), ["official_app"]);
+
+  const { state: s, source } = withOffer(state(2), "official_app", screenshotReply);
+  const verified = recordChoice(s, SCENARIOS[2], "verify", source).state;
+  assert.equal(verified.closed, true);
+  assert.equal(verified.verification, "confirmed");
+});
+test("mentioning official apps in a warning or unrelated sentence does not create an action", () => {
+  assert.deepEqual(classifyOffers("택배사 공식 앱을 열지 마세요. 링크로 확인하세요.", []), []);
+  assert.deepEqual(classifyOffers("공식 앱이 아닌 문자 속 링크에서 주소를 변경해 주세요.", ["official_app", "link"]), ["link"]);
+  assert.deepEqual(classifyOffers("택배사 공식 앱에 대한 문의입니다.", []), []);
+});
