@@ -63,6 +63,15 @@ const offerIcons: Record<OfferKind, string> = {
   call: "☎",
 };
 
+function offerText(kind: OfferKind, title?: string): string {
+  if (kind === "transfer" && title?.includes("가족")) return "수리비 보내기";
+  if (kind === "transfer") return "요청 금액 이체하기";
+  if (kind === "share" && title?.includes("택배")) return "배송 정보 전송";
+  if (kind === "link" && title?.includes("택배")) return "배송 정보 확인 링크";
+  if (kind === "link" && title?.includes("은행")) return "거래 내역 확인 링크";
+  return offerLabels[kind];
+}
+
 function contactTitle(title?: string): string {
   if (title?.includes("가족")) return "처음 보는 번호";
   if (title?.includes("택배")) return "배송 안내";
@@ -232,6 +241,8 @@ export default function RealTraining() {
             <div className="kv"><span className="kv__k">안전 행동</span><span className="kv__v" style={{ whiteSpace: "normal" }}>{result.safety}</span></div>
             <div className="kv"><span className="kv__k">정체 판단</span><span className="kv__v">{result.judgment}</span></div>
             <div className="kv"><span className="kv__k">독립 확인</span><span className="kv__v">{result.checked ? "직접 실행함" : "실행하지 않음"}</span></div>
+            {result.linkOpened && <div className="kv"><span className="kv__k">메시지 링크</span><span className="kv__v">열어 봄</span></div>}
+            {result.followedSenderNumber && <div className="kv"><span className="kv__k">안내받은 번호</span><span className="kv__v">연락함</span></div>
           </div>
           <div className="card card--blue">
             <p className="card__title">이번 행동에서 배울 점</p>
@@ -320,10 +331,10 @@ export default function RealTraining() {
                       type="button"
                       disabled={busy}
                       onClick={() => activateOffer(m.offer!, i)}
-                      aria-label={offerLabels[m.offer] + " (가상 행동)"}
+                      aria-label={offerText(m.offer, session?.title) + " (가상 행동)"}
                     >
                       <span className="rt-offer-icon" aria-hidden="true">{offerIcons[m.offer]}</span>
-                      {offerLabels[m.offer]}
+                      {offerText(m.offer, session?.title)}
                       <span aria-hidden="true">›</span>
                     </button>
                   )}
@@ -382,9 +393,9 @@ export default function RealTraining() {
             <div className="rt-browser-bar"><span aria-hidden="true">◀</span><strong>메시지에서 열린 페이지</strong><span aria-hidden="true">···</span></div>
             <div className="rt-browser-content">
               <span className="rt-browser-symbol" aria-hidden="true">▣</span>
-              <h2>정보 확인</h2>
-              <p>요청된 정보를 입력하고 계속 진행하시겠어요?</p>
-              <div className="rt-browser-field">정보 입력란</div>
+              <h2>{session?.title?.includes("택배") ? "배송지 확인" : session?.title?.includes("은행") ? "거래 내역 확인" : "안내 확인"}</h2>
+              <p>정보 확인을 위해 아래 항목을 작성하시겠어요?</p>
+              <div className="rt-browser-field">{session?.title?.includes("택배") ? "받는 분 · 배송지" : "이름 · 확인 정보"}</div>
               <button className="btn btn--primary" disabled={busy} onClick={() => void perform("share", previewIndex)}>
                 정보 입력 후 전송
               </button>
