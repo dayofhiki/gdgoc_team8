@@ -47,7 +47,7 @@ function Review() {
       </section>
       <BottomCTA row>
         <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-        <button className="btn btn--primary" onClick={() => router.push("/roleplay/case")}>사례 다시 보기</button>
+        <button className="btn btn--primary" onClick={() => router.push("/roleplay/mode")}>다시 연습하기</button>
       </BottomCTA>
     </Screen>
   );

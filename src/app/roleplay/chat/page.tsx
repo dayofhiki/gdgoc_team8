@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { PersonIcon } from "@/components/Icons";
 import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
 import { actionChoice, type Action } from "@/lib/trainingActions";
-import { useAppState } from "@/components/AppState";
+import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 import { copyText } from "@/lib/share";
 import type { BehaviorFeedback } from "@/lib/trainingFeedback";
 
@@ -74,7 +74,7 @@ function contactTitle(title?: string): string {
 
 export default function RealTraining() {
   const router = useRouter();
-  const { ready: familyReady, familyQuestion } = useAppState();
+  const { ready: familyReady, familyQuestion, nickname } = useAppState();
   const started = useRef(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>("chat");
@@ -291,7 +291,7 @@ export default function RealTraining() {
         <Header title="내 대응 돌아보기" back={() => router.push("/home")} />
         <section className="screen__body rt-feedback rt-feedback--behavior">
           <section className={"rt-feedback-behavior-hero rt-feedback-behavior-hero--" + feedback.tone} aria-label="이번 대응의 핵심 피드백">
-            <span className="rt-feedback-behavior-eyebrow">오늘의 대응 피드백</span>
+            <span className="rt-feedback-behavior-eyebrow">{nickname || DEFAULT_NICKNAME}님의 대응 피드백</span>
             <h2>{feedback.headline}</h2>
             <p>{feedback.explanation}</p>
             <span className="rt-feedback-evidence-note">정답이 아닌, 실제로 선택한 행동을 기준으로 살펴봤어요.</span>
@@ -396,7 +396,7 @@ export default function RealTraining() {
         </section>
         <BottomCTA row>
           <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-          <button className="btn btn--primary" onClick={() => void start()}>한 번 더 연습하기</button>
+          <button className="btn btn--primary" onClick={() => router.push("/roleplay/mode")}>다시 연습하기</button>
         </BottomCTA>
       </Screen>
     );
