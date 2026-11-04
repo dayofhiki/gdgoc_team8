@@ -1,4 +1,4 @@
-import { actionChoice } from "./trainingActions";
+import { actionChoice } from "./trainingActions.ts";
 import type { Action } from "./trainingActions";
 
 /**
