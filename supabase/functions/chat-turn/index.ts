@@ -1,6 +1,6 @@
 import { generateReply, nextStage } from "../_shared/ai.ts";
 import { handle, HttpError, must } from "../_shared/http.ts";
-import { hasPii, maskPii } from "../_shared/pii.ts";
+import { detectPii, maskPii } from "../_shared/pii.ts";
 import type { AiOutput, ChatTurnRequest, ChatTurnResponse, Message, Mission, Stage } from "../_shared/types.ts";
 import { decideNext } from "./decide.ts";
 
@@ -29,23 +29,31 @@ Deno.serve(handle<ChatTurnRequest>(async ({ body, user, admin }): Promise<ChatTu
     await admin.from("messages").select("role, text, stage").eq("session_id", session.id).order("created_at"),
   ) as Pick<Message, "role" | "text" | "stage">[];
 
-  const save = async (role: Message["role"], text: string, stage: Stage) =>
-    must(await admin.from("messages").insert({ session_id: session.id, role, text, stage }).select().single()) as Message;
+  // (session_id, turn, role) 유니크 → 같은 턴을 동시에 보낸 두 번째 요청은 여기서 409
+  const save = async (role: Message["role"], text: string, stage: Stage, turn: number) => {
+    const res = await admin.from("messages").insert({ session_id: session.id, role, text, stage, turn }).select().single();
+    if (res.error?.code === "23505") throw new HttpError(409, "TURN_CONFLICT", "이전 답장을 처리하고 있어요");
+    return must(res) as Message;
+  };
+  const last = async () =>
+    must(
+      await admin.from("messages").select().eq("session_id", session.id)
+        .order("created_at", { ascending: false }).limit(1).single(),
+    ) as Message;
 
-  // 첫 호출(text 없음): 오프닝 대사. 이미 대화가 있으면 마지막 메시지를 다시 돌려줌(새로고침 대비).
+  // 첫 호출(text 없음): 오프닝 대사(turn 0). 이미 있으면(새로고침·동시 호출) 마지막 메시지를 돌려줌.
   if (!text) {
-    if (history.length) {
-      const last = must(
-        await admin.from("messages").select().eq("session_id", session.id)
-          .order("created_at", { ascending: false }).limit(1).single(),
-      ) as Message;
-      return { reply: last, stage, ended: false, used_fallback: false };
-    }
-    const reply = await save("scammer", mission.fallback_lines[stage], stage);
+    const reply = history.length ? await last() : await save("scammer", mission.fallback_lines[stage], stage, 0)
+      .catch((e) => e instanceof HttpError && e.code === "TURN_CONFLICT" ? last() : Promise.reject(e));
     return { reply, stage, ended: false, used_fallback: false };
   }
 
-  if (hasPii(text)) throw new HttpError(422, "PII_BLOCKED", "전화번호·계좌번호 같은 실제 정보는 입력하지 마세요");
+  const pii = detectPii(text);
+  if (pii.length) {
+    throw new HttpError(422, "PII_BLOCKED", "전화번호·계좌번호 같은 실제 정보는 입력하지 마세요", {
+      types: [...new Set(pii.map((p) => p.type))],
+    });
+  }
 
   const ai: AiOutput = await withTimeout(
     generateReply({
@@ -64,8 +72,8 @@ Deno.serve(handle<ChatTurnRequest>(async ({ body, user, admin }): Promise<ChatTu
 
   const d = decideNext(session.turn_count, ai);
   // 두 번 나눠 insert: 한 문장이면 created_at(now())이 같아 순서가 섞임
-  await save("senior", text, stage);
-  const reply = await save("scammer", maskPii(ai.reply), d.stage);
+  await save("senior", text, stage, d.turn_count);
+  const reply = await save("scammer", maskPii(ai.reply), d.stage, d.turn_count);
   must(
     await admin.from("sessions").update({
       stage: d.stage,

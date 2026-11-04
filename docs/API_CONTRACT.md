@@ -133,8 +133,15 @@ const r = await callFn<InviteJoinResponse>("invite-join", { token });
 
 | 오류 | 상태 | 언제 | FE 처리 |
 |---|---|---|---|
-| `PII_BLOCKED` | 422 | 전화번호·주민번호·계좌번호 입력. **저장 안 됨** | 입력 유지 + 경고 |
+| `PII_BLOCKED` | 422 | 전화·주민/외국인번호·카드·계좌·이메일·링크·생일(키워드 동반) 입력. **저장 안 됨** | 입력 유지 + 경고 |
+
+`PII_BLOCKED`는 걸린 종류를 `types`로 함께 보냅니다 (경고 문구용, 선택 필드):
+```json
+{ "error": { "code": "PII_BLOCKED", "message": "전화번호·계좌번호 같은 실제 정보는 입력하지 마세요", "types": ["phone"] } }
+```
+`types` 값: `rrn` 주민·외국인번호 · `phone` · `card` · `account` · `email` · `url` · `birth` · `number`(은행명 없는 10자리 이상 숫자). 못 잡는 것: 한글 숫자("공일공")·이름·주소·비밀번호.
 | `SESSION_ENDED` | 409 | 이미 끝난 세션 | 결과 화면으로 |
+| `TURN_CONFLICT` | 409 | 같은 턴을 동시에 두 번 보냄 (연타). 먼저 온 요청만 저장 | 무시 (먼저 보낸 요청의 응답을 씀) |
 | `NOT_FOUND` | 404 | 없는 세션 또는 남의 세션 | 처음으로 |
 | `BAD_REQUEST` | 400 | session_id 없음, text가 문자열 아님 | — |
 
@@ -197,7 +204,7 @@ if (turn.ended) { /* session-end 호출 */ }
 
 ```ts
 const { data, error } = await sb().from("invites")
-  .insert({ senior_name: "어머니", difficulty: "normal", max_participants: 1 })
+  .insert({ senior_name: "어머니", difficulty: "normal" })
   .select("token").single();
 const link = `${location.origin}/?invite=${data.token}`;
 ```
@@ -206,7 +213,7 @@ const link = `${location.origin}/?invite=${data.token}`;
 |---|---|---|
 | `senior_name` | 시니어 호칭 (자유 입력, 실명 넣지 않기) | `""` |
 | `difficulty` | `easy` · `normal` · `hard` | `normal` |
-| `max_participants` | 1~200 (가족 1, 기관 N) | `1` |
+| `max_participants` | 1~200. 익명 로그인이라 같은 사람도 브라우저가 바뀌면 새 참여자로 세므로 보통 생략 | `200` |
 
 `token`(64자)·`created_by`·`expires_at`(7일 후)은 서버가 채웁니다. 조회는 본인이 만든 초대만 가능합니다.
 
@@ -218,7 +225,7 @@ const link = `${location.origin}/?invite=${data.token}`;
   "created_by": "0161728e-3827-4e67-94e9-34738dff8bad",
   "senior_name": "어머니",
   "difficulty": "normal",
-  "max_participants": 1,
+  "max_participants": 200,
   "expires_at": "2026-11-10T09:13:29.807159+00:00",
   "created_at": "2026-11-03T09:13:29.807159+00:00"
 }
@@ -285,8 +292,9 @@ await sb().from("results").update({ share_consent: true }).eq("session_id", id);
 | `INVITE_INVALID` | 404 | invite-join | E01 "유효하지 않은 링크" |
 | `INVITE_EXPIRED` | 410 | invite-join | E01 "유효기간 지남" |
 | `INVITE_FULL` | 409 | invite-join | E01 "인원 가득 참" |
-| `PII_BLOCKED` | 422 | chat-turn | 입력 유지 + 경고 |
+| `PII_BLOCKED` | 422 | chat-turn | 입력 유지 + 경고 (`types`로 종류 표시 가능) |
 | `SESSION_ENDED` | 409 | chat-turn | 결과 화면으로 |
+| `TURN_CONFLICT` | 409 | chat-turn | 무시 |
 | `NOT_FOUND` | 404 | chat-turn · session-end | 처음으로 |
 | `BAD_REQUEST` | 400 | 전체 | 요청 형식 확인 (개발 중 버그) |
 | `UNAUTHORIZED` | 401 | 전체 | `ensureAnon()` 후 재시도 |

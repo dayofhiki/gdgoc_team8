@@ -114,7 +114,7 @@ export default function Lab() {
     <main style={S.wrap}>
       <span style={S.badge}>로컬 AI 테스트 · 서버/DB 사용 안 함</span>
       <p style={S.small}>
-        AI: {gemini === null ? "확인 중…" : gemini ? "Gemini 연결됨 (.env.local의 GEMINI_API_KEY)" : "키 없음 → mock 대사"}
+        AI: {gemini === null ? "확인 중…" : gemini ? "LLM 연결됨 (.env.local의 GEMINI·GROQ·OPENROUTER_API_KEY 중 등록된 것)" : "키 없음 → mock 대사"}
       </p>
 
       {view === "setup" && (
