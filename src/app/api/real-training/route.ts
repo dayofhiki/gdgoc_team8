@@ -7,6 +7,7 @@ import type { DialogueSignal } from "@/lib/trainingDialogue";
 import { complete, providers, type Msg } from "../../../../supabase/functions/_shared/llm";
 import { detectPii } from "../../../../supabase/functions/_shared/pii";
 import type { Choice, Guess, TrainingState } from "@/lib/realTraining";
+import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/lib/trainingTurnContext";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,11 +110,14 @@ async function generateResponse(state: TrainingState, text: string) {
   const available = trainingProviders();
   if (!available.length) throw new Error("AI_NOT_CONFIGURED");
   const dialogue = state.dialogue ?? INITIAL_DIALOGUE;
+  const currentContext = learnerContext(state.messages, text);
   const instruction = [
     "당신은 사용자가 참여한 금융사기 예방 문자 훈련에서 실제 문자 대화 상대를 연기하는 배우다. 대사에 훈련·AI·시나리오라는 말을 꺼내지 않는다.",
     "당신은 훈련의 상대 인물을 연기하는 '배우'이며, 대화 종료·안전 평가·보안 정책은 서버가 결정한다.",
     "아래 역할 정보와 이미 오간 대화에서 확정된 사실을 일관되게 유지한다. 아직 정해지지 않은 세부사항을 새로운 사실로 만들어내지 않는다.",
     actorBrief(scenario, dialogue, state.turns),
+    "### 학습자의 이번 발화와 반복 패턴(해석은 추정, 채점 근거 아님)",
+    learnerTurnGuidance(currentContext, scenario.identity, state.events.length),
     "앞 턴까지의 대화 상태: " + JSON.stringify({
       stage: dialogue.stage,
       hasPendingRequest: dialogue.hasPendingRequest,
@@ -191,7 +195,11 @@ async function generateResponse(state: TrainingState, text: string) {
     }, { list: available });
     auditSignal = audit.value.dialogue;
     // 모델의 다른 해석을 모아 행동 누락을 줄이되, 실제 허용 여부는 서버에서 검증한다.
-    extracted = [...extracted, ...audit.value.actions];
+    // 정상인 대사의 안전 경로는 감사 모델의 재해석만으로 생성하지 않는다.
+    // 실제 답변을 작성한 1차 모델의 명시적 송금 부탁만 행동으로 허용한다.
+    extracted = scenario.identity === "legitimate"
+      ? first.value.actions.filter(a => a.kind === "transfer")
+      : [...extracted, ...audit.value.actions];
   } catch (error) {
     console.warn("training: independent conversation audit unavailable", error instanceof Error ? error.name : "unknown");
   }
@@ -251,6 +259,20 @@ export async function POST(req: NextRequest) {
       const text = typeof body.text === "string" ? body.text.trim() : "";
       if (!text || text.length > 300) return apiError("답장은 1~300자로 입력해 주세요.", 400);
       if (hasSensitiveData(text) || detectPii(text).length) return apiError("실제 전화번호·계좌·이메일·링크 등 개인정보는 입력하지 말아 주세요.", 422);
+      if (isExplicitTrainingStop(text)) {
+        // SY/AI_System의 명시적 중단 원칙: 앱에서 종료한다는 말만 즉시 중단.
+        // "그만 연락해" 같은 발신자에 대한 거절은 일반 대화로 처리한다.
+        const withMessage: TrainingState = {
+          ...state, turns: state.turns + 1,
+          messages: [...state.messages, { actor: "me", text }],
+        };
+        const ended = recordChoice(withMessage, scenario, "stop").state;
+        return apiOk({
+          token: seal(ended), messages: ended.messages, turns: ended.turns,
+          maxTurns: MAX_TURNS, verified: ended.verification !== "none",
+          closed: ended.closed, endReason: ended.endReason ?? null,
+        });
+      }
       const response = await generateResponse(state, text);
       state.messages.push({ actor: "me", text });
       if (response.reply) state.messages.push({ actor: "them", text: response.reply, actions: response.actions });
