@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import { PersonIcon } from "@/components/Icons";
 import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
 
-type OfferKind = "transfer" | "share" | "link" | "call";
-type Message = { actor: "them" | "me" | "system"; text: string; offer?: OfferKind };
-type Choice = "verify" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
+type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
+type LinkPreview = { url: string; domain: string; title: string; description: string };
+type Message = { actor: "them" | "me" | "system"; text: string; offer?: OfferKind; offers?: OfferKind[]; linkPreview?: LinkPreview };
+type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
 type Guess = "legitimate" | "fraud" | "uncertain";
-type Phase = "loading" | "chat" | "judge" | "result";
-type Ending = { choice: "verify" | "stop" | "comply" | "share"; stage: "receipt" | "review" };
+type Phase = "chat" | "judge" | "result";
+type Ending = { choice: "verify" | "family_contact" | "stop" | "comply" | "share"; stage: "receipt" | "review" };
 type Session = {
   token: string;
   title?: string;
@@ -61,8 +62,10 @@ async function request(payload: object): Promise<Reply> {
 const offerLabels: Record<OfferKind, string> = {
   transfer: "송금하기",
   share: "정보 전송하기",
-  link: "안내 링크 열기",
+  link: "링크 열기",
   call: "안내 번호로 전화",
+  official_app: "공식 앱에서 조회",
+  official_call: "대표번호로 전화",
 };
 
 const offerIcons: Record<OfferKind, string> = {
@@ -70,14 +73,18 @@ const offerIcons: Record<OfferKind, string> = {
   share: "↗",
   link: "↗",
   call: "☎",
+  official_app: "▣",
+  official_call: "☎",
 };
 
 function offerText(kind: OfferKind, title?: string): string {
   if (kind === "transfer" && title?.includes("가족")) return "수리비 보내기";
   if (kind === "transfer") return "요청 금액 이체하기";
   if (kind === "share" && title?.includes("택배")) return "배송 정보 전송";
-  if (kind === "link" && title?.includes("택배")) return "배송 정보 확인 링크";
-  if (kind === "link" && title?.includes("은행")) return "거래 내역 확인 링크";
+  if (kind === "official_app" && title?.includes("은행")) return "은행 앱 열기";
+  if (kind === "official_app" && title?.includes("택배")) return "택배사 앱 열기";
+  if (kind === "official_call" && title?.includes("은행")) return "카드 뒷면 번호로 전화";
+  if (kind === "official_call" && title?.includes("택배")) return "택배사 고객센터로 전화";
   return offerLabels[kind];
 }
 
@@ -92,7 +99,7 @@ export default function RealTraining() {
   const router = useRouter();
   const started = useRef(false);
   const historyRef = useRef<HTMLDivElement>(null);
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [phase, setPhase] = useState<Phase>("chat");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [session, setSession] = useState<Session | null>(null);
@@ -108,7 +115,7 @@ export default function RealTraining() {
   const [ending, setEnding] = useState<Ending | null>(null);
 
   async function start() {
-    setPhase("loading");
+    setPhase("chat");
     setError("");
     setInput("");
     setSession(null);
@@ -124,7 +131,7 @@ export default function RealTraining() {
     try {
       const initial = await request({ action: "start" });
       setSession(initial);
-      try { setTipVisible(localStorage.getItem("mikki-action-guide-v1") !== "seen"); }
+      try { setTipVisible(localStorage.getItem("mikki-menu-guide-v2") !== "seen"); }
       catch { setTipVisible(true); }
       setPhase("chat");
     } catch (err) {
@@ -170,7 +177,7 @@ export default function RealTraining() {
 
   function dismissGuide() {
     setTipVisible(false);
-    try { localStorage.setItem("mikki-action-guide-v1", "seen"); } catch { /* storage disabled */ }
+    try { localStorage.setItem("mikki-menu-guide-v2", "seen"); } catch { /* storage disabled */ }
   }
 
   function openActions() {
@@ -219,7 +226,7 @@ export default function RealTraining() {
         setPreviewIndex(sourceIndex);
       } else {
         setPreviewIndex(null);
-        if (next.closed && (choice === "verify" || choice === "stop" || choice === "comply" || choice === "share")) {
+        if (next.closed && (choice === "verify" || choice === "family_contact" || choice === "stop" || choice === "comply" || choice === "share")) {
           setEnding({ choice, stage: "receipt" });
         } else if (next.closed || next.turns >= next.maxTurns) {
           setPhase("judge");
@@ -241,7 +248,8 @@ export default function RealTraining() {
     const choice: Choice =
       offer === "transfer" ? "comply" :
       offer === "share" ? "share" :
-      offer === "call" ? "verify_sender" : "open_link";
+      offer === "call" ? "verify_sender" :
+      offer === "official_app" || offer === "official_call" ? "verify" : "open_link";
     void perform(choice, index);
   }
 
@@ -259,23 +267,6 @@ export default function RealTraining() {
     } finally {
       setBusy(false);
     }
-  }
-
-  if (phase === "loading") {
-    return (
-      <Screen>
-        <Header title="실전 대응 훈련" back={() => router.push("/home")} />
-        <section className="screen__body">
-          <div className="stack" style={{ marginTop: 60, gap: 14 }}>
-            <h2 className="title">상대가 누구인지 모르는 상황부터 연습해요</h2>
-            <p className="desc">실제 연락과 사칭 시도가 섞여 있어요. 사기인지 맞히는 것보다 안전하게 확인하는 행동이 중요해요.</p>
-            {busy ? <p className="desc" role="status">훈련을 준비하고 있어요…</p> : null}
-            {error ? <p role="alert" style={{ color: "var(--red)" }}>{error}</p> : null}
-          </div>
-        </section>
-        {!busy && <BottomCTA><button className="btn btn--primary" onClick={() => void start()}>다시 시도하기</button></BottomCTA>}
-      </Screen>
-    );
   }
 
   if (phase === "result" && result) {
@@ -396,11 +387,24 @@ export default function RealTraining() {
           <strong>{contact}</strong>
           <span>문자 메시지</span>
         </div>
-        <button type="button" className="rt-header-more" onClick={openActions} aria-label="대응 행동 메뉴 열기" aria-expanded={actionsOpen}>···</button>
+        <button type="button" className="rt-header-more" onClick={openActions} aria-label="다른 사람에게 연락하거나 대화 중단 메뉴 열기" aria-expanded={actionsOpen}>···</button>
       </header>
+      {tipVisible && session && (
+        <div className="rt-menu-guide" role="status">
+          <span>위의 <b>···</b>에서 가족에게 연락하거나 대화를 중단할 수 있어요.</span>
+          <button type="button" onClick={dismissGuide} aria-label="안내 닫기">×</button>
+        </div>
+      )}
 
       <div className="rt-history" ref={historyRef} role="log" aria-live="polite" aria-relevant="additions text">
         <div className="rt-day">오늘 · 새로운 대화</div>
+        {!session && !error && <div className="rt-loading-message" role="status">새 메시지를 불러오는 중…</div>}
+        {!session && error && (
+          <div className="rt-loading-error" role="alert">
+            <p>{error}</p>
+            <button type="button" onClick={() => void start()}>다시 불러오기</button>
+          </div>
+        )}
         {(session?.messages ?? []).map((m, i) =>
           m.actor === "system" ? (
             <div key={i} className="rt-system"><span>{m.text}</span></div>
@@ -410,19 +414,45 @@ export default function RealTraining() {
               <div className="rt-msg-body">
                 <div className="rt-bubble">
                   <p>{m.text}</p>
-                  {m.actor === "them" && m.offer && (
-                    <button
-                      className={m.offer === "link" || m.offer === "call" ? "rt-message-link" : "rt-message-request"}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => activateOffer(m.offer!, i)}
-                      aria-label={offerText(m.offer, session?.title) + " (가상 행동)"}
-                    >
-                      <span className="rt-offer-icon" aria-hidden="true">{offerIcons[m.offer]}</span>
-                      {offerText(m.offer, session?.title)}
-                      <span aria-hidden="true">›</span>
+                  {m.actor === "them" && m.linkPreview && (
+                    <div className="rt-link-attachment">
+                      <button type="button" className="rt-link-url" onClick={() => activateOffer("link", i)} disabled={busy}
+                        aria-label={m.linkPreview.domain + " 링크 열기 (모의 문자)"}>
+                        {m.linkPreview.url}
+                      </button>
+                      <button type="button" className="rt-link-preview" onClick={() => activateOffer("link", i)} disabled={busy}
+                        aria-label={m.linkPreview.title + " 미리보기 열기 (모의 문자)"}>
+                        <span className="rt-link-preview-image" aria-hidden="true"><span>▤</span></span>
+                        <span className="rt-link-preview-copy">
+                          <strong>{m.linkPreview.title}</strong>
+                          <small>{m.linkPreview.description}</small>
+                          <small className="rt-link-preview-domain">{m.linkPreview.domain}</small>
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                  {m.actor === "them" && (m.offers ?? (m.offer ? [m.offer] : [])).includes("call") && (
+                    <button type="button" className="rt-phone-link" disabled={busy}
+                      onClick={() => activateOffer("call", i)} aria-label="문자 속 안내 번호로 전화하기 (모의 전화)">
+                      <span aria-hidden="true">☎</span> 02-0000-0000
                     </button>
                   )}
+                  {m.actor === "them" && (m.offers ?? (m.offer ? [m.offer] : []))
+                    .filter((offer) => offer !== "link" && offer !== "call")
+                    .map((offer) => (
+                      <button
+                        className="rt-message-request"
+                        type="button"
+                        key={offer}
+                        disabled={busy}
+                        onClick={() => activateOffer(offer, i)}
+                        aria-label={offerText(offer, session?.title) + " (가상 행동)"}
+                      >
+                        <span className="rt-offer-icon" aria-hidden="true">{offerIcons[offer]}</span>
+                        {offerText(offer, session?.title)}
+                        <span aria-hidden="true">›</span>
+                      </button>
+                    ))}
                 </div>
               </div>
             </div>
@@ -442,22 +472,13 @@ export default function RealTraining() {
       </div>
 
       <div className="rt-compose-zone">
-        {tipVisible && (
-          <div className="rt-guide" role="status">
-            <div><strong>다른 방법으로 확인하고 싶으신가요?</strong><p>왼쪽 <b>＋</b> 버튼에서 기존 번호로 확인하거나 대화를 끝낼 수 있어요.</p></div>
-            <button type="button" className="rt-guide-close" aria-label="안내 닫기" onClick={dismissGuide}>×</button>
-          </div>
-        )}
         {error && <p className="rt-error" role="alert">{error}</p>}
         <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-          <button className="rt-plus" type="button" aria-label="확인 및 대화 중단 메뉴" aria-expanded={actionsOpen} onClick={openActions} disabled={busy || Boolean(ending)}>
-            <span aria-hidden="true">＋</span>
-          </button>
           <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
-            maxLength={300} value={input} disabled={busy || session?.closed || (session?.turns ?? 0) >= (session?.maxTurns ?? 8)}
+            maxLength={300} value={input} disabled={busy || !session || session.closed || (session.turns >= session.maxTurns)}
             onChange={(event) => setInput(event.target.value)} />
           <button type="submit" className="rt-send" aria-label="메시지 전송"
-            disabled={busy || !input.trim() || session?.closed}>
+            disabled={busy || !session || !input.trim() || session.closed}>
             <span aria-hidden="true">↑</span>
           </button>
         </form>
@@ -470,9 +491,9 @@ export default function RealTraining() {
             <h2>다음에 어떻게 하시겠어요?</h2>
             <p>대화 밖에서 할 수 있는 행동을 선택해 보세요.</p>
           </div>
-          <button type="button" className="rt-sheet-action" onClick={() => void perform("verify")} disabled={busy}>
+          <button type="button" className="rt-sheet-action" onClick={() => void perform("family_contact")} disabled={busy}>
             <span className="rt-sheet-icon">☎</span>
-            <span><strong>기존 번호·공식 앱으로 확인</strong><small>직접 확인한 후 훈련 마무리</small></span><span aria-hidden="true">›</span>
+            <span><strong>저장된 번호로 가족에게 연락</strong><small>가족에게 직접 연락하고 대화 마무리</small></span><span aria-hidden="true">›</span>
           </button>
           <button type="button" className="rt-sheet-action" onClick={() => void perform("stop")} disabled={busy}>
             <span className="rt-sheet-icon">✕</span>
@@ -484,8 +505,9 @@ export default function RealTraining() {
 
       {ending && (
         <div className={ending.stage === "review" ? "rt-transition rt-transition--visible" : "rt-action-receipt"} role="status" aria-live="polite">
-          <div className="rt-transition__symbol" aria-hidden="true">{ending.choice === "verify" ? "✓" : ending.choice === "stop" ? "✕" : "↗"}</div>
-          <strong>{ending.choice === "verify" ? "기존 연락처로 확인했어요" :
+          <div className="rt-transition__symbol" aria-hidden="true">{ending.choice === "verify" || ending.choice === "family_contact" ? "✓" : ending.choice === "stop" ? "✕" : "↗"}</div>
+          <strong>{ending.choice === "verify" ? "공식 경로로 확인했어요" :
+            ending.choice === "family_contact" ? "가족에게 연락했어요" :
             ending.choice === "stop" ? "대화가 종료됐어요" :
             ending.choice === "comply" ? "송금 완료" : "정보 전송 완료"}</strong>
           {ending.stage === "review" && (
