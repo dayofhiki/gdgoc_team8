@@ -96,7 +96,9 @@ const { data: mem } = await kid.from("family_members").select("nickname").eq("fa
 ok(mem?.map((m) => m.nickname).join() === "자녀,엄마,아빠", "다시 공유한 링크로 들어와도 같은 가족 3명");
 const { error: strangerInv } = await stranger.from("invites").insert({ family_id: fam });
 ok(!!strangerInv, "가족 아닌 사람은 그 가족 링크 생성 불가");
-await mom.from("practice_records").insert([{ kind: "training", title: "가족의 급한 연락", safe: true }, { kind: "challenge", score: 2, total: 3 }]);
+// 여러 행 insert는 빠진 키를 null로 보냄 → title(not null)을 행마다 채움
+const { error: recErr } = await mom.from("practice_records").insert([{ kind: "training", title: "가족의 급한 연락", safe: true }, { kind: "challenge", title: "가족 도전장", score: 2, total: 3 }]);
+if (recErr) console.log("  기록 저장 오류:", recErr.message);
 let { data: ov } = await kid.rpc("family_overview", { p_family: fam });
 ok(ov?.find((r) => r.nickname === "엄마")?.record_count === null, "엄마 공유 꺼짐(기본) → 자녀에게 결과 안 보임");
 const { data: momUser } = await mom.auth.getUser();
