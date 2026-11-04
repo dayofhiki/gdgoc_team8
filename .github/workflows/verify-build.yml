@@ -25,5 +25,13 @@ jobs:
         run: npm run typecheck
       - name: Training regression tests
         run: npm run test:training
+      - name: Backend PII / LLM / database tests
+        run: npm run test:backend
+      - name: Setup Deno for Supabase Edge Function check
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate Edge Functions
+        run: deno check supabase/functions/chat-turn/index.ts supabase/functions/practice-chat/index.ts
       - name: Next.js production build
         run: npm run build
