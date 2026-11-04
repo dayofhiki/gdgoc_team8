@@ -242,7 +242,7 @@ export default function RealTraining() {
             <div className="kv"><span className="kv__k">정체 판단</span><span className="kv__v">{result.judgment}</span></div>
             <div className="kv"><span className="kv__k">독립 확인</span><span className="kv__v">{result.checked ? "직접 실행함" : "실행하지 않음"}</span></div>
             {result.linkOpened && <div className="kv"><span className="kv__k">메시지 링크</span><span className="kv__v">열어 봄</span></div>}
-            {result.followedSenderNumber && <div className="kv"><span className="kv__k">안내받은 번호</span><span className="kv__v">연락함</span></div>
+            {result.followedSenderNumber && <div className="kv"><span className="kv__k">안내받은 번호</span><span className="kv__v">연락함</span></div>}
           </div>
           <div className="card card--blue">
             <p className="card__title">이번 행동에서 배울 점</p>
