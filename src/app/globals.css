@@ -879,6 +879,7 @@ p, h1, h2, h3 { margin: 0; }
 .rt-feedback-status > div { display: flex; flex-direction: column; gap: 5px; }
 .rt-feedback-status > div > span { font-size: 13px; color: #6c7a8d; }
 .rt-feedback-status > div > strong { font-size: 21px; letter-spacing: -.5px; }
+.rt-feedback-status > div > small { color: #7a8797; font-size: 12px; font-weight: 600; }
 .rt-feedback-status-tag {
   border-radius: 12px;
   padding: 8px 11px;
