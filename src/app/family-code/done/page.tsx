@@ -4,16 +4,33 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
 import { BottomCTA, Screen } from "@/components/ui";
+import { copyText } from "@/lib/share";
 
 /** 가족 암호 · 완료 */
 export default function FamilyCodeDone() {
   const { ready, familyQuestion, familyAnswer } = useAppState();
   const [reveal, setReveal] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
   const router = useRouter();
 
   useEffect(() => {
     if (ready && !familyQuestion) router.replace("/family-code/question");
   }, [ready, familyQuestion, router]);
+
+  const shareWithFamily = async () => {
+    const text = `우리 가족 확인 질문: ${familyQuestion}\n답은 메시지로 보내지 말고 직접 만나서 정해요.\n미끼주의보에서 함께 연습해요.`;
+    const url = `${location.origin}/family-code/guide`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "우리 가족 암호", text, url });
+        setShareMessage("가족에게 공유할 내용을 준비했어요.");
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+      }
+    }
+    setShareMessage((await copyText(`${text}\n${url}`)) ? "질문과 링크를 복사했어요." : "공유하지 못했어요. 다시 시도해 주세요.");
+  };
 
   return (
     <Screen>
@@ -47,9 +64,10 @@ export default function FamilyCodeDone() {
           </div>
         </div>
       </section>
+      {shareMessage && <div className="toast" role="status">{shareMessage}</div>}
       <BottomCTA row>
         <Link href="/home" className="btn btn--gray btn--lg" style={{ color: "var(--g800)" }}>홈으로</Link>
-        <Link href="/invite" className="btn btn--primary btn--lg">가족에게 질문 보내기</Link>
+        <button className="btn btn--primary btn--lg" onClick={() => void shareWithFamily()}>가족에게 공유하기</button>
       </BottomCTA>
     </Screen>
   );

@@ -9,6 +9,7 @@ const TOTAL = 4;
 export default function Onboarding() {
   const [step, setStep] = useState(1);
   const [nick, setNick] = useState("");
+  const [nickFocused, setNickFocused] = useState(false);
   const { setNickname } = useAppState();
   const router = useRouter();
 
@@ -81,9 +82,8 @@ export default function Onboarding() {
         )}
 
         {step === 4 && (
-          <div className="nick">
-            <img src="/images/fish-side.png" alt="뻐끄미" className="float" style={{ marginTop: 86, width: 187 }} />
-            <label htmlFor="nick" className="nick__label">별명을 입력해주세요</label>
+          <div className="nick" style={{ paddingTop: 24, justifyContent: "flex-start" }}>
+            <label htmlFor="nick" className="nick__label" style={{ marginTop: 16 }}>별명을 입력해주세요</label>
             <input
               id="nick"
               className="nick__input"
@@ -91,10 +91,12 @@ export default function Onboarding() {
               onChange={(e) => setNick(e.target.value.slice(0, 12))}
               placeholder={`예: ${DEFAULT_NICKNAME}`}
               autoComplete="off"
-              autoFocus
+              onFocus={() => setNickFocused(true)}
+              onBlur={() => setNickFocused(false)}
               enterKeyHint="done"
               aria-required="true"
             />
+            {!nickFocused && <img src="/images/fish-side.png" alt="뻐끄미" className="float" style={{ marginTop: 36, width: 156, maxWidth: "46vw" }} />}
           </div>
         )}
       </section>
@@ -110,7 +112,7 @@ export default function Onboarding() {
           <button className="btn btn--primary btn--lg" style={{ fontWeight: 600 }} disabled={!trimmed} onClick={() => finish("/home")}>
             나 혼자 시작하기
           </button>
-          <button className="btn btn--outline" disabled={!trimmed} onClick={() => finish("/family-code")}>
+          <button className="btn btn--outline" disabled={!trimmed} onClick={() => finish("/invite")}>
             가족과 함께 시작하기
           </button>
         </BottomCTA>

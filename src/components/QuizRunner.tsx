@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_REMEMBER, pickQuiz, type OX } from "@/lib/quiz";
+import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 import { BottomCTA, Dialog, Header, Progress, Screen } from "./ui";
 
 type Props = {
@@ -14,6 +15,9 @@ type Answer = { id: string; picked: OX; correct: boolean };
 
 export default function QuizRunner({ ids, from }: Props) {
   const router = useRouter();
+  const { nickname } = useAppState();
+  const displayName = nickname || DEFAULT_NICKNAME;
+  const [started, setStarted] = useState(false);
   const items = useMemo(() => pickQuiz(ids), [ids]);
   const [idx, setIdx] = useState(0);
   const [picked, setPicked] = useState<OX | null>(null);
@@ -43,6 +47,27 @@ export default function QuizRunner({ ids, from }: Props) {
     setHintUsed((s) => new Set(s).add(q.id));
   };
 
+  if (!started) {
+    return (
+      <Screen>
+        <Header title="OX 퀴즈" back={() => router.push(from ? "/" : "/home")} />
+        <section className="screen__body">
+          <div className="stack" style={{ marginTop: 32, gap: 12 }}>
+            <span className="chip">보이스피싱 대처 퀴즈</span>
+            <h2 className="title">{"OX 퀴즈로\n사기 신호를 알아봐요"}</h2>
+            <p className="desc">총 {total}문제예요. 문제를 읽고 맞으면 O, 틀리면 X를 선택해 주세요.</p>
+          </div>
+          <img src="/images/fish-ox.png" alt="O와 X 카드를 든 뻐끄미" style={{ alignSelf: "center", width: "min(74%, 260px)", marginTop: 30 }} />
+          <div className="card card--blue" style={{ marginTop: 12 }}>
+            <p className="card__title">퀴즈 진행 방법</p>
+            <p className="card__text">정답을 고르면 바로 해설이 나와요. 어려우면 힌트를 볼 수 있고, 마지막에 결과를 확인할 수 있어요.</p>
+          </div>
+        </section>
+        <BottomCTA><button className="btn btn--primary" onClick={() => setStarted(true)}>시작하기</button></BottomCTA>
+      </Screen>
+    );
+  }
+
   if (done) {
     const right = answers.filter((a) => a.correct).length;
     const wrong = answers.filter((a) => !a.correct);
@@ -58,9 +83,8 @@ export default function QuizRunner({ ids, from }: Props) {
         <section className="screen__body">
           <div className="stack" style={{ marginTop: 20, gap: 8 }}>
             <h2 className="title">{"OX 퀴즈를\n모두 풀었어요!"}</h2>
-            <p className="desc">
-              {total}문제 중 {right}문제를 맞혔어요.
-            </p>
+            <p className="desc">{displayName}님의 점수: {right} / {total}점</p>
+            <p className="desc">{total}문제 중 {right}문제를 맞혔어요.</p>
           </div>
           <div className="stack" style={{ marginTop: 64, gap: 20 }}>
             <div className="card">
@@ -76,8 +100,8 @@ export default function QuizRunner({ ids, from }: Props) {
           </div>
         </section>
         <BottomCTA row>
-          <button className="btn btn--gray" onClick={() => router.push(from ? "/" : "/home")}>
-            {from ? "시작하기" : "홈으로"}
+          <button className="btn btn--gray" onClick={() => router.push(from ? "/quiz/recommend?guest=1" : "/quiz/recommend")}>
+            가족 암호 추천 보기
           </button>
           {wrong.length > 0 ? (
             <button className="btn btn--primary" onClick={retry}>틀린 문제 다시 풀기</button>

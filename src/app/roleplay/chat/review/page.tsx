@@ -3,18 +3,20 @@ import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BottomCTA, Header, Screen } from "@/components/ui";
 import { CHAT_MOMENTS, REMEMBER_CHAT } from "@/lib/chatScript";
+import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 
 const COUNT = ["", "한", "두", "세"];
 
 function Review() {
   const router = useRouter();
+  const { nickname } = useAppState();
   const params = useSearchParams();
   const reached = Math.min(Math.max(Number(params.get("r")) || 0, 0), CHAT_MOMENTS.length);
   const stopped = params.get("stopped") === "1";
   const moments = CHAT_MOMENTS.slice(0, reached);
   const fooled = moments.filter((m) => m.danger).length;
 
-  const title = fooled > 0 ? `이 대화에서\n${COUNT[fooled] ?? fooled} 번 속았어요.` : "속기 전에\n잘 멈췄어요!";
+  const title = fooled > 0 ? `이 사례에서는\n${COUNT[fooled] ?? fooled} 번 속았어요.` : "속기 전에\n잘 멈췄어요!";
   const desc =
     fooled > 0
       ? stopped
@@ -28,6 +30,7 @@ function Review() {
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 20, gap: 8 }}>
           <h2 className="title">{title}</h2>
+          <p className="desc">{nickname || DEFAULT_NICKNAME}님의 채팅 연습 결과</p>
           <p className="desc">{desc}</p>
         </div>
         <div className="stack" style={{ marginTop: 64, gap: 20 }}>
@@ -50,7 +53,7 @@ function Review() {
       </section>
       <BottomCTA row>
         <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-        <button className="btn btn--primary" onClick={() => router.push("/roleplay/chat")}>처음부터 다시 보기</button>
+        <button className="btn btn--primary" onClick={() => router.push("/roleplay/mode")}>다시 연습하기</button>
       </BottomCTA>
     </Screen>
   );

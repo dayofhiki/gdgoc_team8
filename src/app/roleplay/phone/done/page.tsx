@@ -3,9 +3,11 @@ import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BottomCTA, Header, Screen } from "@/components/ui";
 import { REMEMBER_CHAT } from "@/lib/chatScript";
+import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 
 function Done() {
   const router = useRouter();
+  const { nickname } = useAppState();
   const d = Math.max(0, Number(useSearchParams().get("d")) || 0);
   const duration = d >= 60 ? `${Math.floor(d / 60)}분 ${d % 60}초` : `${d}초`;
 
@@ -15,6 +17,7 @@ function Done() {
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 20, gap: 8 }}>
           <h2 className="title">{"전화 훈련을\n마치셨어요!"}</h2>
+          <p className="desc">{nickname || DEFAULT_NICKNAME}님의 통화 연습 결과</p>
           <p className="desc">사기범의 압박에서 빠져나오는 연습을 했어요.</p>
         </div>
         <div className="stack" style={{ marginTop: 64, gap: 20 }}>
@@ -33,7 +36,7 @@ function Done() {
       </section>
       <BottomCTA row>
         <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-        <button className="btn btn--primary" onClick={() => router.push("/roleplay/phone")}>다시 연습하기</button>
+        <button className="btn btn--primary" onClick={() => router.push("/roleplay/mode")}>다시 연습하기</button>
       </BottomCTA>
     </Screen>
   );

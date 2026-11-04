@@ -18,7 +18,8 @@ export default function PhonePractice() {
   useEffect(() => {
     if (state !== "calling") return;
     const t = setTimeout(() => {
-      started.current = Date.now();
+      started.current = Date.now() - 1000;
+      setSec(1);
       setState("talking");
     }, 1800);
     return () => clearTimeout(t);
@@ -62,7 +63,7 @@ export default function PhonePractice() {
         {state === "idle" ? (
           <button className="btn btn--primary btn--lg" onClick={() => setState("calling")}>전화 시작하기</button>
         ) : (
-          <button className="btn btn--gray" onClick={end} disabled={state === "calling"}>통화 끊기</button>
+          <button className="btn btn--primary" onClick={end} disabled={state === "calling"}>통화 끊기</button>
         )}
       </BottomCTA>
     </Screen>
