@@ -117,7 +117,7 @@ export function recordChoice(state: TrainingState, scenario: Scenario, choice: C
     state: {
       ...state,
       verification,
-      closed: choice !== "verify",
+      closed: choice === "comply" || choice === "share" || choice === "stop",
       events: [...state.events, event],
       messages: [...state.messages, { actor: "system", text: notice }],
     },
