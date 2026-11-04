@@ -279,41 +279,73 @@ export default function RealTraining() {
   }
 
   if (phase === "result" && result) {
+    const fraud = result.identity === "fraud";
+    const dangerous = result.dangerousAction;
     return (
       <Screen>
-        <Header title="실전 훈련 결과" back={() => router.push("/home")} />
-        <section className="screen__body" style={{ gap: 16 }}>
-          <div className="stack" style={{ marginTop: 18, gap: 10 }}>
-            <span className="chip">실제 정체 공개</span>
-            <h2 className="title">{result.truthLabel === "실제 연락" ? "이번에는 진짜 연락이었어요" : "이번에는 사칭 시도였어요"}</h2>
-            <p className="desc">{result.purpose}</p>
+        <Header title="훈련 결과" back={() => router.push("/home")} />
+        <section className="screen__body rt-feedback">
+          <div className={fraud ? "rt-feedback-hero rt-feedback-hero--fraud" : "rt-feedback-hero rt-feedback-hero--real"}>
+            <span className="rt-feedback-eyebrow">이번 연락의 실제 정체</span>
+            <div className="rt-feedback-identity">
+              <span className="rt-feedback-identity-icon" aria-hidden="true">{fraud ? "!" : "✓"}</span>
+              <h2>{fraud ? "사칭 시도" : "실제 연락"}</h2>
+            </div>
+            <p>{result.purpose}</p>
           </div>
-          <div className="card" style={{ marginTop: 16 }}>
-            <p className="card__title">이번 훈련의 행동 평가</p>
-            <div className="kv"><span className="kv__k">안전 행동</span><span className="kv__v" style={{ whiteSpace: "normal" }}>{result.safety}</span></div>
-            <div className="kv"><span className="kv__k">정체 판단</span><span className="kv__v">{result.judgment}</span></div>
-            <div className="kv"><span className="kv__k">독립 확인</span><span className="kv__v">{result.checked ? "직접 실행함" : "실행하지 않음"}</span></div>
-            {result.linkOpened && <div className="kv"><span className="kv__k">메시지 링크</span><span className="kv__v">열어 봄</span></div>}
-            {result.followedSenderNumber && <div className="kv"><span className="kv__k">안내받은 번호</span><span className="kv__v">연락함</span></div>}
+
+          <div className="rt-feedback-status">
+            <div>
+              <span>내가 선택한 행동</span>
+              <strong>{result.highlights.actionTitle}</strong>
+            </div>
+            <span className={dangerous ? "rt-feedback-status-tag rt-feedback-status-tag--danger" :
+              result.checked ? "rt-feedback-status-tag rt-feedback-status-tag--safe" : "rt-feedback-status-tag"}>
+              {result.highlights.status}
+            </span>
           </div>
-          <div className="card card--blue">
-            <p className="card__title">이번 행동에서 배울 점</p>
-            {result.feedback.map((line, index) => <p className="card__text" key={index}>{index + 1}. {line}</p>)}
+
+          <section className="rt-feedback-panel rt-feedback-panel--good" aria-label="잘한 점">
+            <div className="rt-feedback-section-head">
+              <span aria-hidden="true">✓</span>
+              <h3>잘한 점</h3>
+            </div>
+            {result.highlights.good.length > 0 ? result.highlights.good.map((item, index) => (
+              <div className="rt-feedback-point" key={index}>
+                <strong>{item.keyword}</strong>
+                <span>{item.text}</span>
+              </div>
+            )) : <p className="rt-feedback-empty">이번에는 확인된 안전 행동이 없어요.</p>}
+          </section>
+
+          <section className="rt-feedback-panel rt-feedback-panel--improve" aria-label="개선할 점">
+            <div className="rt-feedback-section-head">
+              <span aria-hidden="true">!</span>
+              <h3>개선할 점</h3>
+            </div>
+            {result.highlights.improve.length > 0 ? result.highlights.improve.map((item, index) => (
+              <div className="rt-feedback-point" key={index}>
+                <strong>{item.keyword}</strong>
+                <span>{item.text}</span>
+              </div>
+            )) : <p className="rt-feedback-empty">이번에는 크게 개선할 행동이 없어요.</p>}
+          </section>
+
+          <div className="rt-feedback-next">
+            <span>다음에는 이렇게</span>
+            <strong>{result.highlights.tip}</strong>
           </div>
-          <div className="card">
-            <p className="card__title">공식 경로로 확인하면 알 수 있었던 사실</p>
-            <p className="card__text">{result.verificationEvidence}</p>
-          </div>
-          <div className="card card--blue">
-            <p className="card__title">가족과 실천할 약속</p>
-            <p className="card__text">{result.nextStep}</p>
-            <Link href="/family-code/guide" className="btn btn--secondary" style={{ marginTop: 8 }}>가족 확인 질문 만들기</Link>
-          </div>
-          <p className="desc" style={{ fontSize: 12, lineHeight: "18px" }}>{result.note}</p>
+
+          <details className="rt-feedback-detail">
+            <summary>실제 확인 결과 자세히 보기</summary>
+            <p>{result.verificationEvidence}</p>
+          </details>
+          <p className="rt-feedback-disclaimer">{result.note}</p>
+          <Link href="/family-code/guide" className="rt-feedback-family-link">가족 확인 질문 정하기 <span aria-hidden="true">›</span></Link>
         </section>
         <BottomCTA row>
           <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-          <button className="btn btn--primary" onClick={() => void start()}>다른 상황 연습</button>
+          <button className="btn btn--primary" onClick={() => void start()}>다시 연습하기</button>
         </BottomCTA>
       </Screen>
     );
