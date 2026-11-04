@@ -89,7 +89,7 @@ test("an unfinished request or a clickable money/link action blocks natural endi
   assert.equal(decide({actions:money}).closed,false);
   assert.equal(decide({actions:link}).closed,false);
   const app = buildActions([{kind:"app",origin:"installed",target:"은행",task:"조회",previewTitle:"",previewDescription:""}],1);
-  assert.equal(decide({actions:app}).closed,true); // official-app advice alone does not override a genuine end.
+  assert.equal(decide({actions:app}).closed,false); // user must be able to click the legitimate app offer.
 });
 
 test("neutral acknowledgment after a goodbye can end without inventing another AI reply", () => {
@@ -155,4 +155,10 @@ test("never expose URLs or numerical identifiers in the dialogue's short summary
     primary:signal({summary:"http://danger.test 010-1234-5678"}),
   });
   assert.doesNotMatch(next.memory.lastSummary,/http|010-1234-5678/);
+});
+
+
+test("explicit question punctuation blocks completion even if both models misread it", () => {
+  assert.equal(decide({userText:"정말 그게 맞나요?"}).closed,false);
+  assert.ok(decide({userText:"정말 그게 맞나요?"}).issues.includes("pending_user_question"));
 });
