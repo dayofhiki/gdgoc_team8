@@ -174,6 +174,6 @@ test("delivery address change prompts expose official-app action, even if Gemini
 });
 test("mentioning official apps in a warning or unrelated sentence does not create an action", () => {
   assert.deepEqual(classifyOffers("택배사 공식 앱을 열지 마세요. 링크로 확인하세요.", []), []);
-  assert.deepEqual(classifyOffers("공식 앱이 아닌 문자 속 링크에서 주소를 변경해 주세요.", ["official_app", "link"]), ["link"]);
+  assert.deepEqual(classifyOffers("공식 앱이 아닌 문자 속 링크를 눌러 주소를 변경해 주세요.", ["official_app", "link"]), ["link"]);
   assert.deepEqual(classifyOffers("택배사 공식 앱에 대한 문의입니다.", []), []);
 });
