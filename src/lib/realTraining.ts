@@ -1,4 +1,5 @@
 import { actionChoice } from "./trainingActions.ts";
+import { buildBehaviorFeedback } from "./trainingFeedback.ts";
 import type { Action } from "./trainingActions";
 import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
 
@@ -339,6 +340,7 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
     linkOpened ? "링크 열람" : followedSenderNumber ? "안내 번호 연락" : "대화 종료";
 
   return {
+    behavior: buildBehaviorFeedback(state, scenario),
     highlights: {
       status,
       actionTitle,
