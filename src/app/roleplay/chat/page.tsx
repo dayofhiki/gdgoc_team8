@@ -298,6 +298,7 @@ export default function RealTraining() {
             <div>
               <span>내가 선택한 행동</span>
               <strong>{result.highlights.actionTitle}</strong>
+              <small>정체 판단 · {result.highlights.judgment}</small>
             </div>
             <span className={dangerous ? "rt-feedback-status-tag rt-feedback-status-tag--danger" :
               result.checked ? "rt-feedback-status-tag rt-feedback-status-tag--safe" : "rt-feedback-status-tag"}>
@@ -485,11 +486,11 @@ export default function RealTraining() {
         <div className={ending.stage === "review" ? "rt-transition rt-transition--visible" : "rt-action-receipt"} role="status" aria-live="polite">
           <div className="rt-transition__symbol" aria-hidden="true">{ending.choice === "verify" ? "✓" : ending.choice === "stop" ? "✕" : "↗"}</div>
           <strong>{ending.choice === "verify" ? "기존 연락처로 확인했어요" :
-            ending.choice === "stop" ? "대화를 종료했어요" :
-            ending.choice === "comply" ? "송금 행동이 기록됐어요" : "정보 전송이 기록됐어요"}</strong>
+            ending.choice === "stop" ? "대화가 종료됐어요" :
+            ending.choice === "comply" ? "송금 완료" : "정보 전송 완료"}</strong>
           {ending.stage === "review" && (
             <>
-              <p>상대의 실제 정체와 내 대응을 확인해 볼까요?</p>
+              <p>지금까지의 선택을 돌아보고 상대의 정체를 확인해 볼까요?</p>
               <span className="rt-transition__loading" aria-hidden="true" />
             </>
           )}
