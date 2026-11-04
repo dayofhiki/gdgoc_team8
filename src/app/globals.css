@@ -990,62 +990,22 @@ p, h1, h2, h3 { margin: 0; }
 .rt-phone-link:focus-visible { outline: 3px solid #8abaff; outline-offset: 2px; }
 
 
-/* 자연스러운 대화 종료: 마지막 메시지를 가리지 않고 입력창을 안내로 바꿈 */
-.rt-conversation-ended {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  padding: 12px 14px 10px;
-  border: 1px solid #dbe6f3;
-  border-radius: 18px;
-  background: #f8fbff;
-  color: #25364e;
-  text-align: center;
-}
-.rt-conversation-ended__icon {
+/* 내 대응 돌아보기: 공통 .card·.tag·.title 위에 공통 스타일에 없는 목록 배치만 더한다 */
+.fb-nick { font-weight: 700; margin-right: 3px; }
+.fb-title { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.fb-title__icon {
+  flex: 0 0 28px;
+  height: 28px;
   display: grid;
   place-items: center;
-  align-self: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #e0ecf8;
-  font-weight: 800;
-  color: #48739e;
+  border-radius: 9px;
+  background: var(--blue-50);
+  color: var(--blue);
 }
-.rt-conversation-ended strong {
-  font-size: clamp(14px, 3.7vw, 17px);
-  line-height: 1.45;
-  letter-spacing: -.35px;
-}
-.rt-conversation-ended p {
-  margin: 5px 0 0;
-  font-size: 13px;
-  line-height: 1.45;
-  color: #66758b;
-}
-.rt-conversation-ended__button {
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  color: #fff;
-  background: #316cb4;
-  border: none;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.rt-conversation-ended__button:focus-visible {
-  outline: 3px solid #1b4d9c;
-  outline-offset: 3px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .rt-conversation-ended { animation: none; }
-}
-
-/* 내 대응 돌아보기: 공통 .card·.tag·.title 위에 공통 스타일에 없는 목록 배치만 더한다 */
+.fb-title__icon--amber { background: #fff2e5; color: #ac621d; }
+.fb-title__icon--gray { background: var(--g100); color: var(--g600); }
+.fb-title__icon--white { background: #fff; color: var(--blue); }
+.fb-title .fb-card-title { flex: 1; min-width: 0; padding-top: 1px; }
 .fb-card-title { font-size: 19px; font-weight: 700; line-height: 26px; letter-spacing: -0.4px; }
 .fb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
 .fb-item { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
@@ -1063,6 +1023,8 @@ p, h1, h2, h3 { margin: 0; }
 }
 .fb-mark--caution { background: var(--red-50); color: var(--red); }
 .fb-mark--neutral { background: var(--g100); color: var(--g600); }
+.fb-item__title.fb-truth-label--real { color: var(--blue); font-weight: 700; }
+.fb-item__title.fb-truth-label--fraud { color: var(--red); font-weight: 700; }
 .fb-points { display: flex; flex-direction: column; gap: 14px; }
 .fb-point { display: flex; flex-direction: column; gap: 4px; }
 .fb-item__title { font-size: 16px; font-weight: 600; line-height: 24px; letter-spacing: -0.3px; color: var(--g900); }
@@ -1078,21 +1040,4 @@ p, h1, h2, h3 { margin: 0; }
   font-size: 15px;
   font-weight: 600;
 }
-.fb-truth { display: block; }
-.fb-truth summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 24px;
-  list-style: none;
-  cursor: pointer;
-}
-.fb-truth summary::-webkit-details-marker { display: none; }
-.fb-truth summary svg { flex-shrink: 0; transition: transform .2s ease; }
-.fb-truth[open] summary svg { transform: rotate(90deg); }
-.fb-truth__body { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .fb-note { font-size: 13px; line-height: 20px; color: var(--g600); }
-@media (prefers-reduced-motion: reduce) {
-  .fb-truth summary svg { transition: none; }
-}
