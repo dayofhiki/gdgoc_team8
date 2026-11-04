@@ -168,7 +168,7 @@ async function generateResponse(state: TrainingState, text: string) {
   const actions = buildActions(extracted, state.turns);
   const decision = decideDialogueTurn({
     memory: dialogue, primary: first.value.dialogue, audit: auditSignal,
-    reply, actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
+    reply, userText: text, actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
   });
   if (!reply && !decision.closed) {
     // 종료 신호가 모델간 불일치하면 무응답을 기록하지 않고 재시도하게 한다.
