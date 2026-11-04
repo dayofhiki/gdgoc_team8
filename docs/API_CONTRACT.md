@@ -62,17 +62,18 @@ await callFn<Res>("chat-turn", { ... });  // Edge Function. 실패 시 Error.mes
 ### 3-1. `invite-join` — 링크 확인·입장
 
 같은 사람이 다시 누르면 기존 참여 기록을 돌려줍니다. 여러 명이 동시에 눌러도 정원을 넘지 않습니다.
+가족 링크(`family_id` 있음)면 입장한 사람이 그 가족 구성원(`family_members`)으로도 등록됩니다.
 
 **요청** `InviteJoinRequest`
 ```json
-{ "token": "6fcd987491504593bec47dbc60de786f4aff723226a34261b0111d9974975fb8" }
+{ "token": "6fcd987491504593bec47dbc60de786f4aff723226a34261b0111d9974975fb8", "nickname": "엄마" }
 ```
 
 **응답 200** `InviteJoinResponse`
 ```json
 {
   "participant_id": "787c8538-6b7e-4151-b9ed-61290a94662d",
-  "invite": { "senior_name": "어머니", "difficulty": "normal" }
+  "invite": { "senior_name": "어머니", "difficulty": "normal", "family_id": "b1e0…", "inviter_name": "똑똑한 물고기" }
 }
 ```
 
@@ -200,6 +201,64 @@ if (turn.ended) { /* session-end 호출 */ }
 권한(RLS)으로 **본인 데이터만** 보이고, **정해진 컬럼만** 쓸 수 있습니다. 삭제는 모든 테이블에서 불가합니다.
 실패 시 supabase-js는 `{ data: null, error }`를 돌려줍니다 (권한 위반은 `error.code = "42501"`).
 
+### 가족 — `families` · `family_members` · `family_questions`
+
+가족 키는 영구, 초대 링크는 7일짜리 입장권입니다. 구성원 누구나 자기 가족 링크를 만들 수 있어 받은 사람이 다시 공유해도 같은 가족으로 묶입니다. 한 사람이 여러 가족에 속할 수 있습니다. 모든 조회는 **같은 가족 구성원만** 가능합니다. 구현은 `src/lib/invite.ts`를 참고하세요.
+
+```ts
+const { data: familyId } = await sb().rpc("create_family", { p_nickname: "똑똑한 물고기" }); // 가족 + 본인 등록
+await sb().from("invites").insert({ family_id: familyId, inviter_name: "똑똑한 물고기" });   // 가족 링크
+await sb().from("family_questions").insert({ family_id: familyId, question: "첫 반려동물 이름은?" }); // 답은 저장 안 함
+const { count } = await sb().from("family_members").select("user_id", { count: "exact", head: true }).eq("family_id", familyId);
+```
+
+| 테이블 | 구성원이 할 수 있는 것 |
+|---|---|
+| `family_members` | 조회, 본인 `nickname` 수정. 등록은 `create_family`·`invite-join`으로만 |
+| `family_questions` | 조회·추가·수정·삭제 (`question` 1~60자) |
+
+### 프론트 연결 체크리스트 (가족 연결·결과 공유)
+
+`src/lib`만 import해서 부르면 됩니다. 별명은 lib이 `mikki:nickname`에서 직접 읽으므로 넘기지 않아도 됩니다.
+
+| # | 화면 | 할 일 | 상태 |
+|---|---|---|---|
+| 1 | `/invite` 가족에게 퀴즈 보내기 | `getInviteToken()` (이미 호출 중) | ✅ 수정 불필요 — 백엔드 반영 후 자동으로 가족 링크 |
+| 2 | `/challenge` 링크 입장 | `joinInvite(token)` (이미 호출 중) | ✅ 수정 불필요 — 입장 시 가족 자동 등록 |
+| 3 | `/family-code/done` 가족에게 공유하기 | 공유 URL을 `/family-code/guide` → `getInviteToken()`으로 만든 `/challenge?invite=<token>&from=<별명>`로. 들어올 때 `saveFamilyQuestion(familyQuestion)` | ❌ 필수 |
+| 4 | `QuizRunner` 결과 화면 | `saveRecord({ kind: from ? "challenge" : "quiz", score, total, detail: { wrong } })` 1회 | ❌ 필수 (결과 기록) |
+| 5 | `/roleplay/chat` 결과 | `finish` 응답 후 `saveRecord({ kind: "training", title, safe: !result.dangerousAction, detail })` | ❌ 필수 (결과 기록) |
+| 6 | 공유 동의 (새 UI) | "가족에게 결과 보여주기" → `setShareResults(true)` | ❌ 필수 — 기본 꺼짐이라 없으면 보호자에게 아무것도 안 보임 |
+| 7 | 보호자 화면 (새 화면) | `familyOverview()` 결과를 그대로 렌더링 | ❌ 새 화면 |
+| - | 홈 (선택) | `familySize()`로 "연결된 가족 N명" | 선택 |
+
+3~5번 구현 예시는 백엔드 담당에게 있는 패치(`fe-wiring.patch`)를 참고하세요.
+
+### 연습 기록·가족 공유 — `practice_records` · `family_overview`
+
+결과 **요약만** 저장합니다 (대화 원문 저장 안 함). 가족에게는 본인이 그 가족에 `share_results`를 켰을 때만 보입니다 (가족별, **기본 꺼짐**). 구현은 `src/lib/records.ts`, `src/lib/invite.ts`.
+
+```ts
+await sb().from("practice_records").insert({ kind: "training", title: "가족의 급한 연락", safe: true, detail: { checked: true } });
+await sb().from("practice_records").insert({ kind: "challenge", score: 2, total: 3 });
+await sb().from("family_members").update({ share_results: true }).eq("family_id", familyId).eq("user_id", myId); // 공유 동의
+const { data } = await sb().rpc("family_overview", { p_family: familyId }); // 보호자 화면
+```
+
+| `kind` | 기록 시점 | 채우는 값 |
+|---|---|---|
+| `quiz` | OX 퀴즈 결과 화면 | `score`·`total`, `detail.wrong`(틀린 문제 id) |
+| `challenge` | 초대 링크 퀴즈 결과 화면 | 위와 같음 |
+| `training` | 실전 훈련 결과 | `title`, `safe`(위험 행동 없음), `detail`(확인 행동 등) |
+
+`family_overview` 응답 (구성원별 1행, 들어온 순):
+```json
+{ "user_id": "…", "nickname": "엄마", "is_me": false, "share_results": true, "joined_at": "…",
+  "record_count": 2, "safe_count": 1, "last_at": "…",
+  "recent": [{ "kind": "challenge", "title": "", "safe": null, "score": 2, "total": 3, "created_at": "…" }] }
+```
+공유를 끈 구성원은 `record_count`·`safe_count`·`last_at`·`recent`가 `null` (본인은 항상 보임). 구성원이 아니면 `FORBIDDEN` 오류.
+
 ### `invites` — 초대 링크 생성 (보호자)
 
 ```ts
@@ -214,6 +273,8 @@ const link = `${location.origin}/?invite=${data.token}`;
 | `senior_name` | 시니어 호칭 (자유 입력, 실명 넣지 않기) | `""` |
 | `difficulty` | `easy` · `normal` · `hard` | `normal` |
 | `max_participants` | 1~200. 익명 로그인이라 같은 사람도 브라우저가 바뀌면 새 참여자로 세므로 보통 생략 | `200` |
+| `family_id` | 가족 링크면 내가 속한 가족 id (구성원이 아니면 거부) | `null` |
+| `inviter_name` | 보낸 사람 별명 (최대 20자) | `""` |
 
 `token`(64자)·`created_by`·`expires_at`(7일 후)은 서버가 채웁니다. 조회는 본인이 만든 초대만 가능합니다.
 
