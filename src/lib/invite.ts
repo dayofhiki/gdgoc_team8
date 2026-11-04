@@ -91,6 +91,25 @@ export async function saveFamilyQuestion(question: string, nickname = storedNick
   }
 }
 
+/** 우리 가족 암호 질문 목록 (최신순). 가족이 없거나 오프라인이면 null */
+export async function familyQuestions(): Promise<{ id: string; question: string; created_at: string }[] | null> {
+  const fid = configured() ? load(KEY_FAMILY) : null;
+  if (!fid) return null;
+  try {
+    await ensureAnon();
+    const { data, error } = await sb()
+      .from("family_questions")
+      .select("id, question, created_at")
+      .eq("family_id", fid)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    console.warn("가족 질문 불러오기 실패", e);
+    return null;
+  }
+}
+
 /** 연결된 가족 수 (나 포함). 가족이 아직 없거나 오프라인이면 null — 가족을 새로 만들지는 않음 */
 export async function familySize(): Promise<number | null> {
   const fid = configured() ? load(KEY_FAMILY) : null;

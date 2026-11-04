@@ -231,6 +231,7 @@ const { count } = await sb().from("family_members").select("user_id", { count: "
 | 6 | 공유 동의 (새 UI) | "가족에게 결과 보여주기" → `setShareResults(true)` | ❌ 필수 — 기본 꺼짐이라 없으면 보호자에게 아무것도 안 보임 |
 | 7 | 보호자 화면 (새 화면) | `familyOverview()` 결과를 그대로 렌더링 | ❌ 새 화면 |
 | - | 홈 (선택) | `familySize()`로 "연결된 가족 N명" | 선택 |
+| - | 가족 질문 표시 (선택) | `familyQuestions()` → 우리 가족 질문 목록 (최신순) | 선택 |
 
 3~5번 구현 예시는 백엔드 담당에게 있는 패치(`fe-wiring.patch`)를 참고하세요.
 
