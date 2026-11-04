@@ -19,7 +19,7 @@ export default function RoleplayIntro() {
           </div>
           <div>
             <p className="rp-intro__h">개인정보는 적지 마세요.</p>
-            <p className="rp-intro__p">비밀번호, 주민등록번호, 계좌번호 등 개인 정보는 요구하지 않아요.</p>
+            <p className="rp-intro__p">비밀번호, 주민등록번호, 계좌번호 등 실제 개인정보는 입력하지 마세요. 작성한 대화는 Gemini가 답변을 만들기 위해 처리합니다.</p>
           </div>
         </div>
       </section>

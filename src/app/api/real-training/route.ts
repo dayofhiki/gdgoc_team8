@@ -141,6 +141,14 @@ async function generateResponse(state: TrainingState, text: string): Promise<str
 }
 
 export async function POST(req: NextRequest) {
+  if (!(req.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) return apiError("JSON 요청만 허용됩니다.", 415);
+  const origin = req.headers.get("origin");
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  if (origin && host) {
+    try {
+      if (new URL(origin).host !== host.split(",")[0].trim()) return apiError("허용되지 않은 출처입니다.", 403);
+    } catch { return apiError("허용되지 않은 출처입니다.", 403); }
+  }
   if (limited(req)) return apiError("요청이 많습니다. 잠시 후 다시 시도해 주세요.", 429);
   const bodyText = await req.text().catch(() => "");
   if (bodyText.length > 32000) return apiError("요청 크기가 너무 큽니다.", 413);
