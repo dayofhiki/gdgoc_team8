@@ -239,7 +239,7 @@ export default function RealTraining() {
     <Screen>
       <Header title="실전 대응 훈련" back={() => router.push("/roleplay/mode")} onClose={() => router.push("/home")} />
       <Progress value={Math.max(1, session?.turns ?? 0)} total={session?.maxTurns ?? 8} dark />
-      <section className="screen__body" style={{ paddingBottom: 280 }}>
+      <section className="screen__body" style={{ paddingBottom: 310 }}>
         <div className="stack" style={{ marginTop: 10, gap: 6 }}>
           <span className="chip">{session?.title ?? "실전 대화"}</span>
           <h2 className="title" style={{ fontSize: 21 }}>이 연락, 어떻게 대응하시겠어요?</h2>
@@ -272,12 +272,12 @@ export default function RealTraining() {
       <BottomCTA>
         <div style={{ width: "100%", borderRadius: 18, padding: 10, background: "#fff", boxShadow: "0 -4px 20px #00000010", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-            <button className="btn btn--secondary" style={{ height: 45, fontSize: 13 }} disabled={busy || session?.verified} onClick={() => setVerifySheet(true)}>
+            <button className="btn btn--secondary" style={{ height: 48, fontSize: 15 }} disabled={busy || session?.verified} onClick={() => setVerifySheet(true)}>
               {session?.verified ? "독립 확인 완료" : "어떻게 확인할까요?"}
             </button>
-            <button className="btn btn--gray" style={{ height: 45, fontSize: 13 }} disabled={busy} onClick={() => void perform("stop")}>대화 중단</button>
-            <button className="btn btn--gray" style={{ height: 43, fontSize: 13 }} disabled={busy} onClick={() => setConfirm("comply")}>요청에 응하기 (가상)</button>
-            <button className="btn btn--gray" style={{ height: 43, fontSize: 13 }} disabled={busy} onClick={() => setConfirm("share")}>정보 제공 (가상)</button>
+            <button className="btn btn--gray" style={{ height: 48, fontSize: 15 }} disabled={busy} onClick={() => void perform("stop")}>대화 중단</button>
+            <button className="btn btn--gray" style={{ height: 48, fontSize: 15 }} disabled={busy} onClick={() => setConfirm("comply")}>요청 수락 (가상)</button>
+            <button className="btn btn--gray" style={{ height: 48, fontSize: 15 }} disabled={busy} onClick={() => setConfirm("share")}>정보 제공 (가상)</button>
           </div>
           <form onSubmit={(event) => { event.preventDefault(); void send(); }} style={{ display: "flex", gap: 8 }}>
             <input type="text" aria-label="상대에게 답장하기" value={input} maxLength={300}
