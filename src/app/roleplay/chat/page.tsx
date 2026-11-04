@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PersonIcon } from "@/components/Icons";
-import { BottomCTA, Dialog, Header, Progress, Screen } from "@/components/ui";
+import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
 
-type Message = { actor: "them" | "me" | "system"; text: string };
-type Choice = "verify" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop";
+type OfferKind = "transfer" | "share" | "link" | "call";
+type Message = { actor: "them" | "me" | "system"; text: string; offer?: OfferKind };
+type Choice = "verify" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
 type Guess = "legitimate" | "fraud" | "uncertain";
 type Phase = "loading" | "chat" | "judge" | "result";
 type Session = {
@@ -27,6 +28,8 @@ type Result = {
   safety: string;
   judgment: string;
   dangerousAction: boolean;
+  linkOpened: boolean;
+  followedSenderNumber: boolean;
   verificationEvidence: string;
   feedback: string[];
   nextStep: string;
@@ -46,26 +49,40 @@ async function request(payload: object): Promise<Reply> {
   return data as Reply;
 }
 
-const ACT_LABELS: Record<Choice, string> = {
-  verify: "기존 번호·공식 채널로 확인",
-  verify_sender: "상대가 알려준 경로로 확인",
-  verify_chat: "현재 상대에게 다시 묻기",
-  comply: "상대의 요청에 응하기",
-  share: "개인정보 제공하기",
-  stop: "대화 중단하기",
+const offerLabels: Record<OfferKind, string> = {
+  transfer: "송금하기",
+  share: "정보 전송하기",
+  link: "안내 링크 열기",
+  call: "안내 번호로 전화",
 };
+
+const offerIcons: Record<OfferKind, string> = {
+  transfer: "₩",
+  share: "↗",
+  link: "↗",
+  call: "☎",
+};
+
+function contactTitle(title?: string): string {
+  if (title?.includes("가족")) return "처음 보는 번호";
+  if (title?.includes("택배")) return "배송 안내";
+  if (title?.includes("은행")) return "거래 안내";
+  return "새 메시지";
+}
 
 export default function RealTraining() {
   const router = useRouter();
   const started = useRef(false);
-  const bottom = useRef<HTMLDivElement>(null);
+  const historyRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [input, setInput] = useState("");
-  const [confirm, setConfirm] = useState<Choice | null>(null);
-  const [verifySheet, setVerifySheet] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [tipVisible, setTipVisible] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [openedLinks, setOpenedLinks] = useState<number[]>([]);
   const [guess, setGuess] = useState<Guess>("uncertain");
   const [result, setResult] = useState<Result | null>(null);
 
@@ -76,10 +93,14 @@ export default function RealTraining() {
     setSession(null);
     setGuess("uncertain");
     setResult(null);
+    setOpenedLinks([]);
+    setPreviewIndex(null);
+    setActionsOpen(false);
     setBusy(true);
     try {
       const initial = await request({ action: "start" });
       setSession(initial);
+      setTipVisible(typeof window !== "undefined" && localStorage.getItem("mikki-action-guide-v1") !== "seen");
       setPhase("chat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "훈련을 시작하지 못했습니다.");
@@ -95,8 +116,20 @@ export default function RealTraining() {
   }, []);
 
   useEffect(() => {
-    if (phase === "chat") bottom.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [phase, session?.messages.length]);
+    if (phase === "chat" && historyRef.current) {
+      historyRef.current.scrollTop = historyRef.current.scrollHeight;
+    }
+  }, [phase, session?.messages.length, busy]);
+
+  function dismissGuide() {
+    setTipVisible(false);
+    try { localStorage.setItem("mikki-action-guide-v1", "seen"); } catch { /* storage disabled */ }
+  }
+
+  function openActions() {
+    dismissGuide();
+    setActionsOpen(true);
+  }
 
   async function send() {
     const text = input.trim();
@@ -105,7 +138,7 @@ export default function RealTraining() {
     setError("");
     try {
       const next = await request({ action: "message", token: session.token, text });
-      setSession(next);
+      setSession({ ...next, title: session.title });
       setInput("");
       if (next.closed) setPhase("judge");
     } catch (err) {
@@ -115,21 +148,39 @@ export default function RealTraining() {
     }
   }
 
-  async function perform(choice: Choice) {
+  async function perform(choice: Choice, sourceIndex?: number) {
     if (!session || busy) return;
-    setConfirm(null);
-    setVerifySheet(false);
     setBusy(true);
     setError("");
     try {
-      const next = await request({ action: "choice", token: session.token, choice });
-      setSession(next);
-      if (next.closed || next.turns >= next.maxTurns) setPhase("judge");
+      const next = await request({ action: "choice", token: session.token, choice, ...(sourceIndex !== undefined ? { sourceIndex } : {}) });
+      setSession({ ...next, title: session.title });
+      setActionsOpen(false);
+      if (choice === "open_link" && sourceIndex !== undefined) {
+        setOpenedLinks((prev) => prev.includes(sourceIndex) ? prev : [...prev, sourceIndex]);
+        setPreviewIndex(sourceIndex);
+      } else {
+        setPreviewIndex(null);
+        if (next.closed || next.turns >= next.maxTurns) setPhase("judge");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "행동을 기록하지 못했습니다.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function activateOffer(offer: OfferKind, index: number) {
+    if (busy) return;
+    if (offer === "link" && openedLinks.includes(index)) {
+      setPreviewIndex(index);
+      return;
+    }
+    const choice: Choice =
+      offer === "transfer" ? "comply" :
+      offer === "share" ? "share" :
+      offer === "call" ? "verify_sender" : "open_link";
+    void perform(choice, index);
   }
 
   async function finish() {
@@ -235,82 +286,113 @@ export default function RealTraining() {
     );
   }
 
+  const contact = contactTitle(session?.title);
+
   return (
-    <Screen>
-      <Header title="실전 대응 훈련" back={() => router.push("/roleplay/mode")} onClose={() => router.push("/home")} />
-      <Progress value={Math.max(1, session?.turns ?? 0)} total={session?.maxTurns ?? 8} dark />
-      <section className="screen__body" style={{ paddingBottom: 310 }}>
-        <div className="stack" style={{ marginTop: 10, gap: 6 }}>
-          <span className="chip">{session?.title ?? "실전 대화"}</span>
-          <h2 className="title" style={{ fontSize: 21 }}>이 연락, 어떻게 대응하시겠어요?</h2>
-          <p className="desc" style={{ fontSize: 14 }}>실제 연락일 수도, 사칭일 수도 있어요. 답장하거나 아래의 가상 행동을 선택해 보세요.</p>
+    <main className="screen rt-screen">
+      <header className="rt-header">
+        <button type="button" className="rt-nav-back" onClick={() => router.push("/roleplay/mode")} aria-label="뒤로 가기">
+          <span aria-hidden="true">‹</span>
+        </button>
+        <div className="rt-avatar" aria-hidden="true"><PersonIcon /></div>
+        <div className="rt-contact">
+          <strong>{contact}</strong>
+          <span>문자 메시지</span>
         </div>
-        <div className="chat-card" style={{ marginTop: 18, marginBottom: 12 }} aria-live="polite">
-          {(session?.messages ?? []).map((m, i) =>
-            m.actor === "system" ? (
-              <div className="card card--blue" key={i} style={{ padding: 14 }}>
-                <p className="card__title" style={{ fontSize: 15 }}>확인·행동 결과</p>
-                <p className="card__text">{m.text}</p>
+        <button type="button" className="rt-header-more" onClick={openActions} aria-label="대응 행동 메뉴 열기" aria-expanded={actionsOpen}>···</button>
+      </header>
+
+      <div className="rt-history" ref={historyRef} role="log" aria-live="polite" aria-relevant="additions text">
+        <div className="rt-day">오늘 · 새로운 대화</div>
+        {(session?.messages ?? []).map((m, i) =>
+          m.actor === "system" ? (
+            <div key={i} className="rt-system"><span>{m.text}</span></div>
+          ) : (
+            <div key={i} className={m.actor === "me" ? "rt-message rt-message--mine" : "rt-message"}>
+              {m.actor === "them" && <span className="rt-msg-avatar" aria-hidden="true"><PersonIcon /></span>}
+              <div className="rt-msg-body">
+                <div className="rt-bubble">
+                  <p>{m.text}</p>
+                  {m.actor === "them" && m.offer && (
+                    <button
+                      className={m.offer === "link" || m.offer === "call" ? "rt-message-link" : "rt-message-request"}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => activateOffer(m.offer!, i)}
+                      aria-label={offerLabels[m.offer] + " (가상 행동)"}
+                    >
+                      <span className="rt-offer-icon" aria-hidden="true">{offerIcons[m.offer]}</span>
+                      {offerLabels[m.offer]}
+                      <span aria-hidden="true">›</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className={m.actor === "me" ? "msg msg--me" : "msg"} key={i}>
-                {m.actor === "them" && <span className="msg__avatar"><PersonIcon /></span>}
-                {m.actor === "me"
-                  ? <p className="bubble bubble--me" style={{ whiteSpace: "pre-wrap" }}>{m.text}</p>
-                  : <div className="msg__col"><p className="bubble" style={{ whiteSpace: "pre-wrap" }}>{m.text}</p></div>}
-              </div>
-            ),
-          )}
-          {busy && <p className="desc" role="status">응답을 기다리고 있어요…</p>}
-          <div ref={bottom} />
-        </div>
-        {error && <p role="alert" style={{ color: "var(--red)", fontSize: 14 }}>{error}</p>}
-        <p className="desc" style={{ fontSize: 12, marginTop: 10 }}>
-          실제 전화·송금·개인정보 전송은 발생하지 않습니다. 실제 개인정보는 입력하지 마세요.
-        </p>
-      </section>
-      <BottomCTA>
-        <div style={{ width: "100%", borderRadius: 18, padding: 10, background: "#fff", boxShadow: "0 -4px 20px #00000010", display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-            <button className="btn btn--secondary" style={{ height: 48, fontSize: 15 }} disabled={busy || session?.verified} onClick={() => setVerifySheet(true)}>
-              {session?.verified ? "독립 확인 완료" : "어떻게 확인할까요?"}
-            </button>
-            <button className="btn btn--gray" style={{ height: 48, fontSize: 15 }} disabled={busy} onClick={() => void perform("stop")}>대화 중단</button>
-            <button className="btn btn--gray" style={{ height: 48, fontSize: 15 }} disabled={busy} onClick={() => setConfirm("comply")}>요청 수락 (가상)</button>
-            <button className="btn btn--gray" style={{ height: 48, fontSize: 15 }} disabled={busy} onClick={() => setConfirm("share")}>정보 제공 (가상)</button>
+            </div>
+          ),
+        )}
+        {busy && <div className="rt-typing"><span /><span /><span /><span className="sr-only">상대방이 답장 중입니다</span></div>}
+      </div>
+
+      <div className="rt-compose-zone">
+        {tipVisible && (
+          <div className="rt-guide" role="status">
+            <div><strong>다른 방법으로 확인하고 싶으신가요?</strong><p>왼쪽 <b>＋</b> 버튼에서 기존 번호로 확인하거나 대화를 끝낼 수 있어요.</p></div>
+            <button type="button" className="rt-guide-close" aria-label="안내 닫기" onClick={dismissGuide}>×</button>
           </div>
-          <form onSubmit={(event) => { event.preventDefault(); void send(); }} style={{ display: "flex", gap: 8 }}>
-            <input type="text" aria-label="상대에게 답장하기" value={input} maxLength={300}
-              onChange={(event) => setInput(event.target.value)} placeholder="직접 답장해 보세요"
-              disabled={busy || session?.closed || (session?.turns ?? 0) >= (session?.maxTurns ?? 8)}
-              style={{ flex: 1, width: 0, minWidth: 0, padding: "10px 12px", border: "1px solid var(--g300)", borderRadius: 12, fontSize: 16 }} />
-            <button type="submit" className="btn btn--primary" style={{ width: 76, height: 47, fontSize: 15 }} disabled={busy || !input.trim()}>보내기</button>
-          </form>
-          <button className="btn btn--muted" style={{ height: 38, fontSize: 14 }} disabled={busy} onClick={() => setPhase("judge")}>여기서 훈련 마치고 판단하기</button>
-        </div>
-      </BottomCTA>
-      {verifySheet && (
-        <Dialog onClose={() => setVerifySheet(false)}>
-          <div className="stack" style={{ gap: 8 }}>
-            <h2 className="title" style={{ fontSize: 20 }}>어떻게 신원을 확인하시겠어요?</h2>
-            <p className="desc" style={{ fontSize: 14 }}>확인 방법을 직접 골라 보세요. 각각 다른 결과가 나옵니다.</p>
+        )}
+        {error && <p className="rt-error" role="alert">{error}</p>}
+        <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+          <button className="rt-plus" type="button" aria-label="확인 및 대화 중단 메뉴" aria-expanded={actionsOpen} onClick={openActions} disabled={busy}>
+            <span aria-hidden="true">＋</span>
+          </button>
+          <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
+            maxLength={300} value={input} disabled={busy || session?.closed || (session?.turns ?? 0) >= (session?.maxTurns ?? 8)}
+            onChange={(event) => setInput(event.target.value)} />
+          <button type="submit" className="rt-send" aria-label="메시지 전송"
+            disabled={busy || !input.trim() || session?.closed}>
+            <span aria-hidden="true">↑</span>
+          </button>
+        </form>
+        <div className="rt-training-note">모의 훈련 · 실제 송금·통화·정보 전송 없음</div>
+      </div>
+
+      {actionsOpen && (
+        <BottomSheet onClose={() => setActionsOpen(false)}>
+          <div className="rt-sheet-title">
+            <h2>다음에 어떻게 하시겠어요?</h2>
+            <p>대화 밖에서 할 수 있는 행동을 선택해 보세요.</p>
           </div>
-          <button className="btn btn--primary" disabled={busy} onClick={() => void perform("verify")}>기존 번호·공식 앱으로 확인</button>
-          <button className="btn btn--gray" disabled={busy} onClick={() => void perform("verify_sender")}>상대가 알려준 번호·링크로 확인</button>
-          <button className="btn btn--gray" disabled={busy} onClick={() => void perform("verify_chat")}>이 채팅에서 본인인지 다시 묻기</button>
-          <button className="btn btn--secondary" onClick={() => setVerifySheet(false)}>대화로 돌아가기</button>
-        </Dialog>
+          <button type="button" className="rt-sheet-action" onClick={() => void perform("verify")} disabled={busy}>
+            <span className="rt-sheet-icon">☎</span>
+            <span><strong>기존 번호·공식 앱으로 확인</strong><small>직접 확인한 후 훈련 마무리</small></span><span aria-hidden="true">›</span>
+          </button>
+          <button type="button" className="rt-sheet-action" onClick={() => void perform("stop")} disabled={busy}>
+            <span className="rt-sheet-icon">✕</span>
+            <span><strong>대화 중단하기</strong><small>대화를 끝내고 판단 단계로 이동</small></span><span aria-hidden="true">›</span>
+          </button>
+          <button type="button" className="btn btn--gray" onClick={() => setActionsOpen(false)}>계속 대화하기</button>
+        </BottomSheet>
       )}
-      {confirm && (
-        <Dialog onClose={() => setConfirm(null)}>
-          <div className="stack" style={{ gap: 12 }}>
-            <h2 className="title" style={{ fontSize: 20 }}>{ACT_LABELS[confirm]}</h2>
-            <p className="desc">훈련 속에서 이 행동을 선택한 것으로 기록합니다. 실제 송금이나 개인정보 전송은 이루어지지 않습니다. 계속할까요?</p>
+
+      {previewIndex !== null && (
+        <BottomSheet onClose={() => setPreviewIndex(null)}>
+          <div className="rt-browser">
+            <div className="rt-browser-bar"><span aria-hidden="true">◀</span><strong>메시지에서 열린 페이지</strong><span aria-hidden="true">···</span></div>
+            <div className="rt-browser-content">
+              <span className="rt-browser-symbol" aria-hidden="true">▣</span>
+              <h2>정보 확인</h2>
+              <p>요청된 정보를 입력하고 계속 진행하시겠어요?</p>
+              <div className="rt-browser-field">정보 입력란</div>
+              <button className="btn btn--primary" disabled={busy} onClick={() => void perform("share", previewIndex)}>
+                정보 입력 후 전송
+              </button>
+              <button className="btn btn--gray" disabled={busy} onClick={() => setPreviewIndex(null)}>페이지 닫기</button>
+            </div>
+            <p className="rt-browser-foot">가상 페이지이며 실제 웹사이트로 이동하거나 개인정보를 입력하지 않습니다.</p>
           </div>
-          <button className="btn btn--primary" disabled={busy} onClick={() => void perform(confirm)}>이 행동 선택하기</button>
-          <button className="btn btn--gray" onClick={() => setConfirm(null)}>다시 생각하기</button>
-        </Dialog>
+        </BottomSheet>
       )}
-    </Screen>
+    </main>
   );
 }
