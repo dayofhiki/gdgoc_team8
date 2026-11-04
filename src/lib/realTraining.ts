@@ -146,7 +146,7 @@ export function classifyOffer(reply: string, suggestion: unknown): OfferKind | u
   if (suggestion === "official_app" &&
       /(?:공식앱|은행앱|택배사앱|설치된앱)/.test(text) &&
       /(?:열어|조회|확인|들어가|실행|접속)/.test(text) &&
-      !/(?:문자(?:속|의)?링크|보내(?:드린|준|는)링크)/.test(text)) return "official_app";
+      !/(?:문자(?:속|의)?링크|보(?:내|낸|내드린|내준|내는)링크|받은링크)/.test(text)) return "official_app";
   if (suggestion === "official_call" &&
       /(?:대표번호|고객센터|카드뒷면|공식번호)/.test(text) &&
       /(?:전화|연락|통화|확인)/.test(text) &&
