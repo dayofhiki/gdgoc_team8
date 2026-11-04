@@ -91,3 +91,15 @@ test("untrusted model details never become real URLs, phone numbers or executabl
   assert.ok(!items[0].linkPreview.title.includes("https://"));
   assert.ok(!items[1].label.includes("1234"));
 });
+
+
+test("model response and second semantic audit cannot duplicate one action via paraphrase", () => {
+  const actions = buildActions([
+    proposal("app", "installed", "택배사", "배송지 변경"),
+    proposal("app", "installed", "택배사", "주소 다시 지정"),
+    proposal("link", "sender", "거래내역", "취소 신청", "거래 취소", "요청 취소"),
+    proposal("link", "sender", "거래내역", "결제 취소", "거래 취소", "취소 페이지"),
+  ], 2);
+  assert.equal(actions.length, 2);
+  assert.deepEqual(actions.map(a => a.kind), ["app", "link"]);
+});

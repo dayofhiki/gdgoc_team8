@@ -106,7 +106,7 @@ async function generateResponse(state: TrainingState, text: string) {
   ];
   const first = await complete(messages, {
     temperature: 0.65,
-    maxTokens: 700,
+    maxTokens: 1250,
     json: true,
     schema: RESPONSE_SCHEMA,
     parse: parseResponse,
@@ -128,7 +128,7 @@ async function generateResponse(state: TrainingState, text: string) {
         ].join("\n"),
       },
       { role: "user", content: reply },
-    ], { temperature: 0, maxTokens: 460, json: true, schema: RESPONSE_SCHEMA, parse: parseResponse, budgetMs: 4800 }, { list: trainingProviders() });
+    ], { temperature: 0, maxTokens: 850, json: true, schema: RESPONSE_SCHEMA, parse: parseResponse, budgetMs: 4800 }, { list: trainingProviders() });
     // 한 모델이 하나의 행동을 누락해도 둘 중 하나가 찾아낸 구체적 행동을 기록한다.
     extracted = [...extracted, ...audit.value.actions];
   } catch (error) {
