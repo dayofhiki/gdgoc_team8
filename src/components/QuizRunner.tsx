@@ -1,8 +1,9 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_REMEMBER, pickQuiz, type OX } from "@/lib/quiz";
 import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
+import { saveRecord } from "@/lib/records";
 import { BottomCTA, Dialog, Header, Progress, Screen } from "./ui";
 
 type Props = {
@@ -28,6 +29,19 @@ export default function QuizRunner({ ids, from }: Props) {
 
   const q = items[idx];
   const total = items.length;
+
+  // 결과 화면에 도달하면 한 번만 기록 (StrictMode의 effect 2회 실행에도 1건)
+  const saved = useRef(false);
+  useEffect(() => {
+    if (!done || saved.current) return;
+    saved.current = true;
+    void saveRecord({
+      kind: from ? "challenge" : "quiz",
+      score: answers.filter((a) => a.correct).length,
+      total: answers.length,
+      detail: { wrong: answers.filter((a) => !a.correct).map((a) => a.id), hints: hintUsed.size },
+    });
+  }, [done, from, answers, hintUsed]);
 
   const choose = (v: OX) => {
     if (picked) return;

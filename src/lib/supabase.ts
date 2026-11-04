@@ -3,6 +3,9 @@ import type { ApiError } from "@shared/types";
 
 let client: SupabaseClient | null = null;
 
+/** .env.local이 없으면 서버 없이(오프라인) 동작 */
+export const configured = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
 // 지연 생성: 빌드 시 서버 프리렌더에서 env 없이 import돼도 깨지지 않게
 export function sb(): SupabaseClient {
   client ??= createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);

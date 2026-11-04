@@ -1,5 +1,6 @@
 // 배포된 Supabase 프로젝트에 실제로 요청을 보내 핵심 경로를 확인. 실행: npm run test:e2e
-// .env.local의 NEXT_PUBLIC_SUPABASE_URL·ANON_KEY 사용. 매 실행마다 익명 사용자 5명과 초대 2개가 새로 생김.
+// .env.local의 NEXT_PUBLIC_SUPABASE_URL·ANON_KEY 사용. 매 실행마다 익명 사용자 9명·초대 4개·가족 1개·기록 2건이 새로 생김.
+// 로컬 Supabase(npx supabase start)로 돌리려면: E2E_URL=http://127.0.0.1:54321 E2E_ANON_KEY=<로컬 anon key> npm run test:e2e
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 
@@ -7,8 +8,9 @@ const env = Object.fromEntries(
   readFileSync(new URL("../../.env.local", import.meta.url), "utf8").trim().split(/\r?\n/)
     .filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]),
 );
+const URL_ = process.env.E2E_URL ?? env.NEXT_PUBLIC_SUPABASE_URL, KEY = process.env.E2E_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const user = async () => {
-  const c = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const c = createClient(URL_, KEY, { auth: { persistSession: false } });
   const { error } = await c.auth.signInAnonymously();
   if (error) throw error;
   return c;
@@ -79,6 +81,35 @@ ok(peek?.length === 0, "다른 사용자는 그 대화 0행");
 ok((await call(outsider, "chat-turn", { session_id: sid, text: "hi" })).code === "NOT_FOUND", "다른 사용자가 남의 세션으로 채팅 → NOT_FOUND");
 const { error: upErr } = await winner.from("results").update({ outcome: "unsafe" }).eq("session_id", sid);
 ok(!!upErr, "판정(outcome) 직접 수정 불가");
+
+// 가족: 링크를 타고 타고 들어와도 한 가족 + 결과 공유는 동의한 사람만
+const [mom, dad, kid, stranger] = await Promise.all([user(), user(), user(), user()]);
+const { data: fam, error: famErr } = await kid.rpc("create_family", { p_nickname: "자녀" });
+ok(!famErr && !!fam, "가족 만들기");
+const { data: fi } = await kid.from("invites").insert({ family_id: fam, inviter_name: "자녀" }).select("token").single();
+const mj = await call(mom, "invite-join", { token: fi.token, nickname: "엄마" });
+ok(mj.data?.invite.family_id === fam && mj.data.invite.inviter_name === "자녀", "가족 링크 입장 → family_id·보낸 사람 반환");
+const { data: fi2, error: fi2Err } = await mom.from("invites").insert({ family_id: fam, inviter_name: "엄마" }).select("token").single();
+ok(!fi2Err, "받은 사람(엄마)도 가족 링크 생성");
+await call(dad, "invite-join", { token: fi2.token, nickname: "아빠" });
+const { data: mem } = await kid.from("family_members").select("nickname").eq("family_id", fam).order("joined_at");
+ok(mem?.map((m) => m.nickname).join() === "자녀,엄마,아빠", "다시 공유한 링크로 들어와도 같은 가족 3명");
+const { error: strangerInv } = await stranger.from("invites").insert({ family_id: fam });
+ok(!!strangerInv, "가족 아닌 사람은 그 가족 링크 생성 불가");
+// 여러 행 insert는 빠진 키를 null로 보냄 → title(not null)을 행마다 채움
+const { error: recErr } = await mom.from("practice_records").insert([{ kind: "training", title: "가족의 급한 연락", safe: true }, { kind: "challenge", title: "가족 도전장", score: 2, total: 3 }]);
+if (recErr) console.log("  기록 저장 오류:", recErr.message);
+let { data: ov } = await kid.rpc("family_overview", { p_family: fam });
+ok(ov?.find((r) => r.nickname === "엄마")?.record_count === null, "엄마 공유 꺼짐(기본) → 자녀에게 결과 안 보임");
+const { data: momUser } = await mom.auth.getUser();
+await mom.from("family_members").update({ share_results: true }).eq("family_id", fam).eq("user_id", momUser.user.id);
+({ data: ov } = await kid.rpc("family_overview", { p_family: fam }));
+const momRow = ov?.find((r) => r.nickname === "엄마");
+ok(momRow?.record_count === 2 && momRow.safe_count === 1 && momRow.recent.length === 2, "엄마 공유 켬 → 자녀 화면에 횟수 2·안전 1·최근 2건");
+const { error: ovErr } = await stranger.rpc("family_overview", { p_family: fam });
+ok(ovErr?.message === "FORBIDDEN", "남의 가족 요약 → FORBIDDEN");
+const { data: peekRec } = await stranger.from("practice_records").select("id");
+ok(peekRec?.length === 0, "남은 공유된 기록도 0행");
 
 console.log(failed ? `\n${failed}개 실패` : "\n전부 통과");
 process.exit(failed ? 1 : 0);

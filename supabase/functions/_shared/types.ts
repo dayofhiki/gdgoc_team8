@@ -36,6 +36,8 @@ export type Invite = {
   senior_name: string;
   difficulty: Difficulty;
   max_participants: number;
+  family_id: string | null;
+  inviter_name: string;
   expires_at: string;
   created_at: string;
 };
@@ -99,10 +101,10 @@ export type AiOutput = {
 };
 
 // Edge Functions
-export type InviteJoinRequest = { token: string };
+export type InviteJoinRequest = { token: string; nickname?: string };
 export type InviteJoinResponse = {
   participant_id: string;
-  invite: Pick<Invite, "senior_name" | "difficulty">;
+  invite: Pick<Invite, "senior_name" | "difficulty" | "family_id" | "inviter_name">;
 };
 export type ChatTurnRequest = { session_id: string; text?: string };
 export type ChatTurnResponse = { reply: Message; stage: Stage; ended: boolean; used_fallback: boolean };

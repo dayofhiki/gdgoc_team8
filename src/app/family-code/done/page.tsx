@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
 import { BottomCTA, Screen } from "@/components/ui";
+import { familyShareUrl, saveFamilyQuestion } from "@/lib/invite";
 import { copyText } from "@/lib/share";
 
 /** 가족 암호 · 완료 */
@@ -13,13 +14,26 @@ export default function FamilyCodeDone() {
   const [shareMessage, setShareMessage] = useState("");
   const router = useRouter();
 
+  // 공유 시트는 클릭 직후 바로 열려야 해서 질문 저장·가족 링크를 미리 준비
+  const [url, setUrl] = useState("");
+
   useEffect(() => {
     if (ready && !familyQuestion) router.replace("/family-code/question");
   }, [ready, familyQuestion, router]);
 
+  useEffect(() => {
+    if (!ready || !familyQuestion) return;
+    let alive = true;
+    saveFamilyQuestion(familyQuestion)
+      .then(() => familyShareUrl(location.origin))
+      .then((u) => alive && setUrl(u));
+    return () => {
+      alive = false;
+    };
+  }, [ready, familyQuestion]);
+
   const shareWithFamily = async () => {
     const text = `우리 가족 확인 질문: ${familyQuestion}\n답은 메시지로 보내지 말고 직접 만나서 정해요.\n미끼주의보에서 함께 연습해요.`;
-    const url = `${location.origin}/family-code/guide`;
     if (navigator.share) {
       try {
         await navigator.share({ title: "우리 가족 암호", text, url });
@@ -67,7 +81,9 @@ export default function FamilyCodeDone() {
       {shareMessage && <div className="toast" role="status">{shareMessage}</div>}
       <BottomCTA row>
         <Link href="/home" className="btn btn--gray btn--lg" style={{ color: "var(--g800)" }}>홈으로</Link>
-        <button className="btn btn--primary btn--lg" onClick={() => void shareWithFamily()}>가족에게 공유하기</button>
+        <button className="btn btn--primary btn--lg" onClick={() => void shareWithFamily()} disabled={!url}>
+          {url ? "가족에게 공유하기" : "링크 준비 중…"}
+        </button>
       </BottomCTA>
     </Screen>
   );
