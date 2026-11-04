@@ -253,6 +253,7 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
       good: goodPoints.slice(0, 2),
       improve: improvePoints.slice(0, 3),
       judgment: guess === "uncertain" ? "판단 보류" : guessCorrect ? "판단 일치" : "판단 불일치",
+      tip: scenario.title.includes("가족") ? "저장된 가족 번호로 직접 연락" : scenario.title.includes("택배") ? "택배사 공식 앱에서 배송 조회" : "은행 공식 앱·대표번호로 확인",
     },
     identity: scenario.identity,
     truthLabel: scenario.identity === "legitimate" ? "실제 연락" : "사칭 시도",
