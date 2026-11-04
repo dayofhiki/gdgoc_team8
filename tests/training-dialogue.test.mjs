@@ -246,3 +246,64 @@ test("genuine actors must not give away verification or transfer routes", () => 
     "네, 저희 쪽에서 확인 요청이 있었습니다.",
   ]) assert.equal(unsolicitedSolution(reply), false, reply);
 });
+
+
+test("SY-derived learner context separates speech claims, suspicion and real action evidence", async () => {
+  const { learnerContext, learnerTurnGuidance, isExplicitTrainingStop } =
+    await import("../src/lib/trainingTurnContext.ts");
+  const history = [
+    { actor: "them", text: "연락 돼?" },
+    { actor: "me", text: "돈 보냈어" },
+    { actor: "them", text: "아직 확인이 안 돼." },
+    { actor: "me", text: "돈 보냈어" },
+    { actor: "me", text: "너 사기꾼이지?" },
+  ];
+  const ctx = learnerContext(history, "돈 보냈어");
+  assert.equal(ctx.repeats, 2);
+  assert.equal(ctx.priorClaims, 2);
+  assert.equal(ctx.priorSuspicions, 1);
+  assert.equal(ctx.claimsAction, true);
+  const fraud = learnerTurnGuidance(ctx, "fraud", 0);
+  assert.match(fraud, /실제로 했다고 가정하면 안 된다/);
+  assert.match(fraud, /물러난다/);
+  assert.match(fraud, /같은 말을 세 번 이상/);
+  assert.doesNotMatch(fraud, /실제 송금이 확인됐습니다/);
+  const normal = learnerTurnGuidance(ctx, "legitimate", 0);
+  assert.doesNotMatch(normal, /다시 '아직 안 왔다'/);
+  assert.equal(learnerContext(history, "돈 안 보냈어").claimsAction, false);
+  assert.equal(learnerContext(history, "링크 안 눌렀어").claimsAction, false);
+  assert.equal(learnerContext(history, "링크 눌렀어").claimsAction, true);
+  assert.equal(learnerContext(history, "딸이 지금 옆에 있는데?").verificationClaim, true);
+  assert.equal(learnerContext(history, "진짜 너 맞아?").suspectsSender, false);
+  assert.equal(isExplicitTrainingStop("연습 그만할래요"), true);
+  assert.equal(isExplicitTrainingStop("상황극 종료"), true);
+  assert.equal(isExplicitTrainingStop("그만 연락해"), false);
+  assert.equal(isExplicitTrainingStop("돈은 안 보낼게요"), false);
+});
+
+test("SY-derived richer dialogue signals can close a resolved confrontation without claiming verification", () => {
+  for (const learnerMove of ["claimed_action", "suspect", "verified_claimed"]) {
+    const parsed = parseDialogueOutput(JSON.stringify({
+      reply: "알겠어, 그럼 나중에 얘기하자.",
+      actions: [],
+      dialogue: signal({ learnerMove }),
+    }));
+    const settled = decide({ primary: parsed.dialogue, audit: parsed.dialogue, nextTurn: 3, userText: "그만 얘기하자." });
+    assert.equal(settled.closed, true);
+  }
+  const unresolved = decide({
+    primary: signal({ learnerMove: "suspect" }),
+    audit: signal({ learnerMove: "suspect" }),
+    userText: "사기꾼이야?",
+  });
+  assert.equal(unresolved.closed, false);
+});
+
+test("real training route handles explicit training stop and rejects invented genuine-actor actions", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  assert.match(route, /if \(isExplicitTrainingStop\(text\)\)/);
+  assert.match(route, /recordChoice\(withMessage, scenario, "stop"\)/);
+  assert.match(route, /scenario\.identity === "legitimate"/);
+  assert.match(route, /first\.value\.actions\.filter\(a => a\.kind === "transfer"\)/);
+});
