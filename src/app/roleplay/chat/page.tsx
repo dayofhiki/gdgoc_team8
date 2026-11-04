@@ -72,6 +72,31 @@ function contactTitle(title?: string): string {
   return "새 메시지";
 }
 
+// 결과 화면에서 가족 질문 화면으로 나갔다 돌아올 때 결과를 복원한다.
+// 복원 표시(?review=1)는 그 방문 기록 항목에만 남으므로, 새 훈련에는 옛 결과가 뜨지 않는다.
+const REVIEW_KEY = "mikki:training-review";
+
+function saveReview(result: Result) {
+  try {
+    sessionStorage.setItem(REVIEW_KEY, JSON.stringify(result));
+    window.history.replaceState(window.history.state, "", "/roleplay/chat?review=1");
+  } catch { /* 저장소를 못 쓰면 복원 없이 진행 */ }
+}
+
+function takeSavedReview(): Result | null {
+  try {
+    const saved = sessionStorage.getItem(REVIEW_KEY);
+    if (new URLSearchParams(location.search).get("review") !== "1") {
+      sessionStorage.removeItem(REVIEW_KEY);
+      return null;
+    }
+    const parsed = saved ? JSON.parse(saved) as Result : null;
+    return parsed?.behavior ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function RealTraining() {
   const router = useRouter();
   const { ready: familyReady, familyQuestion, nickname } = useAppState();
@@ -132,6 +157,13 @@ export default function RealTraining() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    const saved = takeSavedReview();
+    if (saved) {
+      setResult(saved);
+      setReviewPage("truth");
+      setPhase("result");
+      return;
+    }
     void start();
   }, []);
 
@@ -337,7 +369,7 @@ export default function RealTraining() {
                 ) : (
                   <p className="fb-item__text">아직 이 기기에 저장된 확인 질문이 없어요. 가족과 직접 만나 함께 정해 보세요.</p>
                 )}
-                <Link className="fb-link" href={hasFamilyQuestion ? "/family-code/question" : "/family-code/guide"}>
+                <Link className="fb-link" href={hasFamilyQuestion ? "/family-code/question" : "/family-code/guide"} onClick={() => saveReview(result)}>
                   {hasFamilyQuestion ? "질문 변경하기" : "가족 확인 질문 정하기"}
                   <ChevronRight size={18} />
                 </Link>
