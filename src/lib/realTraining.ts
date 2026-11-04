@@ -102,6 +102,30 @@ export type TrainingState = {
  * Gemini가 의미를 제안하지만 메시지에 명시적인 요청이 있을 때만 가상 액션을 보여준다.
  * 실제 링크/전화번호/결제 수단을 생성하지 않는다.
  */
+/**
+ * 모델이 영어 단어를 섞어도 시니어에게 보여 주는 대사는 한글 위주로 정리한다.
+ * 실제 URL 및 번호는 원래 정책대로 가리고, 원문을 학습용 채팅에 노출하지 않는다.
+ */
+export function normalizeKoreanReply(reply: string): string {
+  return reply
+    .replace(/https?:\/\/\S+|www\.\S+/gi, "외부 링크")
+    .replace(/(?:\d[\s.-]?){8,}/g, "번호 생략")
+    .replace(/\b(?:official|authorized)\b/gi, "공식")
+    .replace(/\b(?:app|application)\b/gi, "앱")
+    .replace(/\b(?:website|web\s*site)\b/gi, "웹사이트")
+    .replace(/\b(?:link|url)\b/gi, "링크")
+    .replace(/\b(?:sms)\b/gi, "문자")
+    .replace(/\b(?:bank)\b/gi, "은행")
+    .replace(/\b(?:address)\b/gi, "주소")
+    .replace(/\b(?:phone)\b/gi, "전화")
+    .replace(/\b(?:please)\b/gi, "")
+    .replace(/\b[A-Za-z][A-Za-z0-9_-]*\b/g, "")
+    .replace(/[<>{}]/g, "")
+    .replace(/ {2,}/g, " ")
+    .replace(/\s+([.,!?])/g, "$1")
+    .trim();
+}
+
 export function classifyOffer(reply: string, suggestion: unknown): OfferKind | undefined {
   if (typeof reply !== "string" || typeof suggestion !== "string") return undefined;
   const text = reply.replace(/\s+/g, "");
