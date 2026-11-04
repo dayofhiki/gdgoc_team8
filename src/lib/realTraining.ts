@@ -143,10 +143,13 @@ export function classifyOffer(reply: string, suggestion: unknown): OfferKind | u
       /(?:번호|전화|연락처)/.test(text) &&
       /(?:전화해|연락해|걸어|통화해)/.test(text) &&
       !/(?:원래|기존|공식|대표|카드\s*뒷면)/.test(text)) return "call";
+  // 공식 앱에서 배송지 주소를 '변경'하도록 요청하는 등 실제 앱 작업도 행동 제안이다.
+  // Gemini의 offers 출력 누락과 무관하게, 발화에 분명히 등장한 경우만 복구한다.
   if (suggestion === "official_app" &&
       /(?:공식앱|은행앱|택배사앱|설치된앱)/.test(text) &&
-      /(?:열어|조회|확인|들어가|실행|접속)/.test(text) &&
-      !/(?:문자(?:속|의)?링크|보(?:내|낸|내드린|내준|내는)링크|받은링크)/.test(text)) return "official_app";
+      /(?:열어|조회|확인|들어가|실행|접속|수정|변경|바꿔|고쳐|등록|설정)/.test(text) &&
+      !/(?:문자(?:속|의)?링크|보(?:내|낸|내드린|내준|내는)링크|받은링크)/.test(text) &&
+      !/(?:공식앱(?:을|은|이)?(?:쓰지|사용하지|이용하지|열지|말고|대신)|공식앱(?:에|에서)?(?:는)?(?:접속하지|들어가지|확인하지|수정하지))/.test(text)) return "official_app";
   if (suggestion === "official_call" &&
       /(?:대표번호|고객센터|카드뒷면|공식번호)/.test(text) &&
       /(?:전화|연락|통화|확인)/.test(text) &&
