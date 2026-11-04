@@ -1,3 +1,6 @@
+import { actionChoice } from "./trainingActions";
+import type { Action } from "./trainingActions";
+
 /**
  * 실전 대응 훈련: AI 대사와 별개로 서버가 보관하는 시나리오 및 채점 기준.
  * 정상/사기 시나리오는 같은 첫 메시지를 사용한다. 실제 정체와 확인 결과는 클라이언트에 공개하지 않는다.
@@ -9,8 +12,8 @@ export type Choice = "verify" | "family_contact" | "verify_sender" | "verify_cha
 export type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
 export type Actor = "them" | "me" | "system";
 export type LinkPreview = { url: string; domain: string; title: string; description: string };
-export type Message = { actor: Actor; text: string; offer?: OfferKind; offers?: OfferKind[]; linkPreview?: LinkPreview };
-export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number };
+export type Message = { actor: Actor; text: string; offer?: OfferKind; offers?: OfferKind[]; linkPreview?: LinkPreview; actions?: Action[] };
+export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string };
 export type Scenario = {
   id: string;
   identity: Identity;
@@ -196,7 +199,7 @@ export function simulatedLink(scenario: Scenario): LinkPreview {
 
 /** 메신저 말풍선의 행동만 송금/정보제공/링크 열기로 인정한다. */
 export function recordChoice(
-  state: TrainingState, scenario: Scenario, choice: Choice, sourceIndex?: number,
+  state: TrainingState, scenario: Scenario, choice: Choice, sourceIndex?: number, actionId?: string,
 ): { state: TrainingState; notice: string } {
   if (state.closed || state.turns >= MAX_TURNS) throw new Error("이미 종료된 훈련입니다.");
   if (state.events.length >= 6) throw new Error("행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.");
@@ -207,25 +210,42 @@ export function recordChoice(
       throw new Error("해당 메시지에서 행동을 선택해 주세요.");
     }
     const message = state.messages[sourceIndex!];
-    const offered = message.offers ?? (message.offer ? [message.offer] : []);
-    const allowed = message.actor === "them" && (
-      (choice === "verify" && (offered.includes("official_app") || offered.includes("official_call"))) ||
-      (choice === "verify_sender" && offered.includes("call")) ||
-      (choice === "comply" && offered.includes("transfer")) ||
-      (choice === "open_link" && offered.includes("link") && !!message.linkPreview) ||
-      (choice === "share" && (offered.includes("share") ||
-        (offered.includes("link") && state.events.some(e => e.choice === "open_link" && e.sourceIndex === sourceIndex))))
-    );
-    if (!allowed) throw new Error("이 메시지에서는 해당 행동을 할 수 없습니다.");
-    if (["open_link", "verify_sender"].includes(choice) && state.events.some(e =>
-      e.choice === choice && e.sourceIndex === sourceIndex)) {
-      throw new Error("이미 선택한 행동입니다.");
+    // 신규 형식은 단어 패턴과 관계없이 서버에 봉인된 구조화 행동 ID로 검증한다.
+    // 기존 훈련 세션 및 단위 테스트를 위한 기존 offers 형식도 유지한다.
+    if (message.actions) {
+      const selected = message.actions.find(a => a.id === actionId);
+      const expected = selected ? actionChoice(selected) : undefined;
+      const viaLink = selected?.kind === "link" && choice === "share" &&
+        state.events.some(e => e.choice === "open_link" && e.sourceIndex === sourceIndex && e.actionId === actionId);
+      if (message.actor !== "them" || !selected || (expected !== choice && !viaLink)) {
+        throw new Error("이 메시지에서는 해당 행동을 할 수 없습니다.");
+      }
+      if (["open_link", "verify_sender"].includes(choice) && state.events.some(e =>
+        e.choice === choice && e.sourceIndex === sourceIndex && e.actionId === actionId)) {
+        throw new Error("이미 선택한 행동입니다.");
+      }
+    } else {
+      const offered = message.offers ?? (message.offer ? [message.offer] : []);
+      const allowed = message.actor === "them" && (
+        (choice === "verify" && (offered.includes("official_app") || offered.includes("official_call"))) ||
+        (choice === "verify_sender" && offered.includes("call")) ||
+        (choice === "comply" && offered.includes("transfer")) ||
+        (choice === "open_link" && offered.includes("link") && !!message.linkPreview) ||
+        (choice === "share" && (offered.includes("share") ||
+          (offered.includes("link") && state.events.some(e => e.choice === "open_link" && e.sourceIndex === sourceIndex))))
+      );
+      if (!allowed) throw new Error("이 메시지에서는 해당 행동을 할 수 없습니다.");
+      if (["open_link", "verify_sender"].includes(choice) && state.events.some(e =>
+        e.choice === choice && e.sourceIndex === sourceIndex)) {
+        throw new Error("이미 선택한 행동입니다.");
+      }
     }
   }
 
   const event: Event = {
     choice, turn: state.turns, verifiedBefore: state.verification === "confirmed",
     ...(sourceNeeded ? { sourceIndex } : {}),
+    ...(actionId ? { actionId } : {}),
   };
   const familyScenario = scenario.id.startsWith("0-");
   const verification = choice === "verify" || (choice === "family_contact" && familyScenario)
