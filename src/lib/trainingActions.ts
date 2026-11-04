@@ -70,7 +70,7 @@ export function buildActions(items: unknown, turn: number): Action[] {
     if (kind === "app" && origin !== "installed") { kind = "link"; origin = "sender"; }
     if (["link", "transfer", "provide_data"].includes(kind)) origin = "sender";
     const target = clean(x.target, 24), task = clean(x.task, 42);
-    const key = [kind, origin, target, task].join("|");
+    const key = [kind, origin, target].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
     const id = turn + "-" + out.length;
