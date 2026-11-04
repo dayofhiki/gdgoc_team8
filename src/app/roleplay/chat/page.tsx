@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PersonIcon } from "@/components/Icons";
 import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
+import { actionChoice, type Action } from "@/lib/trainingActions";
 
 type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
 type LinkPreview = { url: string; domain: string; title: string; description: string };
-type Message = { actor: "them" | "me" | "system"; text: string; offer?: OfferKind; offers?: OfferKind[]; linkPreview?: LinkPreview };
+type Message = { actor: "them" | "me" | "system"; text: string; actions?: Action[] };
 type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
 type Guess = "legitimate" | "fraud" | "uncertain";
 type Phase = "chat" | "judge" | "result";
@@ -59,35 +60,6 @@ async function request(payload: object): Promise<Reply> {
   return data as Reply;
 }
 
-const offerLabels: Record<OfferKind, string> = {
-  transfer: "송금하기",
-  share: "정보 전송하기",
-  link: "링크 열기",
-  call: "안내 번호로 전화",
-  official_app: "공식 앱에서 조회",
-  official_call: "대표번호로 전화",
-};
-
-const offerIcons: Record<OfferKind, string> = {
-  transfer: "₩",
-  share: "↗",
-  link: "↗",
-  call: "☎",
-  official_app: "▣",
-  official_call: "☎",
-};
-
-function offerText(kind: OfferKind, title?: string): string {
-  if (kind === "transfer" && title?.includes("가족")) return "수리비 보내기";
-  if (kind === "transfer") return "요청 금액 이체하기";
-  if (kind === "share" && title?.includes("택배")) return "배송 정보 전송";
-  if (kind === "official_app" && title?.includes("은행")) return "은행 앱 열기";
-  if (kind === "official_app" && title?.includes("택배")) return "택배사 앱 열기";
-  if (kind === "official_call" && title?.includes("은행")) return "카드 뒷면 번호로 전화";
-  if (kind === "official_call" && title?.includes("택배")) return "택배사 고객센터로 전화";
-  return offerLabels[kind];
-}
-
 function contactTitle(title?: string): string {
   if (title?.includes("가족")) return "처음 보는 번호";
   if (title?.includes("택배")) return "배송 안내";
@@ -107,7 +79,8 @@ export default function RealTraining() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [tipVisible, setTipVisible] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const [openedLinks, setOpenedLinks] = useState<number[]>([]);
+  const [previewActionId, setPreviewActionId] = useState<string | null>(null);
+  const [openedLinks, setOpenedLinks] = useState<string[]>([]);
   const [guess, setGuess] = useState<Guess>("uncertain");
   const [result, setResult] = useState<Result | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
@@ -126,6 +99,7 @@ export default function RealTraining() {
     setEnding(null);
     setOpenedLinks([]);
     setPreviewIndex(null);
+    setPreviewActionId(null);
     setActionsOpen(false);
     setBusy(true);
     try {
@@ -213,19 +187,21 @@ export default function RealTraining() {
     }
   }
 
-  async function perform(choice: Choice, sourceIndex?: number) {
+  async function perform(choice: Choice, sourceIndex?: number, actionId?: string) {
     if (!session || busy || ending) return;
     setBusy(true);
     setError("");
     try {
-      const next = await request({ action: "choice", token: session.token, choice, ...(sourceIndex !== undefined ? { sourceIndex } : {}) });
+      const next = await request({ action: "choice", token: session.token, choice, ...(sourceIndex !== undefined ? { sourceIndex } : {}), ...(actionId ? { actionId } : {}) });
       setSession({ ...next, title: session.title });
       setActionsOpen(false);
-      if (choice === "open_link" && sourceIndex !== undefined) {
-        setOpenedLinks((prev) => prev.includes(sourceIndex) ? prev : [...prev, sourceIndex]);
+      if (choice === "open_link" && sourceIndex !== undefined && actionId) {
+        setOpenedLinks((prev) => prev.includes(actionId) ? prev : [...prev, actionId]);
         setPreviewIndex(sourceIndex);
+        setPreviewActionId(actionId);
       } else {
         setPreviewIndex(null);
+        setPreviewActionId(null);
         if (next.closed && (choice === "verify" || choice === "family_contact" || choice === "stop" || choice === "comply" || choice === "share")) {
           setEnding({ choice, stage: "receipt" });
         } else if (next.closed || next.turns >= next.maxTurns) {
@@ -239,18 +215,14 @@ export default function RealTraining() {
     }
   }
 
-  function activateOffer(offer: OfferKind, index: number) {
+  function activateAction(action: Action, index: number) {
     if (busy) return;
-    if (offer === "link" && openedLinks.includes(index)) {
+    if (action.kind === "link" && openedLinks.includes(action.id)) {
       setPreviewIndex(index);
+      setPreviewActionId(action.id);
       return;
     }
-    const choice: Choice =
-      offer === "transfer" ? "comply" :
-      offer === "share" ? "share" :
-      offer === "call" ? "verify_sender" :
-      offer === "official_app" || offer === "official_call" ? "verify" : "open_link";
-    void perform(choice, index);
+    void perform(actionChoice(action), index, action.id);
   }
 
   async function finish() {
@@ -375,6 +347,7 @@ export default function RealTraining() {
   }
 
   const contact = contactTitle(session?.title);
+  const activeLink = previewIndex !== null ? session?.messages[previewIndex]?.actions?.find(a => a.id === previewActionId)?.linkPreview : undefined;
 
   return (
     <main className="screen rt-screen">
@@ -414,45 +387,34 @@ export default function RealTraining() {
               <div className="rt-msg-body">
                 <div className="rt-bubble">
                   <p>{m.text}</p>
-                  {m.actor === "them" && m.linkPreview && (
-                    <div className="rt-link-attachment">
-                      <button type="button" className="rt-link-url" onClick={() => activateOffer("link", i)} disabled={busy}
-                        aria-label={m.linkPreview.domain + " 링크 열기 (모의 문자)"}>
-                        {m.linkPreview.url}
-                      </button>
-                      <button type="button" className="rt-link-preview" onClick={() => activateOffer("link", i)} disabled={busy}
-                        aria-label={m.linkPreview.title + " 미리보기 열기 (모의 문자)"}>
-                        <span className="rt-link-preview-image" aria-hidden="true"><span>▤</span></span>
-                        <span className="rt-link-preview-copy">
-                          <strong>{m.linkPreview.title}</strong>
-                          <small>{m.linkPreview.description}</small>
-                          <small className="rt-link-preview-domain">{m.linkPreview.domain}</small>
+                  {m.actor === "them" && (m.actions ?? []).map((action) =>
+                    action.kind === "link" && action.linkPreview ? (
+                      <div className="rt-link-attachment" key={action.id}>
+                        <button type="button" className="rt-link-url" onClick={() => activateAction(action, i)} disabled={busy}
+                          aria-label={action.linkPreview.domain + " 링크 열기 (모의 문자)"}>
+                          {action.linkPreview.url}
+                        </button>
+                        <button type="button" className="rt-link-preview" onClick={() => activateAction(action, i)} disabled={busy}
+                          aria-label={action.linkPreview.title + " 링크 미리보기 열기 (모의 문자)"}>
+                          <span className="rt-link-preview-image" aria-hidden="true"><span>▤</span></span>
+                          <span className="rt-link-preview-copy">
+                            <strong>{action.linkPreview.title}</strong>
+                            <small>{action.linkPreview.description}</small>
+                            <small className="rt-link-preview-domain">{action.linkPreview.domain}</small>
+                          </span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button className="rt-message-request" type="button" key={action.id} disabled={busy}
+                        onClick={() => activateAction(action, i)} aria-label={action.label + " (가상 행동)"}>
+                        <span className="rt-offer-icon" aria-hidden="true">
+                          {action.kind === "app" ? "▣" : action.kind === "phone" ? "☎" : action.kind === "transfer" ? "₩" : "↗"}
                         </span>
-                      </button>
-                    </div>
-                  )}
-                  {m.actor === "them" && (m.offers ?? (m.offer ? [m.offer] : [])).includes("call") && (
-                    <button type="button" className="rt-phone-link" disabled={busy}
-                      onClick={() => activateOffer("call", i)} aria-label="문자 속 안내 번호로 전화하기 (모의 전화)">
-                      <span aria-hidden="true">☎</span> 02-0000-0000
-                    </button>
-                  )}
-                  {m.actor === "them" && (m.offers ?? (m.offer ? [m.offer] : []))
-                    .filter((offer) => offer !== "link" && offer !== "call")
-                    .map((offer) => (
-                      <button
-                        className="rt-message-request"
-                        type="button"
-                        key={offer}
-                        disabled={busy}
-                        onClick={() => activateOffer(offer, i)}
-                        aria-label={offerText(offer, session?.title) + " (가상 행동)"}
-                      >
-                        <span className="rt-offer-icon" aria-hidden="true">{offerIcons[offer]}</span>
-                        {offerText(offer, session?.title)}
+                        {action.label}
                         <span aria-hidden="true">›</span>
                       </button>
-                    ))}
+                    ),
+                  )}
                 </div>
               </div>
             </div>
@@ -518,19 +480,19 @@ export default function RealTraining() {
           )}
         </div>
       )}
-      {previewIndex !== null && (
+      {previewIndex !== null && activeLink && (
         <BottomSheet onClose={() => setPreviewIndex(null)}>
           <div className="rt-browser">
             <div className="rt-browser-bar"><span aria-hidden="true">◀</span><strong>메시지에서 열린 페이지</strong><span aria-hidden="true">···</span></div>
             <div className="rt-browser-content">
               <span className="rt-browser-symbol" aria-hidden="true">▣</span>
-              <h2>{session?.title?.includes("택배") ? "배송지 확인" : session?.title?.includes("은행") ? "거래 내역 확인" : "안내 확인"}</h2>
+              <h2>{activeLink.title}</h2>
               <p>정보 확인을 위해 아래 항목을 작성하시겠어요?</p>
-              <div className="rt-browser-field">{session?.title?.includes("택배") ? "받는 분 · 배송지" : "이름 · 확인 정보"}</div>
-              <button className="btn btn--primary" disabled={busy} onClick={() => void perform("share", previewIndex)}>
+              <div className="rt-browser-field">{activeLink.description}</div>
+              <button className="btn btn--primary" disabled={busy} onClick={() => void perform("share", previewIndex, previewActionId ?? undefined)}>
                 정보 입력 후 전송
               </button>
-              <button className="btn btn--gray" disabled={busy} onClick={() => setPreviewIndex(null)}>페이지 닫기</button>
+              <button className="btn btn--gray" disabled={busy} onClick={() => { setPreviewIndex(null); setPreviewActionId(null); }}>페이지 닫기</button>
             </div>
             <p className="rt-browser-foot">가상 페이지이며 실제 웹사이트로 이동하거나 개인정보를 입력하지 않습니다.</p>
           </div>
