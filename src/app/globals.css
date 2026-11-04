@@ -1073,3 +1073,19 @@ p, h1, h2, h3 { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .rt-menu-guide { animation: none; }
 }
+
+
+.rt-phone-link {
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: #2266ba;
+  font-size: 15px;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rt-phone-link:focus-visible { outline: 3px solid #8abaff; outline-offset: 2px; }
