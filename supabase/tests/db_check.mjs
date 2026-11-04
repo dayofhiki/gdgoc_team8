@@ -14,6 +14,7 @@ grant usage on schema public to anon, authenticated, service_role;
 -- 기본 권한을 주지 않음 = 대시보드 "Automatically expose new tables" 꺼짐. 마이그레이션의 명시 grant만으로 동작해야 함
 `);
 await db.exec(readFileSync(root + "/supabase/migrations/20261103000000_001_init.sql", "utf8"));
+await db.exec(readFileSync(root + "/supabase/migrations/20261103000001_002_turn_lock_open_seats.sql", "utf8")); // 003(pg_cron)은 PGlite에 없어 제외
 await db.exec(readFileSync(root + "/supabase/seed.sql", "utf8"));
 const G = "00000000-0000-0000-0000-00000000000a", A = "00000000-0000-0000-0000-00000000000b", B = "00000000-0000-0000-0000-00000000000c";
 await db.exec(`insert into auth.users values ('${G}'),('${A}'),('${B}')`);
@@ -22,7 +23,7 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
 const err = async (p) => { try { await p; return null; } catch (e) { return e.message; } };
 
 const [fam] = await as(G, "insert into invites (senior_name) values ('어머니') returning token, max_participants");
-ok(fam.token.length === 64 && fam.max_participants === 1, "보호자 초대 생성, 64자 토큰, 기본 1명");
+ok(fam.token.length === 64 && fam.max_participants === 200, "보호자 초대 생성, 64자 토큰, 기본 정원 200");
 const [org] = await as(G, "insert into invites (senior_name, max_participants) values ('복지관', 2) returning token");
 ok(!!(await err(as(G, "insert into invites (max_participants) values (500)"))), "인원 상한 200 초과 거부");
 ok(!!(await err(as(A, "insert into invites (created_by) values ($1)", [G]))), "남의 이름으로 초대 생성 불가");
@@ -31,7 +32,7 @@ ok(!!(await err(as(A, "insert into invites (created_by) values ($1)", [G]))), "�
 const join = async (tok, u) => { await db.exec("set role service_role"); try { return (await db.query("select * from join_invite($1,$2)", [tok, u])).rows[0]; } finally { await db.exec("reset role"); } };
 const pa = await join(fam.token, A);
 ok((await join(fam.token, A)).participant_id === pa.participant_id, "같은 사용자 재입장 → 같은 참여자");
-ok((await err(join(fam.token, B))) === "INVITE_FULL", "가족 링크 2번째 사용자 → INVITE_FULL");
+ok((await join(fam.token, B)).participant_id !== pa.participant_id, "기본 링크는 다른 브라우저(새 익명 사용자)도 입장");
 ok((await err(join("nope", A))) === "INVITE_INVALID", "없는 토큰 → INVITE_INVALID");
 await join(org.token, A); await join(org.token, B);
 ok((await err(join(org.token, G))) === "INVITE_FULL", "기관 링크 2명까지 입장, 3번째 → INVITE_FULL");
@@ -49,6 +50,9 @@ ok(!!(await err(as(A, "insert into messages (session_id, role, text, stage) valu
 await db.query("insert into messages (session_id, role, text, stage) values ($1,'scammer','hi','approach')", [s.id]);
 await db.query("insert into results (session_id, user_id, outcome) values ($1,$2,'safe')", [s.id, A]);
 ok((await as(A, "select * from messages")).length === 1, "본인 메시지 조회");
+await db.query("insert into messages (session_id, role, text, stage, turn) values ($1,'senior','a','approach',1)", [s.id]);
+ok(!!(await err(db.query("insert into messages (session_id, role, text, stage, turn) values ($1,'senior','b','approach',1)", [s.id]))), "같은 턴·역할 메시지 중복 저장 불가 (연타 방지)");
+await db.query("delete from messages where turn = 1");
 ok((await as(B, "select * from messages")).length === 0 && (await as(B, "select * from results")).length === 0, "다른 사용자는 메시지·결과 0행");
 await as(A, "update results set share_consent = true");
 ok((await db.query("select share_consent from results")).rows[0].share_consent === true, "본인 공유 동의 변경 가능");

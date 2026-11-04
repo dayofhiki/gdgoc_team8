@@ -7,8 +7,8 @@
 | | 상태 |
 |---|---|
 | **Phase 0** Setup | ✅ 완료 · Supabase 프로젝트 `pedmhdnmhmzsezerrzvk` 연결 |
-| **Phase 1** E2E | ✅ 완료 · 클라우드에서 `npm run test:e2e` 18개 통과 |
-| **Phase 2** AI | ⬜ 시작 전 (현재 mock) |
+| **Phase 1** E2E | ✅ 완료 · 클라우드에서 `npm run test:e2e` 20개 통과 |
+| **Phase 2** AI | 🔶 진행 중 · `chat-turn`·`practice-chat`이 실제 LLM으로 답함 (Gemini → Groq 자동 전환) |
 | **Phase 3** 보호자 | ⬜ 시작 전 |
 | **Phase 4** 시연 | ⬜ 시작 전 |
 
@@ -33,7 +33,7 @@
 | 확인 항목 | 결과 | 방법 |
 |---|---|---|
 | FE 타입·빌드 | ✅ 통과 | `npm run typecheck` · `npm run build` |
-| DB·권한 규칙 20개 | ✅ 통과 | `npm run test:backend` (PGlite, Supabase 불필요) |
+| DB·권한 규칙 21개 | ✅ 통과 | `npm run test:backend` (PGlite, Supabase 불필요) |
 | 판정·개인정보 로직 4개 | ✅ 통과 | 같은 명령 |
 | Edge Function 타입 | ✅ 통과 | `npx deno check supabase/functions/*/index.ts` |
 | Edge Function 실제 실행 | ✅ 통과 | `npm run test:e2e` (클라우드) |
@@ -45,13 +45,22 @@
 ### BE — 바로 다음
 - [x] Supabase 클라우드 프로젝트 생성, 익명 로그인 활성화
 - [x] 마이그레이션·시드 push, Edge Function 3개 배포
-- [x] E2E 스크립트 (`npm run test:e2e`): 입장·동시 입장·3턴 7행·결과 1행·권한 18개 통과
+- [x] E2E 스크립트 (`npm run test:e2e`): 입장·동시 입장·3턴 7행·결과 1행·권한 20개 통과
 - [ ] URL·anon key 팀 공유 (팀원은 `.env.local`에 입력)
 - [ ] 브라우저 2개로 화면 흐름 직접 확인
+- [ ] 클라우드 대시보드 Auth > Rate Limits: 익명 로그인 시간당 한도를 최대로 (기본 30이면 복지관 31번째부터 입장 실패)
+
+### 이슈 (Phase 2 전후로 처리)
+| # | 문제 | 해결 방향 | 시점 |
+|---|---|---|---|
+| E | `session-end`가 키워드(`classify`)로 결과를 다시 계산 → Gemini 판정과 결과 화면이 달라짐 | `chat-turn`이 턴마다 판정을 저장, `session-end`는 모으기만 | Phase 2 |
+| F | ~~`withTimeout`은 기다림만 멈추고 Gemini 요청은 계속됨 (비용)~~ | ✅ `llm.ts`가 시도마다 `AbortSignal.timeout`, 전체 7초 예산 | 완료 |
+| G | ~~`maskPii`가 숫자만 가림 → AI 답변의 URL·링크 통과~~ | ✅ ko-pii 규칙 이식으로 URL·이메일 가림 | 완료 |
 
 ### AI — Phase 2
-- [ ] `supabase/functions/_shared/ai.ts`만 Gemini로 교체 ([ONBOARDING](ONBOARDING.md#ai-담당))
-- [ ] `test:backend`를 deno로 전환 (Gemini 코드가 `Deno.env`를 쓰면 Node 실행이 깨짐)
+- [x] `ai.ts`를 LLM으로 교체 (`llm.ts` 경유, [ONBOARDING](ONBOARDING.md#ai-담당))
+- [x] ~~`test:backend`를 deno로 전환~~ → `llm.ts`가 `Deno.env`·`process.env` 둘 다 읽어 Node 그대로 실행
+- [x] `test:e2e` LLM 배포 후 20개 통과 (2026-11-04). 단 "3턴 → ended"는 LLM 판정에 달림 → 여기서 실패하면 버그가 아니라 판정 품질 신호 ("직접 전화해서 확인할게"를 verify_independent로 못 잡은 것)
 - [ ] 키 제거 시 `used_fallback: true` 확인
 
 ### FE
@@ -72,7 +81,7 @@
 | 대화 종료 판정: AI vs 서버 규칙 | 서버 규칙 (`decideNext`) + AI의 `ended` | `chat-turn/decide.ts` |
 | 최대 대화 턴 수 | 8턴 | `chat-turn/decide.ts` `MAX_TURNS` |
 | 링크 유효기간 | 7일 | 마이그레이션 `invites.expires_at` 기본값 |
-| 이탈 기준 시간 | 없음 (`abandoned` 값만 정의) | 미정 |
+| 이탈 기준 시간 | 시작 후 1일 지나면 `abandoned` (매일 03:00 KST) | 마이그레이션 `003` |
 | 대화 기록 보관 기간 | 무기한 | 미정 |
 
 ## 5. 내가 내린 결정 (이유 포함)
@@ -84,6 +93,9 @@
 | 입장은 DB 함수 `join_invite`로 처리 | 초대 행을 잠가서 동시 입장해도 인원 초과 안 됨 |
 | `sessions`에 난이도 컬럼 없음 | 초대의 난이도를 따라서 클라이언트가 못 바꿈 |
 | 개인정보가 보이면 저장 안 하고 `PII_BLOCKED` | 원본을 DB에 남기지 않기 위해 |
+| 메시지에 `turn` + 유니크 `(session_id, turn, role)` | 보내기 연타·동시 요청이 와도 같은 턴은 1번만 저장 (`TURN_CONFLICT`) |
+| 초대 정원 기본 200, 화면의 인원 선택 제거 | 익명 로그인이라 같은 사람이 카톡→크롬처럼 브라우저를 바꾸면 새 참여자 → 1명 정원이면 본인도 못 들어옴 |
+| 자동 정리는 최소만 (003) | 하루 넘은 active 세션 → `abandoned`, 30일 지난 **데이터 없는** 익명 계정만 삭제. 대화·결과는 보관 기간 결정 전까지 안 지움 |
 | 대화가 끝나면 `chat-turn`이 세션도 종료 | `session-end`가 안 불려도 대화가 계속되지 않게 |
 | 클라이언트는 정해진 컬럼만 쓰기 가능 | 상태·턴 수·판정은 Edge Function만 변경 |
 
@@ -92,7 +104,7 @@
 | 한계 | 영향 | 해결 시점 |
 |---|---|---|
 | 답변 판정이 키워드 기반 | "안 확인할래요" 같은 부정문 오판 | Phase 2 (Gemini) |
-| 개인정보 탐지가 숫자 정규식만 | "공일공…"처럼 한글 숫자는 통과 | 음성 모드 도입 시 |
+| 개인정보 탐지: ko-pii(MIT) 규칙 이식 (전화·주민/외국인번호·카드 Luhn·계좌·이메일·URL·전각/띄어쓴 숫자) | 한글 숫자("공일공…")·이름·주소는 통과 (ko-pii에도 없음) | 음성 모드 도입 시 재검토 |
 | 안전 약속 저장 안 됨 | 새로고침하면 사라짐 | Phase 3 |
 | 보호자가 진행 상황을 못 봄 | 대기 화면은 안내 문구만 | Phase 3 |
 | 시니어 화면에 초대자 이름 없음 | "가족이 초대했어요"로 고정 | 필요 시 `invites`에 컬럼 추가 |
@@ -102,6 +114,8 @@
 ```
 supabase/
 ├─ migrations/…_001_init.sql   테이블 6개 · 권한(RLS) · join_invite
+├─ migrations/…_002_…sql       메시지 turn 유니크 (연타 방지) · 정원 기본 200
+├─ migrations/…_003_…sql       pg_cron 정리 작업 2개 (PGlite 테스트에서 제외)
 ├─ seed.sql                    미션 3개
 ├─ functions/
 │  ├─ _shared/
@@ -113,8 +127,8 @@ supabase/
 │  ├─ invite-join/             링크 입장
 │  ├─ chat-turn/               대화 1턴 (+ decide.ts 판정)
 │  └─ session-end/             종료·결과
-├─ tests/db_check.mjs          DB·권한 검사 20개 (Supabase 불필요)
-└─ tests/e2e.mjs               클라우드 E2E 18개 (npm run test:e2e)
+├─ tests/db_check.mjs          DB·권한 검사 21개 (Supabase 불필요)
+└─ tests/e2e.mjs               클라우드 E2E 20개 (npm run test:e2e)
 src/
 ├─ lib/supabase.ts             FE용 클라이언트 (ensureAnon · callFn)
 └─ app/page.tsx                전체 화면 (분리 예정)

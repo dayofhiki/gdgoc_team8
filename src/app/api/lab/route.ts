@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { NextResponse } from "next/server";
 import { generateReply, nextStage, classify } from "../../../../supabase/functions/_shared/ai";
 import { hasPii, maskPii } from "../../../../supabase/functions/_shared/pii";
+import { providers } from "../../../../supabase/functions/_shared/llm";
 import { decideNext } from "../../../../supabase/functions/chat-turn/decide";
 import type { AiOutput, Difficulty, Message, Mission, Outcome, Stage } from "@shared/types";
 
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   if (!body) return err(400, "BAD_REQUEST");
 
   if (body.action === "missions") {
-    return NextResponse.json({ missions: loadMissions(), gemini: Boolean(process.env.GEMINI_API_KEY) });
+    return NextResponse.json({ missions: loadMissions(), gemini: providers().length > 0 });
   }
 
   if (body.action === "turn") {

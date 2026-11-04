@@ -90,7 +90,7 @@ SupabasePostgres + RLSRealtimeEdge FunctionsGemini
 
 | 설계 결정 | 이유 |
 | --- | --- |
-| 초대와 참여자 분리 | 기관 링크 하나로 여러 명 입장. 가족 링크는 1명 제한 |
+| 초대와 참여자 분리 | 기관 링크 하나로 여러 명 입장. 정원 기본 200 (익명 로그인이라 브라우저가 바뀌면 새 참여자로 셈) |
 | invites에 미션 없음 | 미션은 시니어가 입장 후 선택 |
 | 긴 토큰 | 6자리 코드는 추측 가능 |
 | messages는 가린 텍스트만 | 개인정보·음성 원본 미저장 |
@@ -98,7 +98,7 @@ SupabasePostgres + RLSRealtimeEdge FunctionsGemini
 | 테이블 | 컬럼 |
 | --- | --- |
 | `missions` | `id` text pk (slug), `title`, `scam_type`, `persona`, `fallback_lines` jsonb (단계별 기본 대사), `sort` |
-| `invites` | `id`, `token` unique (32바이트 랜덤 hex), `created_by` (보호자 uid), `senior_name`, `difficulty` (`easy`·`normal`·`hard`), `max_participants` default 1, `expires_at`, `created_at` |
+| `invites` | `id`, `token` unique (32바이트 랜덤 hex), `created_by` (보호자 uid), `senior_name`, `difficulty` (`easy`·`normal`·`hard`), `max_participants` default 200, `expires_at`, `created_at` |
 | `participants` | `id`, `invite_id`, `user_id` (시니어 uid), `joined_at`, unique(`invite_id`, `user_id`) |
 | `sessions` | `id`, `participant_id`, `user_id`, `mission_id`, `mode` (`chat`·`voice`), `stage`, `status`, `turn_count`, `started_at`, `ended_at` |
 | `messages` | `id`, `session_id`, `role` (`scammer`·`senior`), `text`, `stage`, `created_at` |

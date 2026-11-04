@@ -17,6 +17,7 @@ export type ErrorCode =
   | "INVITE_FULL"
   | "PII_BLOCKED"
   | "AI_TIMEOUT"
+  | "TURN_CONFLICT"
   | "INTERNAL";
 
 export type Mission = {
@@ -60,6 +61,7 @@ export type Message = {
   role: Role;
   text: string;
   stage: Stage;
+  turn?: number | null; // 오프닝 0, 이후 1.. (002 이전 행은 null)
   created_at: string;
 };
 
@@ -74,7 +76,11 @@ export type Result = {
   created_at: string;
 };
 
-export type ApiError = { error: { code: ErrorCode; message: string } };
+// 개인정보 종류 (pii.ts detectPii). number = 은행명 없는 10자리 이상 숫자열
+export type PiiType = "rrn" | "phone" | "card" | "account" | "email" | "url" | "birth" | "number";
+
+// types: PII_BLOCKED일 때 걸린 개인정보 종류 (경고 문구용)
+export type ApiError = { error: { code: ErrorCode; message: string; types?: PiiType[] } };
 
 // AI 경계: _shared/ai.ts 의 generateReply(input: AiInput): Promise<AiOutput>
 export type AiInput = {
