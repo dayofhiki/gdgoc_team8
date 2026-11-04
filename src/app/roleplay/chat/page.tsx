@@ -11,6 +11,7 @@ type Message = { actor: "them" | "me" | "system"; text: string; offer?: OfferKin
 type Choice = "verify" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
 type Guess = "legitimate" | "fraud" | "uncertain";
 type Phase = "loading" | "chat" | "judge" | "result";
+type Ending = { choice: "verify" | "stop" | "comply" | "share"; stage: "receipt" | "review" };
 type Session = {
   token: string;
   title?: string;
@@ -34,6 +35,14 @@ type Result = {
   feedback: string[];
   nextStep: string;
   note: string;
+  highlights: {
+    status: string;
+    actionTitle: string;
+    judgment: string;
+    good: { keyword: string; text: string }[];
+    improve: { keyword: string; text: string }[];
+    tip: string;
+  };
 };
 type Reply = Session & { result?: Result };
 
@@ -94,6 +103,9 @@ export default function RealTraining() {
   const [openedLinks, setOpenedLinks] = useState<number[]>([]);
   const [guess, setGuess] = useState<Guess>("uncertain");
   const [result, setResult] = useState<Result | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [typingVisible, setTypingVisible] = useState(false);
+  const [ending, setEnding] = useState<Ending | null>(null);
 
   async function start() {
     setPhase("loading");
@@ -102,6 +114,9 @@ export default function RealTraining() {
     setSession(null);
     setGuess("uncertain");
     setResult(null);
+    setPendingMessage(null);
+    setTypingVisible(false);
+    setEnding(null);
     setOpenedLinks([]);
     setPreviewIndex(null);
     setActionsOpen(false);
@@ -129,7 +144,29 @@ export default function RealTraining() {
     if (phase === "chat" && historyRef.current) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
-  }, [phase, session?.messages.length, busy]);
+  }, [phase, session?.messages.length, pendingMessage, typingVisible, busy]);
+
+  useEffect(() => {
+    if (pendingMessage === null) {
+      setTypingVisible(false);
+      return;
+    }
+    const timeout = window.setTimeout(() => setTypingVisible(true), 320);
+    return () => window.clearTimeout(timeout);
+  }, [pendingMessage]);
+
+  useEffect(() => {
+    if (!ending) return;
+    if (ending.stage === "receipt") {
+      const timeout = window.setTimeout(() => setEnding({ choice: ending.choice, stage: "review" }), 500);
+      return () => window.clearTimeout(timeout);
+    }
+    const timeout = window.setTimeout(() => {
+      setEnding(null);
+      setPhase("judge");
+    }, 1250);
+    return () => window.clearTimeout(timeout);
+  }, [ending]);
 
   function dismissGuide() {
     setTipVisible(false);
@@ -143,15 +180,26 @@ export default function RealTraining() {
 
   async function send() {
     const text = input.trim();
-    if (!session || !text || busy || session.closed || session.turns >= session.maxTurns) return;
+    if (!session || !text || busy || session.closed || ending || session.turns >= session.maxTurns) return;
+    // 사용자 말풍선은 서버가 답하기 전에 즉시 표시한다.
+    setPendingMessage(text);
+    setInput("");
     setBusy(true);
     setError("");
+    const sentAt = Date.now();
     try {
-      const next = await request({ action: "message", token: session.token, text });
+      const replyPromise = request({ action: "message", token: session.token, text });
+      const next = await replyPromise;
+      // 빠른 응답도 잠깐 입력 중을 보여 준다. 지연된 답은 추가로 늦추지 않는다.
+      const remaining = Math.max(0, 840 - (Date.now() - sentAt));
+      if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       setSession({ ...next, title: session.title });
-      setInput("");
+      setPendingMessage(null);
       if (next.closed) setPhase("judge");
     } catch (err) {
+      // 네트워크 실패 시 보낸 것처럼 남겨 두지 않고 입력창에 복구한다.
+      setPendingMessage(null);
+      setInput(text);
       setError(err instanceof Error ? err.message : "대화에 실패했습니다. 다시 시도해 주세요.");
     } finally {
       setBusy(false);
@@ -159,7 +207,7 @@ export default function RealTraining() {
   }
 
   async function perform(choice: Choice, sourceIndex?: number) {
-    if (!session || busy) return;
+    if (!session || busy || ending) return;
     setBusy(true);
     setError("");
     try {
@@ -171,7 +219,11 @@ export default function RealTraining() {
         setPreviewIndex(sourceIndex);
       } else {
         setPreviewIndex(null);
-        if (next.closed || next.turns >= next.maxTurns) setPhase("judge");
+        if (next.closed && (choice === "verify" || choice === "stop" || choice === "comply" || choice === "share")) {
+          setEnding({ choice, stage: "receipt" });
+        } else if (next.closed || next.turns >= next.maxTurns) {
+          setPhase("judge");
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "행동을 기록하지 못했습니다.");
@@ -343,7 +395,17 @@ export default function RealTraining() {
             </div>
           ),
         )}
-        {busy && <div className="rt-typing"><span /><span /><span /><span className="sr-only">상대방이 답장 중입니다</span></div>}
+        {pendingMessage !== null && (
+          <div className="rt-message rt-message--mine rt-pending" aria-label="방금 보낸 메시지">
+            <div className="rt-msg-body"><div className="rt-bubble"><p>{pendingMessage}</p></div></div>
+          </div>
+        )}
+        {typingVisible && pendingMessage !== null && (
+          <div className="rt-typing" aria-label="상대방이 입력 중입니다" role="status">
+            <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+            <span className="sr-only">상대방이 입력 중입니다</span>
+          </div>
+        )}
       </div>
 
       <div className="rt-compose-zone">
@@ -355,7 +417,7 @@ export default function RealTraining() {
         )}
         {error && <p className="rt-error" role="alert">{error}</p>}
         <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-          <button className="rt-plus" type="button" aria-label="확인 및 대화 중단 메뉴" aria-expanded={actionsOpen} onClick={openActions} disabled={busy}>
+          <button className="rt-plus" type="button" aria-label="확인 및 대화 중단 메뉴" aria-expanded={actionsOpen} onClick={openActions} disabled={busy || Boolean(ending)}>
             <span aria-hidden="true">＋</span>
           </button>
           <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
@@ -387,6 +449,20 @@ export default function RealTraining() {
         </BottomSheet>
       )}
 
+      {ending && (
+        <div className={ending.stage === "review" ? "rt-transition rt-transition--visible" : "rt-action-receipt"} role="status" aria-live="polite">
+          <div className="rt-transition__symbol" aria-hidden="true">{ending.choice === "verify" ? "✓" : ending.choice === "stop" ? "✕" : "↗"}</div>
+          <strong>{ending.choice === "verify" ? "기존 연락처로 확인했어요" :
+            ending.choice === "stop" ? "대화를 종료했어요" :
+            ending.choice === "comply" ? "송금 행동이 기록됐어요" : "정보 전송이 기록됐어요"}</strong>
+          {ending.stage === "review" && (
+            <>
+              <p>상대의 실제 정체와 내 대응을 확인해 볼까요?</p>
+              <span className="rt-transition__loading" aria-hidden="true" />
+            </>
+          )}
+        </div>
+      )}
       {previewIndex !== null && (
         <BottomSheet onClose={() => setPreviewIndex(null)}>
           <div className="rt-browser">
