@@ -100,7 +100,8 @@ export default function RealTraining() {
     try {
       const initial = await request({ action: "start" });
       setSession(initial);
-      setTipVisible(typeof window !== "undefined" && localStorage.getItem("mikki-action-guide-v1") !== "seen");
+      try { setTipVisible(localStorage.getItem("mikki-action-guide-v1") !== "seen"); }
+      catch { setTipVisible(true); }
       setPhase("chat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "훈련을 시작하지 못했습니다.");

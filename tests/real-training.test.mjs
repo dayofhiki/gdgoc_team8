@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SCENARIOS, evaluate, recordChoice } from "../src/lib/realTraining.ts";
+import { SCENARIOS, classifyOffer, evaluate, recordChoice } from "../src/lib/realTraining.ts";
 
 function state(index) {
   return {
@@ -9,66 +9,80 @@ function state(index) {
     events: [], verification: "none", closed: false,
   };
 }
-test("every training situation has an indistinguishable first message paired with a different truth", () => {
+function withOffer(state, kind, text = "송금해 주세요") {
+  state.messages.push({ actor: "them", text, offer: kind });
+  return { state, source: state.messages.length - 1 };
+}
+
+test("normal/fraud pair starts with an identical message", () => {
   assert.equal(SCENARIOS.length, 6);
   for (let i = 0; i < SCENARIOS.length; i += 2) {
     assert.equal(SCENARIOS[i].identity, "legitimate");
-    assert.equal(SCENARIOS[i + 1].identity, "fraud");
-    assert.equal(SCENARIOS[i].opening, SCENARIOS[i + 1].opening);
-    assert.notEqual(SCENARIOS[i].verification, SCENARIOS[i + 1].verification);
+    assert.equal(SCENARIOS[i+1].identity, "fraud");
+    assert.equal(SCENARIOS[i].opening, SCENARIOS[i+1].opening);
+    assert.notEqual(SCENARIOS[i].verification, SCENARIOS[i+1].verification);
   }
 });
-test("verified genuine request may be followed safely", () => {
-  let s = state(0);
-  s = recordChoice(s, SCENARIOS[0], "verify").state;
-  assert.equal(s.verification, "confirmed");
-  s = recordChoice(s, SCENARIOS[0], "comply").state;
-  const result = evaluate(s, SCENARIOS[0], "legitimate");
-  assert.equal(result.checked, true);
-  assert.equal(result.dangerousAction, false);
+test("explicit asks become appropriate inline actions; chatter does not", () => {
+  assert.equal(classifyOffer("수리비를 이체해 주실 수 있나요?", "transfer"), "transfer");
+  assert.equal(classifyOffer("주소를 입력해 주세요.", "share"), "share");
+  assert.equal(classifyOffer("배송 확인 링크를 눌러 주세요.", "link"), "link");
+  assert.equal(classifyOffer("제가 알려준 번호로 전화해 주세요.", "call"), "call");
+  assert.equal(classifyOffer("그렇군요, 잘 지내세요.", "transfer"), undefined);
+  assert.equal(classifyOffer("배송 안내가 필요하신가요?", "link"), undefined);
+  assert.equal(classifyOffer("이체해 주세요.", "link"), undefined);
 });
-test("complying with a fraud remains risky even after an unsuccessful verification", () => {
-  let s = state(1);
-  s = recordChoice(s, SCENARIOS[1], "verify").state;
-  assert.equal(s.verification, "failed");
-  s = recordChoice(s, SCENARIOS[1], "comply").state;
+test("trusted verification ends the conversation and gives the correct evidence", () => {
+  const legit = recordChoice(state(0), SCENARIOS[0], "verify").state;
+  assert.equal(legit.verification, "confirmed");
+  assert.equal(legit.closed, true);
+  assert.equal(evaluate(legit, SCENARIOS[0], "legitimate").checked, true);
+  assert.throws(() => recordChoice(legit, SCENARIOS[0], "stop"));
+  const fraud = recordChoice(state(1), SCENARIOS[1], "verify").state;
+  assert.equal(fraud.verification, "failed");
+  assert.equal(fraud.closed, true);
+});
+test("stopping a genuine conversation is safe, but not an accurate fraud identification", () => {
+  const stopped = recordChoice(state(0), SCENARIOS[0], "stop").state;
+  assert.equal(stopped.closed, true);
+  assert.equal(evaluate(stopped, SCENARIOS[0], "fraud").judgment, "실제 정체와 다름");
+});
+test("only a real message offer can trigger money or information transfer", () => {
+  const empty = state(1);
+  assert.throws(() => recordChoice(empty, SCENARIOS[1], "comply"));
+  assert.throws(() => recordChoice(empty, SCENARIOS[1], "share", 0));
+  const { state: transferState, source } = withOffer(state(1), "transfer");
+  assert.throws(() => recordChoice(transferState, SCENARIOS[1], "share", source));
+  const paid = recordChoice(transferState, SCENARIOS[1], "comply", source).state;
+  assert.equal(paid.closed, true);
+  assert.equal(evaluate(paid, SCENARIOS[1], "fraud").dangerousAction, true);
+  const genuine = withOffer(state(0), "transfer");
+  const paidGenuine = recordChoice(genuine.state, SCENARIOS[0], "comply", genuine.source).state;
+  assert.equal(evaluate(paidGenuine, SCENARIOS[0], "legitimate").dangerousAction, true);
+});
+test("link opening is logged separately, can be closed without submitting and does not end training", () => {
+  const { state: s, source } = withOffer(state(3), "link", "배송 확인 링크를 눌러 주세요.");
+  const visited = recordChoice(s, SCENARIOS[3], "open_link", source).state;
+  assert.equal(visited.closed, false);
+  assert.equal(evaluate(visited, SCENARIOS[3], "uncertain").linkOpened, true);
+  assert.equal(evaluate(visited, SCENARIOS[3], "uncertain").dangerousAction, false);
+  assert.throws(() => recordChoice(visited, SCENARIOS[3], "open_link", source));
+  const submitted = recordChoice(visited, SCENARIOS[3], "share", source).state;
+  assert.equal(submitted.closed, true);
+  assert.equal(evaluate(submitted, SCENARIOS[3], "fraud").dangerousAction, true);
+});
+test("sender-provided phone verification is not independent", () => {
+  const { state: s, source } = withOffer(state(1), "call", "제가 알려준 번호로 전화해 주세요.");
+  const called = recordChoice(s, SCENARIOS[1], "verify_sender", source).state;
+  assert.equal(called.verification, "none");
+  assert.equal(called.closed, false);
+  assert.equal(evaluate(called, SCENARIOS[1], "fraud").checked, false);
+  assert.throws(() => recordChoice(called, SCENARIOS[1], "verify_sender", source));
+});
+test("a text promise to verify or a lucky correct guess is not a verification event", () => {
+  const s = state(1);
+  s.messages.push({ actor: "me", text: "원래 번호로 전화할게요." });
   const result = evaluate(s, SCENARIOS[1], "fraud");
-  assert.equal(result.checked, true);
-  assert.equal(result.dangerousAction, true);
-});
-test("correct guessing is not treated as independent verification", () => {
-  const result = evaluate(state(1), SCENARIOS[1], "fraud");
+  assert.equal(result.checked, false);
   assert.equal(result.judgment, "실제 정체와 일치");
-  assert.equal(result.checked, false);
-  assert.match(result.safety, /확인 행동도 없었어요/);
-});
-test("acting before checking is risky even when the caller was genuine", () => {
-  const s = recordChoice(state(0), SCENARIOS[0], "comply").state;
-  const result = evaluate(s, SCENARIOS[0], "legitimate");
-  assert.equal(result.dangerousAction, true);
-});
-test("ending a genuine conversation is not incorrectly scored as fraud recognition", () => {
-  const s = recordChoice(state(0), SCENARIOS[0], "stop").state;
-  const result = evaluate(s, SCENARIOS[0], "fraud");
-  assert.equal(result.dangerousAction, false);
-  assert.equal(result.judgment, "실제 정체와 다름");
-  assert.equal(result.checked, false);
-});
-test("sender-provided channels and in-chat questions do not complete independent verification", () => {
-  let s = state(1);
-  s = recordChoice(s, SCENARIOS[1], "verify_sender").state;
-  assert.equal(s.verification, "none");
-  assert.equal(evaluate(s, SCENARIOS[1], "uncertain").checked, false);
-  s = recordChoice(s, SCENARIOS[1], "verify_chat").state;
-  assert.equal(s.verification, "none");
-  s = recordChoice(s, SCENARIOS[1], "verify").state;
-  assert.equal(s.verification, "failed");
-  assert.equal(evaluate(s, SCENARIOS[1], "fraud").checked, true);
-});
-test("identity verification is recorded once and cannot be fabricated by a chat message", () => {
-  const s = state(0);
-  s.messages.push({ actor: "me", text: "원래 번호로 전화해 볼게요." });
-  assert.equal(evaluate(s, SCENARIOS[0], "uncertain").checked, false);
-  const verified = recordChoice(s, SCENARIOS[0], "verify").state;
-  assert.throws(() => recordChoice(verified, SCENARIOS[0], "verify"));
 });
