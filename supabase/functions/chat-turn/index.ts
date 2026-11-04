@@ -65,7 +65,8 @@ Deno.serve(handle<ChatTurnRequest>(async ({ body, user, admin }): Promise<ChatTu
   const d = decideNext(session.turn_count, ai);
   // 두 번 나눠 insert: 한 문장이면 created_at(now())이 같아 순서가 섞임
   await save("senior", text, stage);
-  const reply = await save("scammer", maskPii(ai.reply), d.stage);
+  // 사용자 중단은 AI 답장이 비어 있음 → 기록용 안내 문구로 저장
+  const reply = await save("scammer", maskPii(ai.reply || "(연습을 중단했어요)"), d.stage);
   must(
     await admin.from("sessions").update({
       stage: d.stage,
@@ -74,5 +75,8 @@ Deno.serve(handle<ChatTurnRequest>(async ({ body, user, admin }): Promise<ChatTu
     }).eq("id", session.id),
   );
 
-  return { reply, stage: d.stage, ended: d.ended, used_fallback: ai.used_fallback };
+  return {
+    reply, stage: d.stage, ended: d.ended, used_fallback: ai.used_fallback,
+    ...(d.end_reason ? { end_reason: d.end_reason, ended_by: d.ended_by } : {}),
+  };
 }));

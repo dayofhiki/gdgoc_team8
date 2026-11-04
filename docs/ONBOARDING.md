@@ -75,7 +75,31 @@ Supabase 연결 전에는 화면 레이아웃 작업만 가능하고, 백엔드 
 ```
 GEMINI_API_KEY=... npx deno test --allow-env --allow-net supabase/functions
 ```
-주의: 현재 `npm run test:backend`는 Node로 실행되어 `Deno.env`를 쓰면 실패합니다. Gemini로 바꿀 때 BE와 함께 스크립트를 deno로 전환합니다.
+참고: `ai.ts`는 `Deno.env`와 `process.env`를 모두 읽으므로 `npm run test:backend`(Node)도 그대로 동작합니다 (키 없음 → mock 경로). Gemini 연결 후 현황은 [HANDOFF 2-1](HANDOFF.md#2-1-ai-흐름-현황).
+
+**현재 Gemini 연결 상태** (2026-11-04): `generateReply`가 대사 생성과 발화 판정을 한 번에 처리하고, 종료 여부는 `judge.ts` 규칙이 정합니다. 종료 후 피드백은 `generateFeedback`. `classify`(DB 세션 `session-end`용)는 아직 키워드 방식입니다.
+
+**환경 변수 (Edge Function Secret, 레포·브라우저에 두지 않음)**
+
+| 이름 | 필수 | 기본값 | 용도 |
+|---|---|---|---|
+| `GEMINI_API_KEY` | 예 | — | 대사·판정·피드백·음성 인식 |
+| `GEMINI_MODEL` | — | `gemini-3.6-flash` | 대사·판정·피드백 |
+| `GEMINI_TRANSCRIBE_MODEL` | — | `gemini-3.5-transcribe` | 녹음 → 텍스트 (Interactions API) |
+
+```
+npx supabase secrets set GEMINI_API_KEY=...            # 선택: GEMINI_MODEL=... GEMINI_TRANSCRIBE_MODEL=...
+npx supabase functions deploy practice-chat transcribe chat-turn
+```
+로컬 `/lab`(개발 서버 전용)은 `.env.local`의 `GEMINI_API_KEY`를 서버 쪽에서만 읽습니다.
+
+**테스트**
+- `npm run test:backend`: DB 규칙 + 단위 테스트(`logic_test`·`judge_test`·`transcribe_test`·`src/lib/practiceSession_test`). Gemini는 `fetch`를 모의로 바꿔 끼워 키 없이 실행
+- `npx deno test --allow-env --allow-net --no-check supabase/functions`: 같은 공용 테스트를 Deno로
+- `npx deno check supabase/functions/*/index.ts`: Edge Function 타입 검사
+- 실제 Gemini·마이크 확인은 배포 후 수동 (가상 대화·가상 음성만 사용)
+
+**음성 기능 제약**: 녹음형(최대 30초)만 지원, 실시간 스트리밍·가족 목소리 복제 없음. 인식 결과는 입력칸에 넣어 사용자가 확인·수정 후 보냄(자동 전송·자동 종료 없음). 음성·인식 결과는 저장·로그하지 않음. TTS는 브라우저 `speechSynthesis`(ko-KR)라 기기별 음성 품질이 다름.
 
 ## BE 담당
 

@@ -78,6 +78,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       reply: maskPii(ai.reply), stage: d.stage, turn_count: d.turn_count, ended: d.ended,
       used_fallback: ai.used_fallback, ms: Date.now() - started,
+      end_reason: d.end_reason, ended_by: d.ended_by, analysis: ai.analysis, offer_link: ai.offer_link,
     });
   }
 

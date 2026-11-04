@@ -40,13 +40,6 @@ export const CHAT_SCRIPT: ChatEvent[] = [
 
 export const CHAT_TOTAL_STEPS = 3;
 
-/** 리뷰 화면의 "위험했던 순간" 목록. danger=true 인 항목만 "속았어요" 횟수로 셉니다. */
-export const CHAT_MOMENTS = [
-  { time: "오후 2:01", text: "새 번호를 바로 믿었어요", danger: false },
-  { time: "오후 2:03", text: "신분증 사진을 보냈어요", danger: true },
-  { time: "오후 2:05", text: "돈을 보냈어요", danger: true },
-];
-
 export const REMEMBER_CHAT = "사기범이 서두를수록 잠깐 멈추고, 원래 알던 번호로 직접 확인하세요.";
 
 /** 다음 이벤트까지 기다리는 시간(ms) */

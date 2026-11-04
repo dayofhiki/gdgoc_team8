@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "tsc --noEmit",
-    "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test supabase/functions/_shared/logic_test.ts",
+    "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test supabase/functions/_shared/logic_test.ts supabase/functions/_shared/judge_test.ts supabase/functions/_shared/transcribe_test.ts src/lib/practiceSession_test.ts",
     "test:e2e": "node supabase/tests/e2e.mjs"
   },
   "dependencies": {
