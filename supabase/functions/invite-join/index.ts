@@ -13,12 +13,16 @@ Deno.serve(handle<InviteJoinRequest>(async ({ body, user, admin }): Promise<Invi
   if (typeof body.token !== "string" || !body.token) throw new HttpError(400, "BAD_REQUEST", "token이 필요합니다");
 
   // 잠금·인원 확인·등록은 DB 함수 안에서 원자적으로 (같은 사용자 재입장은 기존 참여자 반환)
-  const { data, error } = await admin.rpc("join_invite", { p_token: body.token, p_user: user.id }).single();
+  const nickname = typeof body.nickname === "string" ? body.nickname.trim().slice(0, 20) : "";
+  const { data, error } = await admin.rpc("join_invite", { p_token: body.token, p_user: user.id, p_nickname: nickname }).single();
   if (error) {
     const code = error.message as ErrorCode;
     if (STATUS[code]) throw new HttpError(STATUS[code]!, code, MESSAGE[code]!);
     throw error;
   }
-  const row = data as { participant_id: string; senior_name: string; difficulty: InviteJoinResponse["invite"]["difficulty"] };
-  return { participant_id: row.participant_id, invite: { senior_name: row.senior_name, difficulty: row.difficulty } };
+  const row = data as { participant_id: string } & InviteJoinResponse["invite"];
+  return {
+    participant_id: row.participant_id,
+    invite: { senior_name: row.senior_name, difficulty: row.difficulty, family_id: row.family_id, inviter_name: row.inviter_name },
+  };
 }));
