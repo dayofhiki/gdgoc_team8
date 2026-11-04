@@ -31,9 +31,8 @@ export default function Onboarding() {
           <>
             <div className="onb__copy" style={{ marginTop: 39 }}>
               <h2 className="onb__title">
-                목소리까지 따라 하는{"\n"}
-                <span className="hl">AI 보이스피싱</span>
-                {"\n"}뻐끄미와 함께 대처법을 연습해 봐요.
+                사기인지 모르는 순간에도{"\n"}
+                <span className="hl">안전한 대응</span>을{"\n"}뻐끄미와 함께 연습해 봐요.
               </h2>
             </div>
             <div className="onb__art">
@@ -71,7 +70,7 @@ export default function Onboarding() {
             <div className="onb__copy" style={{ marginTop: 24 }}>
               <span className="chip chip--ghost">혼자 연습하기</span>
               <h2 className="onb__title">
-                <span className="hl">퀴즈와 AI 상황극</span>으로{"\n"}보이스피싱 대처법을 익혀요.{"\n"}내 속도에 맞춰 하나씩 도전해요.
+                <span className="hl">퀴즈와 실전 대응 훈련</span>으로{"\n"}보이스피싱 대처법을 익혀요.{"\n"}내 속도에 맞춰 하나씩 도전해요.
               </h2>
             </div>
             <div className="onb__art">
