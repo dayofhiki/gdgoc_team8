@@ -431,8 +431,14 @@ export default function RealTraining() {
                       </button>
                     </div>
                   )}
+                  {m.actor === "them" && (m.offers ?? (m.offer ? [m.offer] : [])).includes("call") && (
+                    <button type="button" className="rt-phone-link" disabled={busy}
+                      onClick={() => activateOffer("call", i)} aria-label="문자 속 안내 번호로 전화하기 (모의 전화)">
+                      <span aria-hidden="true">☎</span> 02-0000-0000
+                    </button>
+                  )}
                   {m.actor === "them" && (m.offers ?? (m.offer ? [m.offer] : []))
-                    .filter((offer) => offer !== "link")
+                    .filter((offer) => offer !== "link" && offer !== "call")
                     .map((offer) => (
                       <button
                         className={offer === "call" ? "rt-message-link" : "rt-message-request"}
