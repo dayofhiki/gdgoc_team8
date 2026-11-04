@@ -11,6 +11,7 @@ type Message = { actor: "them" | "me" | "system"; text: string; offer?: OfferKin
 type Choice = "verify" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
 type Guess = "legitimate" | "fraud" | "uncertain";
 type Phase = "loading" | "chat" | "judge" | "result";
+type Ending = { choice: "verify" | "stop" | "comply" | "share"; stage: "receipt" | "review" };
 type Session = {
   token: string;
   title?: string;
@@ -34,6 +35,14 @@ type Result = {
   feedback: string[];
   nextStep: string;
   note: string;
+  highlights: {
+    status: string;
+    actionTitle: string;
+    judgment: string;
+    good: { keyword: string; text: string }[];
+    improve: { keyword: string; text: string }[];
+    tip: string;
+  };
 };
 type Reply = Session & { result?: Result };
 
@@ -94,6 +103,9 @@ export default function RealTraining() {
   const [openedLinks, setOpenedLinks] = useState<number[]>([]);
   const [guess, setGuess] = useState<Guess>("uncertain");
   const [result, setResult] = useState<Result | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [typingVisible, setTypingVisible] = useState(false);
+  const [ending, setEnding] = useState<Ending | null>(null);
 
   async function start() {
     setPhase("loading");
@@ -102,6 +114,9 @@ export default function RealTraining() {
     setSession(null);
     setGuess("uncertain");
     setResult(null);
+    setPendingMessage(null);
+    setTypingVisible(false);
+    setEnding(null);
     setOpenedLinks([]);
     setPreviewIndex(null);
     setActionsOpen(false);
@@ -129,7 +144,29 @@ export default function RealTraining() {
     if (phase === "chat" && historyRef.current) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
-  }, [phase, session?.messages.length, busy]);
+  }, [phase, session?.messages.length, pendingMessage, typingVisible, busy]);
+
+  useEffect(() => {
+    if (pendingMessage === null) {
+      setTypingVisible(false);
+      return;
+    }
+    const timeout = window.setTimeout(() => setTypingVisible(true), 320);
+    return () => window.clearTimeout(timeout);
+  }, [pendingMessage]);
+
+  useEffect(() => {
+    if (!ending) return;
+    if (ending.stage === "receipt") {
+      const timeout = window.setTimeout(() => setEnding({ choice: ending.choice, stage: "review" }), 500);
+      return () => window.clearTimeout(timeout);
+    }
+    const timeout = window.setTimeout(() => {
+      setEnding(null);
+      setPhase("judge");
+    }, 1250);
+    return () => window.clearTimeout(timeout);
+  }, [ending]);
 
   function dismissGuide() {
     setTipVisible(false);
@@ -143,15 +180,26 @@ export default function RealTraining() {
 
   async function send() {
     const text = input.trim();
-    if (!session || !text || busy || session.closed || session.turns >= session.maxTurns) return;
+    if (!session || !text || busy || session.closed || ending || session.turns >= session.maxTurns) return;
+    // 사용자 말풍선은 서버가 답하기 전에 즉시 표시한다.
+    setPendingMessage(text);
+    setInput("");
     setBusy(true);
     setError("");
+    const sentAt = Date.now();
     try {
-      const next = await request({ action: "message", token: session.token, text });
+      const replyPromise = request({ action: "message", token: session.token, text });
+      const next = await replyPromise;
+      // 빠른 응답도 잠깐 입력 중을 보여 준다. 지연된 답은 추가로 늦추지 않는다.
+      const remaining = Math.max(0, 840 - (Date.now() - sentAt));
+      if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       setSession({ ...next, title: session.title });
-      setInput("");
+      setPendingMessage(null);
       if (next.closed) setPhase("judge");
     } catch (err) {
+      // 네트워크 실패 시 보낸 것처럼 남겨 두지 않고 입력창에 복구한다.
+      setPendingMessage(null);
+      setInput(text);
       setError(err instanceof Error ? err.message : "대화에 실패했습니다. 다시 시도해 주세요.");
     } finally {
       setBusy(false);
@@ -159,7 +207,7 @@ export default function RealTraining() {
   }
 
   async function perform(choice: Choice, sourceIndex?: number) {
-    if (!session || busy) return;
+    if (!session || busy || ending) return;
     setBusy(true);
     setError("");
     try {
@@ -171,7 +219,11 @@ export default function RealTraining() {
         setPreviewIndex(sourceIndex);
       } else {
         setPreviewIndex(null);
-        if (next.closed || next.turns >= next.maxTurns) setPhase("judge");
+        if (next.closed && (choice === "verify" || choice === "stop" || choice === "comply" || choice === "share")) {
+          setEnding({ choice, stage: "receipt" });
+        } else if (next.closed || next.turns >= next.maxTurns) {
+          setPhase("judge");
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "행동을 기록하지 못했습니다.");
@@ -227,41 +279,74 @@ export default function RealTraining() {
   }
 
   if (phase === "result" && result) {
+    const fraud = result.identity === "fraud";
+    const dangerous = result.dangerousAction;
     return (
       <Screen>
-        <Header title="실전 훈련 결과" back={() => router.push("/home")} />
-        <section className="screen__body" style={{ gap: 16 }}>
-          <div className="stack" style={{ marginTop: 18, gap: 10 }}>
-            <span className="chip">실제 정체 공개</span>
-            <h2 className="title">{result.truthLabel === "실제 연락" ? "이번에는 진짜 연락이었어요" : "이번에는 사칭 시도였어요"}</h2>
-            <p className="desc">{result.purpose}</p>
+        <Header title="훈련 결과" back={() => router.push("/home")} />
+        <section className="screen__body rt-feedback">
+          <div className={fraud ? "rt-feedback-hero rt-feedback-hero--fraud" : "rt-feedback-hero rt-feedback-hero--real"}>
+            <span className="rt-feedback-eyebrow">이번 연락의 실제 정체</span>
+            <div className="rt-feedback-identity">
+              <span className="rt-feedback-identity-icon" aria-hidden="true">{fraud ? "!" : "✓"}</span>
+              <h2>{fraud ? "사칭 시도" : "실제 연락"}</h2>
+            </div>
+            <p>{result.purpose}</p>
           </div>
-          <div className="card" style={{ marginTop: 16 }}>
-            <p className="card__title">이번 훈련의 행동 평가</p>
-            <div className="kv"><span className="kv__k">안전 행동</span><span className="kv__v" style={{ whiteSpace: "normal" }}>{result.safety}</span></div>
-            <div className="kv"><span className="kv__k">정체 판단</span><span className="kv__v">{result.judgment}</span></div>
-            <div className="kv"><span className="kv__k">독립 확인</span><span className="kv__v">{result.checked ? "직접 실행함" : "실행하지 않음"}</span></div>
-            {result.linkOpened && <div className="kv"><span className="kv__k">메시지 링크</span><span className="kv__v">열어 봄</span></div>}
-            {result.followedSenderNumber && <div className="kv"><span className="kv__k">안내받은 번호</span><span className="kv__v">연락함</span></div>}
+
+          <div className="rt-feedback-status">
+            <div>
+              <span>내가 선택한 행동</span>
+              <strong>{result.highlights.actionTitle}</strong>
+              <small>정체 판단 · {result.highlights.judgment}</small>
+            </div>
+            <span className={dangerous ? "rt-feedback-status-tag rt-feedback-status-tag--danger" :
+              result.checked ? "rt-feedback-status-tag rt-feedback-status-tag--safe" : "rt-feedback-status-tag"}>
+              {result.highlights.status}
+            </span>
           </div>
-          <div className="card card--blue">
-            <p className="card__title">이번 행동에서 배울 점</p>
-            {result.feedback.map((line, index) => <p className="card__text" key={index}>{index + 1}. {line}</p>)}
+
+          <section className="rt-feedback-panel rt-feedback-panel--good" aria-label="잘한 점">
+            <div className="rt-feedback-section-head">
+              <span aria-hidden="true">✓</span>
+              <h3>잘한 점</h3>
+            </div>
+            {result.highlights.good.length > 0 ? result.highlights.good.map((item, index) => (
+              <div className="rt-feedback-point" key={index}>
+                <strong>{item.keyword}</strong>
+                <span>{item.text}</span>
+              </div>
+            )) : <p className="rt-feedback-empty">이번에는 확인된 안전 행동이 없어요.</p>}
+          </section>
+
+          <section className="rt-feedback-panel rt-feedback-panel--improve" aria-label="개선할 점">
+            <div className="rt-feedback-section-head">
+              <span aria-hidden="true">!</span>
+              <h3>개선할 점</h3>
+            </div>
+            {result.highlights.improve.length > 0 ? result.highlights.improve.map((item, index) => (
+              <div className="rt-feedback-point" key={index}>
+                <strong>{item.keyword}</strong>
+                <span>{item.text}</span>
+              </div>
+            )) : <p className="rt-feedback-empty">이번에는 크게 개선할 행동이 없어요.</p>}
+          </section>
+
+          <div className="rt-feedback-next">
+            <span>다음에는 이렇게</span>
+            <strong>{result.highlights.tip}</strong>
           </div>
-          <div className="card">
-            <p className="card__title">공식 경로로 확인하면 알 수 있었던 사실</p>
-            <p className="card__text">{result.verificationEvidence}</p>
-          </div>
-          <div className="card card--blue">
-            <p className="card__title">가족과 실천할 약속</p>
-            <p className="card__text">{result.nextStep}</p>
-            <Link href="/family-code/guide" className="btn btn--secondary" style={{ marginTop: 8 }}>가족 확인 질문 만들기</Link>
-          </div>
-          <p className="desc" style={{ fontSize: 12, lineHeight: "18px" }}>{result.note}</p>
+
+          <details className="rt-feedback-detail">
+            <summary>실제 확인 결과 자세히 보기</summary>
+            <p>{result.verificationEvidence}</p>
+          </details>
+          <p className="rt-feedback-disclaimer">{result.note}</p>
+          <Link href="/family-code/guide" className="rt-feedback-family-link">가족 확인 질문 정하기 <span aria-hidden="true">›</span></Link>
         </section>
         <BottomCTA row>
           <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-          <button className="btn btn--primary" onClick={() => void start()}>다른 상황 연습</button>
+          <button className="btn btn--primary" onClick={() => void start()}>다시 연습하기</button>
         </BottomCTA>
       </Screen>
     );
@@ -343,7 +428,17 @@ export default function RealTraining() {
             </div>
           ),
         )}
-        {busy && <div className="rt-typing"><span /><span /><span /><span className="sr-only">상대방이 답장 중입니다</span></div>}
+        {pendingMessage !== null && (
+          <div className="rt-message rt-message--mine rt-pending" aria-label="방금 보낸 메시지">
+            <div className="rt-msg-body"><div className="rt-bubble"><p>{pendingMessage}</p></div></div>
+          </div>
+        )}
+        {typingVisible && pendingMessage !== null && (
+          <div className="rt-typing" aria-label="상대방이 입력 중입니다" role="status">
+            <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+            <span className="sr-only">상대방이 입력 중입니다</span>
+          </div>
+        )}
       </div>
 
       <div className="rt-compose-zone">
@@ -355,7 +450,7 @@ export default function RealTraining() {
         )}
         {error && <p className="rt-error" role="alert">{error}</p>}
         <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-          <button className="rt-plus" type="button" aria-label="확인 및 대화 중단 메뉴" aria-expanded={actionsOpen} onClick={openActions} disabled={busy}>
+          <button className="rt-plus" type="button" aria-label="확인 및 대화 중단 메뉴" aria-expanded={actionsOpen} onClick={openActions} disabled={busy || Boolean(ending)}>
             <span aria-hidden="true">＋</span>
           </button>
           <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
@@ -387,6 +482,20 @@ export default function RealTraining() {
         </BottomSheet>
       )}
 
+      {ending && (
+        <div className={ending.stage === "review" ? "rt-transition rt-transition--visible" : "rt-action-receipt"} role="status" aria-live="polite">
+          <div className="rt-transition__symbol" aria-hidden="true">{ending.choice === "verify" ? "✓" : ending.choice === "stop" ? "✕" : "↗"}</div>
+          <strong>{ending.choice === "verify" ? "기존 연락처로 확인했어요" :
+            ending.choice === "stop" ? "대화가 종료됐어요" :
+            ending.choice === "comply" ? "송금 완료" : "정보 전송 완료"}</strong>
+          {ending.stage === "review" && (
+            <>
+              <p>지금까지의 선택을 돌아보고 상대의 정체를 확인해 볼까요?</p>
+              <span className="rt-transition__loading" aria-hidden="true" />
+            </>
+          )}
+        </div>
+      )}
       {previewIndex !== null && (
         <BottomSheet onClose={() => setPreviewIndex(null)}>
           <div className="rt-browser">

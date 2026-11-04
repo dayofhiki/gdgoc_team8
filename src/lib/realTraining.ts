@@ -102,6 +102,30 @@ export type TrainingState = {
  * Gemini가 의미를 제안하지만 메시지에 명시적인 요청이 있을 때만 가상 액션을 보여준다.
  * 실제 링크/전화번호/결제 수단을 생성하지 않는다.
  */
+/**
+ * 모델이 영어 단어를 섞어도 시니어에게 보여 주는 대사는 한글 위주로 정리한다.
+ * 실제 URL 및 번호는 원래 정책대로 가리고, 원문을 학습용 채팅에 노출하지 않는다.
+ */
+export function normalizeKoreanReply(reply: string): string {
+  return reply
+    .replace(/https?:\/\/\S+|www\.\S+/gi, "외부 링크")
+    .replace(/(?:\d[\s.-]?){8,}/g, "번호 생략")
+    .replace(/\b(?:official|authorized)\b/gi, "공식")
+    .replace(/\b(?:app|application)\b/gi, "앱")
+    .replace(/\b(?:website|web\s*site)\b/gi, "웹사이트")
+    .replace(/\b(?:link|url)\b/gi, "링크")
+    .replace(/\b(?:sms)\b/gi, "문자")
+    .replace(/\b(?:bank)\b/gi, "은행")
+    .replace(/\b(?:address)\b/gi, "주소")
+    .replace(/\b(?:phone)\b/gi, "전화")
+    .replace(/\b(?:please)\b/gi, "")
+    .replace(/\b[A-Za-z][A-Za-z0-9_-]*\b/g, "")
+    .replace(/[<>{}]/g, "")
+    .replace(/ {2,}/g, " ")
+    .replace(/\s+([.,!?])/g, "$1")
+    .trim();
+}
+
 export function classifyOffer(reply: string, suggestion: unknown): OfferKind | undefined {
   if (typeof reply !== "string" || typeof suggestion !== "string") return undefined;
   const text = reply.replace(/\s+/g, "");
@@ -200,7 +224,37 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
   if (guess === "uncertain" && !checked) feedback.push("확신하기 어렵다면 판단을 보류하고 별도로 확인하는 것이 좋습니다.");
   if (!risk && !linkOpened && !followedSenderNumber && !checked) feedback.push("위험한 행동을 하지 않았지만, 적극적으로 신원을 확인하는 연습도 해 보세요.");
 
+  // 답변 문구가 아니라 실제로 기록된 행동에 기반한 짧은 피드백.
+  type Point = { keyword: string; text: string };
+  const goodPoints: Point[] = [];
+  const improvePoints: Point[] = [];
+  if (checked) goodPoints.push({ keyword: "독립 확인", text: "기존 번호·공식 앱으로 확인" });
+  if (stopped) goodPoints.push({ keyword: "대화 중단", text: "요청에 응하지 않고 멈춤" });
+  if (!complied && !shared) goodPoints.push({ keyword: "정보 보호", text: "송금·개인정보 제공 안 함" });
+
+  if (riskyComply) improvePoints.push({ keyword: "송금 위험", text: "신원 확인 전에 요청 수락" });
+  if (shared) improvePoints.push({ keyword: "정보 위험", text: "요청한 개인정보를 전송" });
+  if (linkOpened) improvePoints.push({ keyword: "링크 주의", text: "문자 링크 대신 공식 앱 이용" });
+  if (followedSenderNumber) improvePoints.push({ keyword: "번호 주의", text: "상대가 알려준 번호는 독립 확인이 아님" });
+  if (!checked && !risk) improvePoints.push({ keyword: "신원 확인", text: "원래 번호·공식 앱으로 직접 확인" });
+  if (stopped && scenario.identity === "legitimate") improvePoints.push({ keyword: "정상 연락", text: "중단 뒤 실제 발신자에게 별도 확인" });
+  if (guess !== "uncertain" && !guessCorrect) improvePoints.push({ keyword: "판단 보완", text: "말투보다 확인된 사실을 기준으로 판단" });
+
+  const status = risk ? "위험 행동" : checked ? "안전 확인" : stopped ? "대화 중단" :
+    linkOpened || followedSenderNumber ? "주의 행동" : "확인 미완료";
+  const actionTitle = shared ? "정보 전송" : complied ? "요청 수락" :
+    checked ? "직접 확인" : stopped ? "대화 중단" :
+    linkOpened ? "링크 열람" : followedSenderNumber ? "안내 번호 연락" : "대화 종료";
+
   return {
+    highlights: {
+      status,
+      actionTitle,
+      good: goodPoints.slice(0, 2),
+      improve: improvePoints.slice(0, 3),
+      judgment: guess === "uncertain" ? "판단 보류" : guessCorrect ? "판단 일치" : "판단 불일치",
+      tip: scenario.title.includes("가족") ? "저장된 가족 번호로 직접 연락" : scenario.title.includes("택배") ? "택배사 공식 앱에서 배송 조회" : "은행 공식 앱·대표번호로 확인",
+    },
     identity: scenario.identity,
     truthLabel: scenario.identity === "legitimate" ? "실제 연락" : "사칭 시도",
     purpose: scenario.purpose,
