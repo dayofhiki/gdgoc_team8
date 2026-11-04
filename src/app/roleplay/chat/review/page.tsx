@@ -3,24 +3,19 @@ import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BottomCTA, Header, Screen } from "@/components/ui";
 import { CHAT_MOMENTS, REMEMBER_CHAT } from "@/lib/chatScript";
-
-const COUNT = ["", "한", "두", "세"];
+import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 
 function Review() {
   const router = useRouter();
+  const { nickname } = useAppState();
   const params = useSearchParams();
   const reached = Math.min(Math.max(Number(params.get("r")) || 0, 0), CHAT_MOMENTS.length);
   const stopped = params.get("stopped") === "1";
   const moments = CHAT_MOMENTS.slice(0, reached);
-  const fooled = moments.filter((m) => m.danger).length;
-
-  const title = fooled > 0 ? `이 대화에서\n${COUNT[fooled] ?? fooled} 번 속았어요.` : "속기 전에\n잘 멈췄어요!";
-  const desc =
-    fooled > 0
-      ? stopped
-        ? "멈추기 전까지 어디서 속았는지 짚어볼게요."
-        : "어디서 속았는지 다시 짚어볼게요."
-      : "의심스러울 때 잠깐 멈추는 게 가장 좋은 대처예요.";
+  const title = "사례 속 위험 신호를\n되짚어 볼까요?";
+  const desc = stopped
+    ? "사례를 중단한 지점까지 위험 신호를 살펴봐요."
+    : "사례 속 인물이 놓친 위험 신호를 살펴봐요.";
 
   return (
     <Screen>
@@ -28,12 +23,14 @@ function Review() {
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 20, gap: 8 }}>
           <h2 className="title">{title}</h2>
+          <p className="desc">{nickname || DEFAULT_NICKNAME}님이 살펴본 사례</p>
           <p className="desc">{desc}</p>
+          <p className="desc" style={{ fontSize: 13 }}>관찰형 사례는 본인의 행동을 평가한 결과가 아니에요. 실전 대응 훈련에서 직접 행동해 보세요.</p>
         </div>
         <div className="stack" style={{ marginTop: 64, gap: 20 }}>
           {moments.length > 0 && (
             <div className="card">
-              <p className="card__title">위험했던 순간</p>
+              <p className="card__title">사례 속 위험했던 순간</p>
               {moments.map((m) => (
                 <div className="kv" key={m.time}>
                   <span className="kv__k">{m.time}</span>
@@ -50,7 +47,7 @@ function Review() {
       </section>
       <BottomCTA row>
         <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-        <button className="btn btn--primary" onClick={() => router.push("/roleplay/chat")}>처음부터 다시 보기</button>
+        <button className="btn btn--primary" onClick={() => router.push("/roleplay/case")}>사례 다시 보기</button>
       </BottomCTA>
     </Screen>
   );

@@ -18,7 +18,8 @@ export default function PhonePractice() {
   useEffect(() => {
     if (state !== "calling") return;
     const t = setTimeout(() => {
-      started.current = Date.now();
+      started.current = Date.now() - 1000;
+      setSec(1);
       setState("talking");
     }, 1800);
     return () => clearTimeout(t);
@@ -34,7 +35,7 @@ export default function PhonePractice() {
 
   return (
     <Screen>
-      <Header title="전화 연습" onClose={() => router.push("/home")} />
+      <Header title="전화 체험 미리보기" onClose={() => router.push("/home")} />
       <section className="screen__body">
         <div className="phone">
           <img
@@ -44,25 +45,25 @@ export default function PhonePractice() {
           />
           {state === "idle" && (
             <>
-              <p className="phone__title">{"ARS로 전화가 갈 거에요\n전화를 받은 뒤 대화를 시작해주세요"}</p>
-              <p className="phone__sub">ai 분석을 위해 통화 내용이 녹음됩니다.</p>
+              <p className="phone__title">{"통화 화면 미리보기예요.\n실제 전화·음성 AI 기능은 아직 준비 중이에요."}</p>
+              <p className="phone__sub">음성 녹음이나 분석은 이루어지지 않아요.</p>
             </>
           )}
-          {state === "calling" && <p className="phone__title">연습 전화를 거는 중이에요…</p>}
+          {state === "calling" && <p className="phone__title">모의 통화 시작 중…</p>}
           {state === "talking" && (
             <>
-              <p className="phone__title">연습 통화 중</p>
+              <p className="phone__title">모의 통화 화면</p>
               <p className="phone__timer" aria-live="off">{fmt(sec)}</p>
-              <p className="phone__sub">수상하면 언제든 끊어도 괜찮아요.</p>
+              <p className="phone__sub">실제 상대방과 연결되지 않았어요.</p>
             </>
           )}
         </div>
       </section>
       <BottomCTA>
         {state === "idle" ? (
-          <button className="btn btn--primary btn--lg" onClick={() => setState("calling")}>전화 시작하기</button>
+          <button className="btn btn--primary btn--lg" onClick={() => setState("calling")}>모의 화면 체험</button>
         ) : (
-          <button className="btn btn--gray" onClick={end} disabled={state === "calling"}>통화 끊기</button>
+          <button className="btn btn--primary" onClick={end} disabled={state === "calling"}>통화 끊기</button>
         )}
       </BottomCTA>
     </Screen>
