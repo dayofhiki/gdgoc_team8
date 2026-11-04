@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "node:crypto";
-import { classifyOffer, evaluate, MAX_TURNS, recordChoice, SCENARIOS } from "@/lib/realTraining";
+import { classifyOffer, evaluate, MAX_TURNS, normalizeKoreanReply, recordChoice, SCENARIOS } from "@/lib/realTraining";
 import type { Choice, Guess, OfferKind, TrainingState } from "@/lib/realTraining";
 
 export const runtime = "nodejs";
@@ -80,7 +80,8 @@ async function generateResponse(state: TrainingState, text: string): Promise<{ r
     "이 시나리오의 실제 정체: " + (scenario.identity === "legitimate" ? "정상 연락" : "사칭 시도"),
     "배경 사실: " + scenario.privateFacts,
     "확인 상태: " + verification,
-    "필수: 한국어 문자 1~2문장으로 자연스럽게 말한다. 실제 가족과 사칭범 모두 비슷한 문장 길이, 예의와 감정 표현을 쓴다.",
+    "필수: reply에는 한글·숫자·한글 문장부호만 사용한다. 영어 단어, 영문 알파벳, 로마자, 영문 브랜드명은 절대 사용하지 않는다. official 앱이 아니라 반드시 공식 앱이라고 한다. app이 아니라 앱, link가 아니라 링크라고 한다.",
+    "한국어 문자 1~2문장으로 자연스럽게 말한다. 실제 가족과 사칭범 모두 비슷한 문장 길이, 예의와 감정 표현을 쓴다.",
     "상대의 마지막 질문에 구체적으로 답한다. 사칭범이라고 해서 노골적인 협박, 비정상적인 말투, 심한 오타를 쓰지 않는다.",
     "정상 역할은 실제 배경에 맞게 반응하고, 사칭 역할은 설정된 신분을 유지한다. 단, 사용자가 독립 확인했으면 억지로 거짓 신분을 주장하지 않는다.",
     "실제 전화번호, 계좌번호, URL, 인증번호, 주민등록번호를 적지 않는다. 시뮬레이션 속에서 금전/정보를 부탁하는 가상 요청 자체는 가능하지만 실제 값은 묻지 않는다.",
@@ -135,10 +136,7 @@ async function generateResponse(state: TrainingState, text: string): Promise<{ r
     const part = raw?.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => typeof p.text === "string")?.text;
     const parsed = JSON.parse(part || "{}");
     if (typeof parsed.reply !== "string" || !parsed.reply.trim()) throw new Error("AI_FAILED");
-    const safe = parsed.reply
-      .replace(/https?:\/\/\S+|www\.\S+/gi, "[외부 링크]")
-      .replace(/(?:\d[\s-]?){8,}/g, "[번호 생략]")
-      .replace(/[<>{}]/g, "").trim().slice(0, 270);
+    const safe = normalizeKoreanReply(parsed.reply).slice(0, 270);
     if (!safe) throw new Error("AI_FAILED");
     return { reply: safe, offer: classifyOffer(safe, parsed.offer) };
   } finally {
