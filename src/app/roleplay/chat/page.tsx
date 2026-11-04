@@ -13,7 +13,7 @@ type Message = { actor: "them" | "me" | "system"; text: string; actions?: Action
 type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
 type Guess = "legitimate" | "fraud" | "uncertain";
 type Phase = "chat" | "judge" | "result";
-type Ending = { choice: "verify" | "family_contact" | "stop" | "comply" | "share"; stage: "receipt" | "review" };
+type Ending = { choice: "verify" | "family_contact" | "stop" | "comply" | "share" | "natural" | "turn_limit"; stage: "receipt" | "review" };
 type Session = {
   token: string;
   title?: string;
@@ -22,6 +22,7 @@ type Session = {
   maxTurns: number;
   verified: boolean;
   closed: boolean;
+  endReason?: "natural" | "turn_limit" | "action" | null;
 };
 type Result = {
   identity: "legitimate" | "fraud";
@@ -138,6 +139,13 @@ export default function RealTraining() {
 
   useEffect(() => {
     if (!ending) return;
+    if (ending.choice === "natural" || ending.choice === "turn_limit") {
+      // 마지막 문자와 종료 안내를 충분히 확인하고 판단 단계로 이동.
+      // 동작 감소를 선호하는 기기에서는 자동 화면 이동을 생략한다.
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const timeout = window.setTimeout(() => { setEnding(null); setPhase("judge"); }, 3400);
+      return () => window.clearTimeout(timeout);
+    }
     if (ending.stage === "receipt") {
       const timeout = window.setTimeout(() => setEnding({ choice: ending.choice, stage: "review" }), 500);
       return () => window.clearTimeout(timeout);
@@ -176,7 +184,14 @@ export default function RealTraining() {
       if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       setSession({ ...next, title: session.title });
       setPendingMessage(null);
-      if (next.closed) setPhase("judge");
+      if (next.closed) {
+        setTipVisible(false);
+        if (next.endReason === "natural" || next.endReason === "turn_limit") {
+          setEnding({ choice: next.endReason, stage: "review" });
+        } else {
+          setPhase("judge");
+        }
+      }
     } catch (err) {
       // 네트워크 실패 시 보낸 것처럼 남겨 두지 않고 입력창에 복구한다.
       setPendingMessage(null);
@@ -435,15 +450,29 @@ export default function RealTraining() {
 
       <div className="rt-compose-zone">
         {error && <p className="rt-error" role="alert">{error}</p>}
-        <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-          <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
-            maxLength={300} value={input} disabled={busy || !session || session.closed || (session.turns >= session.maxTurns)}
-            onChange={(event) => setInput(event.target.value)} />
-          <button type="submit" className="rt-send" aria-label="메시지 전송"
-            disabled={busy || !session || !input.trim() || session.closed}>
-            <span aria-hidden="true">↑</span>
-          </button>
-        </form>
+        {session?.closed && (session.endReason === "natural" || session.endReason === "turn_limit") ? (
+          <div className="rt-conversation-ended" role="status" aria-live="polite">
+            <span className="rt-conversation-ended__icon" aria-hidden="true">✓</span>
+            <div>
+              <strong>{session.endReason === "natural" ? "이번 문자 대화가 마무리되었어요" : "여기까지 연습해 볼게요"}</strong>
+              <p>어떻게 대응하셨는지 함께 살펴볼까요?</p>
+            </div>
+            <button type="button" className="rt-conversation-ended__button"
+              onClick={() => { setEnding(null); setPhase("judge"); }}>
+              내 대응 결과 확인하기 <span aria-hidden="true">›</span>
+            </button>
+          </div>
+        ) : (
+          <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+            <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
+              maxLength={300} value={input} disabled={busy || !session || session.closed || session.turns >= session.maxTurns}
+              onChange={(event) => setInput(event.target.value)} />
+            <button type="submit" className="rt-send" aria-label="메시지 전송"
+              disabled={busy || !session || !input.trim() || session.closed}>
+              <span aria-hidden="true">↑</span>
+            </button>
+          </form>
+        )}
         <div className="rt-training-note">모의 훈련 · 실제 송금·통화·정보 전송 없음</div>
       </div>
 
@@ -465,7 +494,7 @@ export default function RealTraining() {
         </BottomSheet>
       )}
 
-      {ending && (
+      {ending && ending.choice !== "natural" && ending.choice !== "turn_limit" && (
         <div className={ending.stage === "review" ? "rt-transition rt-transition--visible" : "rt-action-receipt"} role="status" aria-live="polite">
           <div className="rt-transition__symbol" aria-hidden="true">{ending.choice === "verify" || ending.choice === "family_contact" ? "✓" : ending.choice === "stop" ? "✕" : "↗"}</div>
           <strong>{ending.choice === "verify" ? "공식 경로로 확인했어요" :
