@@ -1089,3 +1089,59 @@ p, h1, h2, h3 { margin: 0; }
   text-underline-offset: 2px;
 }
 .rt-phone-link:focus-visible { outline: 3px solid #8abaff; outline-offset: 2px; }
+
+
+/* 자연스러운 대화 종료: 마지막 메시지를 가리지 않고 입력창을 안내로 바꿈 */
+.rt-conversation-ended {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  border: 1px solid #dbe6f3;
+  border-radius: 18px;
+  background: #f8fbff;
+  color: #25364e;
+  text-align: center;
+}
+.rt-conversation-ended__icon {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e0ecf8;
+  font-weight: 800;
+  color: #48739e;
+}
+.rt-conversation-ended strong {
+  font-size: clamp(14px, 3.7vw, 17px);
+  line-height: 1.45;
+  letter-spacing: -.35px;
+}
+.rt-conversation-ended p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #66758b;
+}
+.rt-conversation-ended__button {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: #fff;
+  background: #316cb4;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rt-conversation-ended__button:focus-visible {
+  outline: 3px solid #1b4d9c;
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rt-conversation-ended { animation: none; }
+}
