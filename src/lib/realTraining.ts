@@ -1,5 +1,6 @@
 import { actionChoice } from "./trainingActions.ts";
 import type { Action } from "./trainingActions";
+import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
 
 /**
  * 실전 대응 훈련: AI 대사와 별개로 서버가 보관하는 시나리오 및 채점 기준.
@@ -100,6 +101,8 @@ export type TrainingState = {
   events: Event[];
   verification: "none" | "confirmed" | "failed";
   closed: boolean;
+  dialogue?: DialogueMemory;
+  endReason?: EndReason;
 };
 
 /**
@@ -266,6 +269,7 @@ export function recordChoice(
       ...state,
       verification,
       closed: ["verify", "family_contact", "comply", "share", "stop"].includes(choice),
+      endReason: ["verify", "family_contact", "comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
       events: [...state.events, event],
       messages: [...state.messages, { actor: "system", text: notice }],
     },
@@ -305,6 +309,7 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
   if (linkOpened) feedback.push("메시지에 포함된 링크를 열었습니다. 링크의 출처가 확실하지 않다면 공식 앱에서 직접 확인하는 편이 안전합니다.");
   if (risk) feedback.push("확인하기 전에 금전·개인정보 요청에 응했습니다. 실제 상황에서는 피해로 이어질 수 있는 행동입니다.");
   if (stopped && scenario.identity === "legitimate") feedback.push("실제 연락을 차단한 경우입니다. 안전을 위해 중단한 뒤 별도 경로로 연락을 확인하면 좋습니다.");
+  if (state.endReason === "natural" && !checked) feedback.push("대화가 자연스럽게 끝난 사실만으로 상대 신원을 확인한 것은 아닙니다. 필요한 경우 공식 경로로 확인해 보세요.");
   if (guess !== "uncertain" && !guessCorrect) feedback.push("이번 정체 판단은 실제와 달랐습니다. 말투보다 별도 경로에서 확인한 정보를 기준으로 판단해 보세요.");
   if (guess === "uncertain" && !checked) feedback.push("확신하기 어렵다면 판단을 보류하고 별도로 확인하는 것이 좋습니다.");
   if (!risk && !linkOpened && !followedSenderNumber && !checked) feedback.push("위험한 행동을 하지 않았지만, 적극적으로 신원을 확인하는 연습도 해 보세요.");
