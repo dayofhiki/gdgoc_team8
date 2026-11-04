@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CASE_GUIDES, DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE,
-  caseGuide, actorBrief, parseDialogueOutput, replySimilarity, decideDialogueTurn,
+  caseGuide, actorBrief, openingBrief, acceptableOpening, unsolicitedSolution, parseOpeningOutput, parseDialogueOutput, replySimilarity, decideDialogueTurn,
 } from "../src/lib/trainingDialogue.ts";
 import { SCENARIOS, evaluate } from "../src/lib/realTraining.ts";
 import { buildActions } from "../src/lib/trainingActions.ts";
@@ -42,11 +42,17 @@ test("all 6 normal/fraud pairs reuse three grounded, distinct case guides", () =
 });
 
 
-test("each case keeps one shared first message but gives the actor distinct facts, voice and objective", () => {
+test("each case offers indistinguishable neutral opening conditions but distinct later actor objectives", () => {
   assert.equal(SCENARIOS.length, 6);
   for (let i = 0; i < SCENARIOS.length; i += 2) {
     const genuine = SCENARIOS[i], impersonation = SCENARIOS[i + 1];
-    assert.equal(genuine.opening, impersonation.opening);
+    assert.equal(genuine.opening, impersonation.opening); // archival template; no longer sent by start API
+    for (const style of [0, 1, 5, 7]) {
+      assert.equal(openingBrief(genuine, style), openingBrief(impersonation, style));
+      assert.ok(!openingBrief(genuine, style).includes("legitimate"));
+      assert.ok(!openingBrief(genuine, style).includes("fraud"));
+      assert.ok(!openingBrief(genuine, style).includes(genuine.opening));
+    }
     for (const s of [genuine, impersonation]) {
       for (const key of ["voice", "situation", "progression", "responseRules", "objective"]) {
         assert.ok(s[key].length > 35, s.id + " missing " + key);
@@ -195,4 +201,48 @@ test("never expose URLs or numerical identifiers in the dialogue's short summary
 test("explicit question punctuation blocks completion even if both models misread it", () => {
   assert.equal(decide({userText:"정말 그게 맞나요?"}).closed,false);
   assert.ok(decide({userText:"정말 그게 맞나요?"}).issues.includes("pending_user_question"));
+});
+
+
+test("first message is genuinely AI-generated, not returned from a static scenario opening", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  assert.match(route, /const opening = await generateOpening\(scenario\)/);
+  assert.match(route, /text: opening/);
+  assert.doesNotMatch(route, /text: scenario\.opening/);
+  assert.match(route, /OPENING_SCHEMA/);
+  assert.doesNotMatch(route, /return scenario\.opening/);
+});
+
+test("neutral opening contract rejects actionable paths and fabricated identifiers", () => {
+  const opener = parseOpeningOutput(JSON.stringify({ opening: "엄마, 나 폰이 고장 나서 잠깐 다른 기기로 문자해. 지금 바빠?" }));
+  assert.ok(acceptableOpening(opener.opening));
+  assert.ok(acceptableOpening("안녕하세요, 배송 확인이 필요한 건이 있어 안내드립니다."));
+  assert.equal(acceptableOpening("그 계좌로 입금해 주세요."), false);
+  assert.equal(acceptableOpening("원래 번호로 전화해 주세요."), false);
+  assert.equal(acceptableOpening("아래 링크로 들어가세요."), false);
+  assert.equal(acceptableOpening("안녕하세요, 010-1234-5678입니다."), false);
+  assert.throws(() => parseOpeningOutput('{"reply":"invalid"}'), /INVALID_OPENING_SCHEMA/);
+  assert.notEqual(openingBrief(SCENARIOS[0], 0), openingBrief(SCENARIOS[0], 1));
+});
+
+test("genuine actors must not give away verification or transfer routes", () => {
+  for (const s of SCENARIOS.filter(s => s.identity === "legitimate")) {
+    assert.match(actorBrief(s, INITIAL_DIALOGUE, 1), /정상 인물 추가 제약/);
+    assert.match(s.objective, /먼저|알려주지|제시하지/);
+  }
+  assert.ok(DIALOGUE_POLICY.includes("안전 강사가 아니다"));
+  for (const reply of [
+    "엄마, 원래 번호로 전화해봐.",
+    "공식 앱에서 확인해 주세요.",
+    "카드 뒷면 번호로 연락하세요.",
+    "여기로 입금해줘.",
+    "은행 고객센터로 전화해 주세요.",
+  ]) assert.equal(unsolicitedSolution(reply), true, reply);
+  for (const reply of [
+    "엄마, 지금 폰이 고장 나서 연락했어.",
+    "응, 알겠어. 그럼 그렇게 해.",
+    "배송지 확인이 필요한 건은 맞습니다.",
+    "네, 저희 쪽에서 확인 요청이 있었습니다.",
+  ]) assert.equal(unsolicitedSolution(reply), false, reply);
 });

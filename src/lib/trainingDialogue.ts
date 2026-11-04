@@ -89,6 +89,8 @@ export function parseDialogueOutput(text: string): DialogueOutput {
 
 export const DIALOGUE_POLICY = [
   "상대의 지난 대답을 기억하고, 이미 끝난 설명을 기계적으로 반복하지 않는다.",
+  "정상 인물은 훈련의 정답을 알려 주는 안전 강사가 아니다. 자신이 먼저 기존 번호 전화, 공식 앱, 고객센터, 송금 계좌 등 해결·검증 경로를 제안하거나 안내하지 않는다. 사용자가 스스로 확인하겠다고 말하면 간결하고 자연스럽게 수긍만 한다.",
+  "사칭자와 정상 인물이 같은 문제해결 안내 대본을 공유하면 안 된다. 구체적인 행동 지시나 유도는 사칭자의 비공개 목적에서만 등장할 수 있다. 정상 인물은 본인의 용건과 사실을 이야기하고 사용자 선택을 기다린다.",
   "반드시 직전 사용자의 질문·감정·거절에 먼저 반응한다. 전혀 묻지 않은 금액·업체·거래·가족사를 새로 확정하지 않는다.",
   "역할의 실제 사정과 말투를 유지한다. 친한 가족은 간결한 반말, 고객 안내는 자연스러운 존댓말을 사용한다. 모든 등장인물이 똑같은 상담 문구를 말하지 않는다.",
   "요청은 사정이 전달된 뒤 자연스럽게 등장할 수 있으며, 매 턴 링크·송금·개인정보 제공을 제안하는 진행표가 아니다.",
@@ -177,6 +179,7 @@ export function actorBrief(scenario: Scenario, memory: DialogueMemory, completed
     "숨겨진 정체(화자의 속마음으로만 사용, 공개 금지): " + scenario.identity,
     "확정된 사실: " + scenario.privateFacts,
     "화자의 목적과 허용된 대응: " + scenario.objective,
+    ...(scenario.identity === "legitimate" ? ["정상 인물 추가 제약: 본인이 먼저 원래 번호·공식 앱·대표번호·입금 방법을 알려주거나 특정 확인 수단을 추천하면 안 된다. 사용자가 확인하겠다면 수긍만 한다. 문제 해결 방법은 학습자가 스스로 떠올려야 한다."] : []),
     "### 말투와 사건 진행",
     "말투: " + scenario.voice,
     "가능한 사건 흐름: " + scenario.progression,
@@ -191,6 +194,68 @@ export function actorBrief(scenario: Scenario, memory: DialogueMemory, completed
     "사용자가 같은 의심을 반복하면 새 핑계나 상투적 사기 문구를 추가하지 말고 이미 알려준 범위에서 대응한다.",
     "정상 연락과 사칭 연락 모두 어색한 연기나 악역 같은 말투 없이 현실의 문자 메시지처럼 행동한다.",
   ].join("\n");
+}
+
+/** 첫 문자는 정체를 숨긴 채, 정상/사칭 쌍에 동일한 중립 조건으로 매 세션 생성한다. */
+export const OPENING_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: { opening: { type: "string" } },
+  required: ["opening"],
+};
+
+export function parseOpeningOutput(text: string): { opening: string } {
+  const value: unknown = JSON.parse(text);
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      typeof (value as { opening?: unknown }).opening !== "string") {
+    throw new Error("INVALID_OPENING_SCHEMA");
+  }
+  return { opening: (value as { opening: string }).opening };
+}
+
+const OPENING_STYLES = [
+  "짧은 질문을 던져 상대가 답장하기 쉽게 시작한다.",
+  "상황을 한 조각만 설명하고 대답을 기다린다.",
+  "연락 목적만 일상적인 한 문장으로 전달한다.",
+  "가까운 관계면 친근하게, 업무 연락이면 담백하게 시작한다.",
+  "처음부터 너무 많은 설명을 하지 않고 핵심 용건으로 시작한다.",
+  "상대가 연락을 받은 상황을 고려해 짧게 말을 건다.",
+  "경직된 안내문 대신 자연스러운 메시지 흐름을 택한다.",
+  "간단한 인사와 현재 상황을 균형 있게 담는다.",
+];
+
+export function openingBrief(scenario: Scenario, styleIndex: number): string {
+  // identity, privateFacts, objective, progression을 일부러 전달하지 않는다.
+  // 둘 중 누가 실제 발신자인지 첫 메시지 문체만으로 구별할 수 없게 한다.
+  const style = OPENING_STYLES[Math.abs(styleIndex) % OPENING_STYLES.length];
+  return [
+    "당신은 한국의 실제 문자 대화에서 상대방에게 첫 문자를 보내는 사람이다.",
+    "이 대화가 훈련이라는 말, 역할극 안내, 사기 여부, 정답은 절대 드러내지 않는다.",
+    "상황명: " + scenario.title,
+    "화자: " + scenario.persona,
+    "현재 상황: " + scenario.situation,
+    "말투: " + scenario.voice,
+    "첫 메시지 표현 방향: " + style,
+    "이미 수신자가 무엇을 답했는지는 모른다. 첫 연락으로 자연스러운 한국어 한두 문장을 작성한다.",
+    "첫 문자부터 돈·링크·입금처·계좌·앱·고객센터·통화 방법 같은 행동 경로를 제시하지 않는다.",
+    "사전에 정한 문장을 반복하거나 예시 문장을 인용하지 말고 매번 새롭게 작성한다.",
+    "이름, 업체명, 구체적인 번호, 일시, 금액, 구매 내역처럼 확정되지 않은 정보를 꾸며내지 않는다.",
+    "130자 이내로 작성하고 opening 키 하나만 있는 JSON을 반환한다.",
+  ].join("\n");
+}
+
+export function acceptableOpening(opening: string): boolean {
+  const text = opening.trim();
+  return text.length >= 10 && text.length <= 130 &&
+    !/(?:https?:\/\/|www\.|(?:\d[\s.-]?){8,})/i.test(text) &&
+    !/(?:송금|이체|입금|계좌|링크|앱에서|고객센터|대표번호|카드\s*뒷면|인증번호|비밀번호|개인정보)/.test(text) &&
+    !/(?:전화(?:해|하세요|주세요|하면|걸어)|연락(?:해|주세요|하세요)|돈\s*보내)/.test(text);
+}
+
+/** 답장 안의 선제적인 안전 정답·결제/연락 경로를 정상 화자가 직접 제시했는지 검사한다. */
+export function unsolicitedSolution(reply: string): boolean {
+  const text = reply.replace(/\s+/g, "");
+  return /(?:원래|기존|저장된)(?:전화)?(?:번호|연락처)|(?:공식|은행|택배사)(?:앱|고객센터|대표번호|홈페이지|사이트)|카드뒷면|대표번호|(?:이|저)번호로(?:전화|연락)|(?:여기|이쪽|이계좌)로?(?:입금|송금|이체|돈)|(?:입금|송금|이체)(?:해|하|해줘|해주세요)|(?:전화|통화|연락)(?:해봐|걸어|해주세요|해줘|하세요)/.test(text);
 }
 
 export const INITIAL_DIALOGUE: DialogueMemory = {

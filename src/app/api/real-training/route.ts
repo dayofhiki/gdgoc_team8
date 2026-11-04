@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "node:crypto";
 import { evaluate, MAX_TURNS, normalizeKoreanReply, recordChoice, SCENARIOS } from "@/lib/realTraining";
 import { ACTION_RULES, buildActions } from "@/lib/trainingActions";
-import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, actorBrief, decideDialogueTurn, parseDialogueOutput } from "@/lib/trainingDialogue";
+import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, OPENING_SCHEMA, actorBrief, openingBrief, acceptableOpening, unsolicitedSolution, parseOpeningOutput, decideDialogueTurn, parseDialogueOutput } from "@/lib/trainingDialogue";
 import type { DialogueSignal } from "@/lib/trainingDialogue";
 import { complete, providers, type Msg } from "../../../../supabase/functions/_shared/llm";
 import { detectPii } from "../../../../supabase/functions/_shared/pii";
@@ -89,6 +89,21 @@ function trainingProviders() {
     ? (process.env.TRAINING_GEMINI_API_KEY || process.env.GEMINI_API_KEY)
     : process.env[key]);
 }
+async function generateOpening(scenario: (typeof SCENARIOS)[number]): Promise<string> {
+  // 첫 문자는 정상/사칭 여부를 전달하지 않고, 매번 실제 LLM이 만든다.
+  // 실패했을 때 예전 고정 opening으로 조용히 되돌아가지 않는다.
+  const result = await complete([
+    { role: "system", content: openingBrief(scenario, randomInt(8)) },
+    { role: "user", content: "지금 처음 보낼 문자 한 건만 작성하세요." },
+  ], {
+    temperature: 0.95, maxTokens: 280, json: true, schema: OPENING_SCHEMA,
+    parse: parseOpeningOutput, budgetMs: 7000,
+  }, { list: trainingProviders() });
+  const opening = normalizeKoreanReply(result.value.opening).trim();
+  if (!acceptableOpening(opening)) throw new Error("UNSAFE_OPENING");
+  return opening;
+}
+
 async function generateResponse(state: TrainingState, text: string) {
   const scenario = SCENARIOS[state.scenario];
   const available = trainingProviders();
@@ -126,11 +141,26 @@ async function generateResponse(state: TrainingState, text: string) {
     })),
     { role: "user", content: text },
   ];
-  const first = await complete(messages, {
+  let first = await complete(messages, {
     temperature: 0.75, maxTokens: 1450, json: true, schema: DIALOGUE_SCHEMA,
     parse: parseDialogueOutput, budgetMs: 8500,
   }, { list: available });
-  const reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
+  let reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
+  // 정상 인물은 사용자가 스스로 찾아야 할 인증/확인/입금 경로를 답으로 알려주지 않는다.
+  // 1차 모델이 어기면 같은 사실관계로 재생성하고, 2차도 위반하면 해당 응답을 내보내지 않는다.
+  const givesAwaySolution = () => unsolicitedSolution(reply) ||
+    first.value.actions.some(a => ["app", "phone", "link", "provide_data"].includes(a.kind));
+  if (scenario.identity === "legitimate" && givesAwaySolution()) {
+    first = await complete([
+      { role: "system", content: instruction + "\n[정상인 답변 필수 수정] 기존 번호, 공식 앱, 고객센터, 결제·입금·통화 경로를 직접 제시하지 마세요. 현재 상대가 한 말에만 자연스럽게 답하고 행동 선택은 상대가 하게 두세요. 행동 제안 없는 JSON을 반환하세요." },
+      ...messages.slice(1),
+    ], {
+      temperature: 0.7, maxTokens: 1450, json: true, schema: DIALOGUE_SCHEMA,
+      parse: parseDialogueOutput, budgetMs: 7500,
+    }, { list: available });
+    reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
+    if (givesAwaySolution()) throw new Error("UNSOLICITED_SOLUTION");
+  }
   let extracted = first.value.actions;
   let auditSignal: DialogueSignal | undefined;
   try {
@@ -203,9 +233,10 @@ export async function POST(req: NextRequest) {
     if (body.action === "start") {
       const index = randomInt(SCENARIOS.length);
       const scenario = SCENARIOS[index];
+      const opening = await generateOpening(scenario);
       const state: TrainingState = {
         version: 1, scenario: index, createdAt: Date.now(), turns: 0,
-        messages: [{ actor: "them", text: scenario.opening }],
+        messages: [{ actor: "them", text: opening }],
         events: [], verification: "none", closed: false, dialogue: INITIAL_DIALOGUE,
       };
       return apiOk({
