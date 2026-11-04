@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SCENARIOS, classifyOffer, evaluate, recordChoice } from "../src/lib/realTraining.ts";
+import { SCENARIOS, classifyOffer, classifyOffers, evaluate, normalizeKoreanReply, recordChoice, simulatedLink } from "../src/lib/realTraining.ts";
 
 function state(index) {
   return {
@@ -10,7 +10,7 @@ function state(index) {
   };
 }
 function withOffer(state, kind, text = "송금해 주세요") {
-  state.messages.push({ actor: "them", text, offer: kind });
+  state.messages.push({ actor: "them", text, offers: [kind], ...(kind === "link" ? { linkPreview: simulatedLink(SCENARIOS[state.scenario]) } : {}) });
   return { state, source: state.messages.length - 1 };
 }
 
@@ -33,12 +33,14 @@ test("explicit asks become appropriate inline actions; chatter does not", () => 
   assert.equal(classifyOffer("이체해 주세요.", "link"), undefined);
 });
 test("trusted verification ends the conversation and gives the correct evidence", () => {
-  const legit = recordChoice(state(0), SCENARIOS[0], "verify").state;
+  const genuineRequest = withOffer(state(0), "official_call", "카드 뒷면 대표번호로 전화해 주세요.");
+  const legit = recordChoice(genuineRequest.state, SCENARIOS[0], "verify", genuineRequest.source).state;
   assert.equal(legit.verification, "confirmed");
   assert.equal(legit.closed, true);
   assert.equal(evaluate(legit, SCENARIOS[0], "legitimate").checked, true);
   assert.throws(() => recordChoice(legit, SCENARIOS[0], "stop"));
-  const fraud = recordChoice(state(1), SCENARIOS[1], "verify").state;
+  const fraudRequest = withOffer(state(1), "official_app", "은행 공식 앱에서 확인해 주세요.");
+  const fraud = recordChoice(fraudRequest.state, SCENARIOS[1], "verify", fraudRequest.source).state;
   assert.equal(fraud.verification, "failed");
   assert.equal(fraud.closed, true);
 });
@@ -85,4 +87,93 @@ test("a text promise to verify or a lucky correct guess is not a verification ev
   const result = evaluate(s, SCENARIOS[1], "fraud");
   assert.equal(result.checked, false);
   assert.equal(result.judgment, "실제 정체와 일치");
+});
+
+
+test("natural Korean replies do not show stray English to senior learners", () => {
+  assert.equal(normalizeKoreanReply("official 앱이나 official website에서 확인해 주세요."), "공식 앱이나 공식 웹사이트에서 확인해 주세요.");
+  assert.equal(normalizeKoreanReply("official 택배 앱에서 직접 확인해 주세요."), "공식 택배 앱에서 직접 확인해 주세요.");
+  assert.equal(normalizeKoreanReply("이 link를 누르지 말고 app으로 확인하세요."), "이 링크를 누르지 말고 앱으로 확인하세요.");
+  assert.doesNotMatch(normalizeKoreanReply("official app에서 확인해 주세요."), /[A-Za-z]/);
+});
+test("feedback reveals truth prominently while strengths and improvements follow real behavior", () => {
+  const req = withOffer(state(0), "official_app", "공식 앱에서 확인해 주세요.");
+  const verified = evaluate(recordChoice(req.state, SCENARIOS[0], "verify", req.source).state, SCENARIOS[0], "legitimate");
+  assert.equal(verified.highlights.status, "안전 확인");
+  assert.equal(verified.identity, "legitimate");
+  assert.ok(verified.highlights.good.some((point) => point.keyword === "독립 확인"));
+  assert.equal(verified.highlights.improve.length, 0);
+
+  const noCheck = evaluate(state(1), SCENARIOS[1], "fraud");
+  assert.equal(noCheck.identity, "fraud");
+  assert.equal(noCheck.highlights.judgment, "판단 일치");
+  assert.ok(noCheck.highlights.improve.some((point) => point.keyword === "신원 확인"));
+  assert.ok(noCheck.highlights.good.every((point) => point.keyword !== "독립 확인"));
+
+  const offered = withOffer(state(1), "transfer");
+  const unsafe = evaluate(recordChoice(offered.state, SCENARIOS[1], "comply", offered.source).state, SCENARIOS[1], "uncertain");
+  assert.equal(unsafe.highlights.status, "위험 행동");
+  assert.ok(unsafe.highlights.improve.some((point) => point.keyword === "송금 위험"));
+  assert.equal(unsafe.highlights.good.some((point) => point.keyword === "정보 보호"), false);
+});
+
+
+test("a single message can contain independent official app and official call actions", () => {
+  const reply = "스마트폰에 설치된 은행 공식 앱이나 카드 뒷면의 대표번호로 직접 연락해서 거래 내역을 조회해 주세요.";
+  assert.deepEqual(classifyOffers(reply, []), ["official_app", "official_call"]);
+  const { state: s, source } = withOffer(state(4), "official_call", reply);
+  s.messages[source].offers = ["official_app", "official_call"];
+  const checked = recordChoice(s, SCENARIOS[4], "verify", source).state;
+  assert.equal(checked.verification, "confirmed");
+  assert.equal(checked.closed, true);
+});
+
+test("an official app offer is not created unless it was actually suggested", () => {
+  assert.deepEqual(classifyOffers("안녕하세요. 거래 내역을 확인 부탁드립니다.", []), []);
+  assert.deepEqual(classifyOffers("스마트폰에 설치된 은행 공식 앱에서 직접 확인해 주세요.", []), ["official_app"]);
+  assert.deepEqual(classifyOffers("제가 보낸 링크에서 공식 앱을 확인해 주세요.", ["official_app", "link"]), ["link"]);
+});
+
+test("links carry reserved non-resolving addresses and message-preview metadata", () => {
+  const preview = simulatedLink(SCENARIOS[3]);
+  assert.match(preview.url, /^https:\/\/.*\.example\//);
+  assert.equal(preview.domain, new URL(preview.url).hostname);
+  const withLink = withOffer(state(3), "link", "문자 링크를 눌러 확인해 주세요.");
+  assert.deepEqual(withLink.state.messages[withLink.source].linkPreview, preview);
+  const opened = recordChoice(withLink.state, SCENARIOS[3], "open_link", withLink.source).state;
+  assert.equal(opened.closed, false);
+  assert.equal(evaluate(opened, SCENARIOS[3], "uncertain").linkOpened, true);
+});
+
+test("global menu offers family contact and ignore, not an unrelated official-app shortcut", () => {
+  const request = withOffer(state(4), "transfer", "송금해 주세요.");
+  assert.throws(() => recordChoice(request.state, SCENARIOS[4], "verify", request.source));
+  assert.throws(() => recordChoice(request.state, SCENARIOS[4], "verify"));
+  const familyBank = recordChoice(state(4), SCENARIOS[4], "family_contact").state;
+  assert.equal(familyBank.closed, true);
+  assert.equal(familyBank.verification, "none");
+  assert.equal(evaluate(familyBank, SCENARIOS[4], "uncertain").checked, false);
+  assert.ok(evaluate(familyBank, SCENARIOS[4], "uncertain").highlights.good.some(p => p.keyword === "가족 상담"));
+  const familyVerified = recordChoice(state(0), SCENARIOS[0], "family_contact").state;
+  assert.equal(familyVerified.verification, "confirmed");
+  assert.equal(evaluate(familyVerified, SCENARIOS[0], "legitimate").checked, true);
+});
+
+
+test("delivery address change prompts expose official-app action, even if Gemini omits its offers", () => {
+  const screenshotReply = "운송장 번호에 적힌 주소가 명확하지 않아 배송이 지연되고 있습니다. 스마트폰에 설치된 택배사 공식 앱에서 배송지 주소를 변경해 주시겠어요";
+  assert.deepEqual(classifyOffers(screenshotReply, []), ["official_app"]);
+  assert.deepEqual(classifyOffers(screenshotReply, ["official_app"]), ["official_app"]);
+  assert.deepEqual(classifyOffers("택배사 공식 앱에서 배송지 정보를 수정해 주세요.", []), ["official_app"]);
+  assert.deepEqual(classifyOffers("은행 공식 앱에서 비밀번호를 변경해 주세요.", []), ["official_app"]);
+
+  const { state: s, source } = withOffer(state(2), "official_app", screenshotReply);
+  const verified = recordChoice(s, SCENARIOS[2], "verify", source).state;
+  assert.equal(verified.closed, true);
+  assert.equal(verified.verification, "confirmed");
+});
+test("mentioning official apps in a warning or unrelated sentence does not create an action", () => {
+  assert.deepEqual(classifyOffers("택배사 공식 앱을 열지 마세요. 링크로 확인하세요.", []), []);
+  assert.deepEqual(classifyOffers("공식 앱이 아닌 문자 속 링크를 눌러 주소를 변경해 주세요.", ["official_app", "link"]), ["link"]);
+  assert.deepEqual(classifyOffers("택배사 공식 앱에 대한 문의입니다.", []), []);
 });

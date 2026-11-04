@@ -36,8 +36,12 @@ PC에서는 Chrome 개발자 도구(F12 → Ctrl+Shift+M)에서 **iPhone 16 Pro 
 - 콘텐츠 데이터: `src/lib/quiz.ts`(OX 문제), `src/lib/chatScript.ts`(채팅 시나리오)
 - 이미지 에셋: `public/images` (Figma에서 내보냄)
 
+## 현재 문자 훈련 및 배포
+- 문자 훈련은 `/api/real-training`에서 AI 역할 대화를 생성하며, 사례별 상황·말투·목적을 반영합니다. AI 공급자 설정이 필요합니다.
+- `main` 브랜치의 Next.js 검증 성공 후 `.github/workflows/deploy-dokploy.yml`이 Dokploy 배포 API를 호출합니다. GitHub Actions의 성공과 실제 운영 서비스 반영은 별도로 확인해야 합니다.
+
 ## 중요한 제한
-**화면은 아직 Supabase 백엔드와 연결 전입니다. Gemini·카카오 SDK·실제 ARS 전화도 미연동입니다.**
+**아래 항목은 초기 화면 구현 시점의 기록으로, 일부는 현재 구현과 다를 수 있습니다.**
 - 별명과 가족 암호 질문은 브라우저 localStorage에만 저장합니다. 가족 암호 답은 기획대로 저장하지 않습니다.
 - 채팅 상황극은 고정 시나리오이며 실제 AI 호출이 아닙니다.
 - "카카오톡 공유하기"는 카카오 JavaScript 키 발급 전까지 기기 공유 시트(또는 링크 복사)로 동작합니다.
