@@ -16,6 +16,8 @@ export type TrainingEpisode = {
   kind: "transfer" | "provide_data" | "link" | "phone";
   target: string;
   task: string;
+  title?: string;
+  field?: string;
   requestAfterTurns: 0 | 1 | 2;
   bankClaim?: string;
   sourceName: string;
