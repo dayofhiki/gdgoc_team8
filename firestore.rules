@@ -1,0 +1,9 @@
+rules_version = '2';
+// 브라우저 직접 접근은 전부 막음. 데이터는 Next 서버(/api/backend, firebase-admin)만 읽고 씀.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

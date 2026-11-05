@@ -24,9 +24,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@shared/*": [
-        "./supabase/functions/_shared/*"
       ]
     },
     "allowJs": true,
@@ -39,7 +36,7 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "supabase/functions"
+    "functions",
+    "node_modules"
   ]
 }

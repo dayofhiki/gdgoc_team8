@@ -9,7 +9,7 @@ import { complete, type Msg, providers } from "./llm.ts";
 export const STAGES: Stage[] = ["approach", "trust", "pressure", "demand"];
 export const nextStage = (s: Stage): Stage => STAGES[Math.min(STAGES.indexOf(s) + 1, STAGES.length - 1)];
 
-// 키워드 판정: session-end 결과 계산과 mock 경로에서 사용. "안 확인할래요" 같은 부정문은 오판 가능.
+// 키워드 판정: /api/lab 결과 계산과 mock 경로에서 사용. "안 확인할래요" 같은 부정문은 오판 가능.
 const SAFE = /(확인|직접\s*전화|끊|안\s*(보내|보낼|해|할|줄|드|누르|누를|알려)|못\s*(보내|보낼|해|할|드)|거절|신고|112|싫어|안\s*돼)/;
 const UNSAFE = /(보낼게|보내드릴게|송금할게|이체할게|알려\s*드릴게|알려줄게|입력할게|누를게|눌러\s*볼게|설치할게)/;
 
@@ -39,7 +39,7 @@ type Intent = "refuse" | "verify_independent" | "comply" | "continue" | "stop" |
 const INTENTS: Intent[] = ["refuse", "verify_independent", "comply", "continue", "stop", "unclear"];
 
 // 모델·키·시간 예산은 llm.ts (Gemini → Groq → OpenRouter 자동 전환)
-const LLM_BUDGET_MS = 7000; // chat-turn 8초 안
+const LLM_BUDGET_MS = 7000; // 라우트 타임아웃 8초 안
 
 const STAGE_GOAL: Record<Stage, string> = {
   approach: "처음 연락하는 단계. 자연스럽게 정체를 밝히고 말을 건다.",
@@ -111,7 +111,7 @@ async function callLlm(input: AiInput, target: Stage): Promise<LlmOut> {
   return value;
 }
 
-// 생성 문장에 URL이 섞이면 지움 (전화번호·계좌 등 숫자는 chat-turn의 maskPii가 처리)
+// 생성 문장에 URL이 섞이면 지움 (전화번호·계좌 등 숫자는 /api/lab의 maskPii가 처리)
 const stripUrls = (s: string) => s.replace(/https?:\/\/\S+|www\.\S+/gi, "[링크]");
 
 export async function generateReply(input: AiInput): Promise<AiOutput> {

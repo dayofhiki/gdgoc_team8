@@ -7,8 +7,8 @@ import { caseBranch, caseDetail, caseVariantCount } from "@/lib/trainingCaseFact
 import { groundedProposals } from "@/lib/trainingActionGuard";
 import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, actorBrief, acceptableOpening, unsolicitedSolution, decideDialogueTurn, parseDialogueOutput, replySimilarity } from "@/lib/trainingDialogue";
 import type { DialogueSignal } from "@/lib/trainingDialogue";
-import { complete, providers, type Msg } from "../../../../supabase/functions/_shared/llm";
-import { detectPii } from "../../../../supabase/functions/_shared/pii";
+import { complete, providers, type Msg } from "@/server/llm";
+import { detectPii } from "@/server/pii";
 import type { Choice, Guess, PhoneMethod, TrainingState } from "@/lib/realTraining";
 import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/lib/trainingTurnContext";
 import { hasConcreteRequest, requestHasTwoReplies, shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";

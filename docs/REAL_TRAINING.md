@@ -45,7 +45,7 @@
 - 실제 계좌/연락처/이메일/링크처럼 보이는 문자열 입력 차단; 서버 내 실제 송금·녹음·통화 기능 없음. 개인정보를 입력하지 말라고 화면에 안내.
 
 ## 배포 전 필수 설정
-**Dokploy의 mikkialert 서비스 환경변수에 서버 전용** GEMINI_API_KEY (또는 TRAINING_GEMINI_API_KEY), 선택적으로 GROQ_API_KEY를 등록하고 Save → Deploy 한다. 기존 Supabase Edge Function의 Secret은 Dokploy 컨테이너로 자동 전달되지 않는다.
+**Dokploy의 mikkialert 서비스 환경변수에 서버 전용** GEMINI_API_KEY (또는 TRAINING_GEMINI_API_KEY), 선택적으로 GROQ_API_KEY를 등록하고 Save → Deploy 한다. (예전 Supabase Edge Function의 Secret은 이 라우트에서 쓰이지 않았고, 전환 후 Supabase는 더 이상 쓰지 않는다.)
 - 선택: GEMINI_MODEL, GROQ_MODEL, LLM_PROVIDERS. 모델의 기본값은 공용 공급자 모듈에 정의돼 있다.
 - 권장: TRAINING_SESSION_SECRET을 고정해 LLM 키 변경이 기존 실전 대화 토큰을 무효화하지 않도록 한다.
 - NEXT_PUBLIC 접두어를 붙이지 말 것. 공개 GitHub/스크린샷에 키를 저장하지 말 것.

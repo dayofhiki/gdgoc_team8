@@ -1,4 +1,4 @@
-// 무료 LLM 공급자 자동 전환 모듈. Edge Function(Deno)과 /api/lab(Node) 양쪽에서 import해서 씀.
+// 무료 LLM 공급자 자동 전환 모듈. Next 서버(/api/real-training, /api/lab)에서 import해서 씀.
 // 셋 다 OpenAI 호환 → 같은 요청 형식, URL·키·모델만 다름. 키가 등록된 공급자만 이 순서대로 시도:
 //   Gemini(프롬프트를 이걸로 다듬음) → Groq(빠름·한도 넉넉) → OpenRouter(:free 모델)
 // 429 · 5xx · 시간 초과 · 빈 응답 · parse 실패면 다음 공급자로. 전부 실패하면 throw.
@@ -10,7 +10,7 @@ export type Options<T> = {
   json?: boolean; // response_format json_object (스키마 강제 아님) → parse에서 검증
   schema?: Record<string, unknown>; // schema: true인 공급자(Gemini)에는 json_schema로 강제, 나머지는 json 모드. 그래도 parse는 함
   parse?: (text: string) => T; // throw하면 형식 오류로 보고 다음 공급자로
-  budgetMs?: number; // 전체 시간 예산. chat-turn 타임아웃(8초)보다 짧게
+  budgetMs?: number; // 전체 시간 예산. 라우트 타임아웃(8초)보다 짧게
 };
 type Deps = { list?: Provider[]; fetch?: typeof fetch; now?: () => number };
 
@@ -19,13 +19,7 @@ const MIN_TRY_MS = 500;
 const DEFAULT_BUDGET_MS = 7000;
 const DEFAULT_COOLDOWN_MS = 60_000;
 
-const env = (k: string): string | undefined => {
-  const g = globalThis as {
-    Deno?: { env: { get(k: string): string | undefined } };
-    process?: { env: Record<string, string | undefined> };
-  };
-  return g.Deno ? g.Deno.env.get(k) : g.process?.env[k];
-};
+const env = (k: string): string | undefined => process.env[k];
 
 // 모델명은 env로 바꿀 수 있음. GEMINI_MODEL은 ai.ts와 같은 값을 공유.
 export function providers(get: (k: string) => string | undefined = env): Provider[] {

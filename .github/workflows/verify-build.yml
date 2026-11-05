@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,13 +25,18 @@ jobs:
         run: npm run typecheck
       - name: Training regression tests
         run: npm run test:training
-      - name: Backend PII / LLM / database tests
+      - name: Backend PII / LLM tests
         run: npm run test:backend
-      - name: Setup Deno for Supabase Edge Function check
-        uses: denoland/setup-deno@v2
+      - name: Install Cloud Functions dependencies
+        run: npm ci --prefix functions
+      - name: Cloud Functions typecheck/build
+        run: npm run build --prefix functions
+      - name: Setup Java for Firestore emulator
+        uses: actions/setup-java@v4
         with:
-          deno-version: v2.x
-      - name: Validate Edge Functions
-        run: deno check supabase/functions/chat-turn/index.ts supabase/functions/practice-chat/index.ts
+          distribution: temurin
+          java-version: '21'
+      - name: Family backend tests (Firestore emulator)
+        run: npm run test:firebase
       - name: Next.js production build
         run: npm run build

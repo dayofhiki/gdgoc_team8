@@ -18,6 +18,7 @@ export type ErrorCode =
   | "PII_BLOCKED"
   | "AI_TIMEOUT"
   | "TURN_CONFLICT"
+  | "FORBIDDEN"
   | "INTERNAL";
 
 export type Mission = {
@@ -100,13 +101,22 @@ export type AiOutput = {
   used_fallback: boolean;
 };
 
-// Edge Functions
-export type InviteJoinRequest = { token: string; nickname?: string };
+// 가족 백엔드 joinInvite 응답
 export type InviteJoinResponse = {
   participant_id: string;
   invite: Pick<Invite, "senior_name" | "difficulty" | "family_id" | "inviter_name">;
 };
-export type ChatTurnRequest = { session_id: string; text?: string };
-export type ChatTurnResponse = { reply: Message; stage: Stage; ended: boolean; used_fallback: boolean };
-export type SessionEndRequest = { session_id: string };
-export type SessionEndResponse = { result: Result };
+
+// 가족 백엔드 (Cloud Function backend). functions/src/family.ts의 타입과 맞출 것
+export type FamilyMemberSummary = {
+  user_id: string;
+  nickname: string;
+  is_me: boolean;
+  share_results: boolean;
+  joined_at: string;
+  /** 공유를 끈 구성원은 아래가 null */
+  record_count: number | null;
+  safe_count: number | null;
+  last_at: string | null;
+  recent: { kind: "quiz" | "challenge" | "training"; title: string; safe: boolean | null; score: number | null; total: number | null; created_at: string }[] | null;
+};

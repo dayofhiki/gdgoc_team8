@@ -1,19 +1,18 @@
 /**
- * 로컬 AI 테스트 전용 API (/api/lab). Supabase 서버·DB를 전혀 건드리지 않습니다.
- * Edge Function과 같은 코드(ai.ts · decide.ts · pii.ts)를 Next.js 서버에서 직접 실행해
+ * 로컬 AI 테스트 전용 API (/api/lab). 서버 DB를 전혀 건드리지 않습니다.
+ * src/server의 AI 코드(ai.ts · decide.ts · pii.ts)를 직접 실행해
  * Gemini 대사·판정을 확인하는 용도. 대화 상태는 브라우저가 들고 다닙니다(저장 안 함).
  *
  * - GEMINI_API_KEY는 .env.local에서 서버 쪽으로만 읽힘 (NEXT_PUBLIC 아님 → 브라우저에 노출 안 됨)
  * - 개발 서버(npm run dev)에서만 동작. 빌드·배포 환경에서는 404 → 외부에서 토큰을 쓸 수 없음
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { NextResponse } from "next/server";
-import { generateReply, nextStage, classify } from "../../../../supabase/functions/_shared/ai";
-import { hasPii, maskPii } from "../../../../supabase/functions/_shared/pii";
-import { providers } from "../../../../supabase/functions/_shared/llm";
-import { decideNext } from "../../../../supabase/functions/chat-turn/decide";
-import type { AiOutput, Difficulty, Message, Mission, Outcome, Stage } from "@shared/types";
+import { generateReply, nextStage, classify } from "@/server/ai";
+import { hasPii, maskPii } from "@/server/pii";
+import { providers } from "@/server/llm";
+import { decideNext } from "@/server/decide";
+import { MISSIONS } from "@/server/missions";
+import type { AiOutput, Difficulty, Message, Mission, Outcome, Stage } from "@/server/types";
 
 type Hist = Pick<Message, "role" | "text" | "stage">[];
 type Body =
@@ -21,19 +20,10 @@ type Body =
   | { action: "turn"; mission_id: string; difficulty: Difficulty; stage: Stage; turn_count: number; history: Hist; text?: string }
   | { action: "end"; history: Hist };
 
-const AI_TIMEOUT_MS = 8000; // chat-turn과 동일
+const AI_TIMEOUT_MS = 8000;
 const MAX_TEXT = 500;
 
-// 미션은 supabase/seed.sql을 그대로 읽어 씀 (복사본을 두지 않기 위해)
-function loadMissions(): Mission[] {
-  const sql = readFileSync(join(process.cwd(), "supabase", "seed.sql"), "utf8");
-  const re = /\('([^']*)',\s*'([^']*)',\s*'([^']*)',\s*'([^']*)',\s*'(\{[^']*\})',\s*(\d+)\)/g;
-  return [...sql.matchAll(re)].map(([, id, title, scam_type, persona, lines, sort]) => ({
-    id, title, scam_type, persona, fallback_lines: JSON.parse(lines), sort: Number(sort),
-  }));
-}
-
-// session-end/index.ts와 같은 규칙 (그 파일은 Deno.serve라 import 불가)
+// 결과 판정 규칙 (키워드 방식)
 const STAGE_FLAGS: Record<Stage, string> = {
   approach: "낯선 번호·처음 보는 상대가 먼저 연락함",
   trust: "그럴듯한 사연이나 신분을 내세워 믿게 만듦",
@@ -54,11 +44,11 @@ export async function POST(req: Request) {
   if (!body) return err(400, "BAD_REQUEST");
 
   if (body.action === "missions") {
-    return NextResponse.json({ missions: loadMissions(), gemini: providers().length > 0 });
+    return NextResponse.json({ missions: MISSIONS, gemini: providers().length > 0 });
   }
 
   if (body.action === "turn") {
-    const mission = loadMissions().find((m) => m.id === body.mission_id);
+    const mission = MISSIONS.find((m) => m.id === body.mission_id);
     if (!mission) return err(404, "NOT_FOUND");
     const text = body.text?.trim().slice(0, MAX_TEXT) ?? "";
     if (!text) {

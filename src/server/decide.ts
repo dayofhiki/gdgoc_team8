@@ -1,4 +1,4 @@
-import type { AiOutput, Stage } from "../_shared/types.ts";
+import type { AiOutput, Stage } from "./types.ts";
 
 export const MAX_TURNS = 8;
 

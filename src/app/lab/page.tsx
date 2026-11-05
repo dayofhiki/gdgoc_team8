@@ -1,11 +1,11 @@
 "use client";
 /**
- * 임시 AI 테스트 페이지 (/lab). Figma 디자인과 무관하며, Supabase 서버·DB를 쓰지 않습니다.
- * 로컬 Next.js API(/api/lab)가 Edge Function과 같은 AI 코드로 Gemini를 호출합니다.
+ * 임시 AI 테스트 페이지 (/lab). Figma 디자인과 무관하며, 백엔드 DB를 쓰지 않습니다.
+ * 로컬 Next.js API(/api/lab)가 src/server의 AI 코드로 Gemini를 호출합니다.
  * 화면 흐름이 정해지면 삭제할 예정.
  */
 import { useEffect, useState, type CSSProperties } from "react";
-import type { Difficulty, Message, Mission, Outcome, Stage } from "@shared/types";
+import type { Difficulty, Message, Mission, Outcome, Stage } from "@/server/types";
 
 type View = "setup" | "chat" | "result";
 type Hist = Pick<Message, "role" | "text" | "stage">;
@@ -169,7 +169,7 @@ export default function Lab() {
           <div style={S.card}><b>이번 대화의 위험 신호</b>
             {result.red_flags.map((f) => <p key={f}>• {f}</p>)}
           </div>
-          <p style={S.small}>※ 결과 판정은 아직 키워드 방식(서버 session-end와 동일)이에요.</p>
+          <p style={S.small}>※ 결과 판정은 아직 키워드 방식이에요.</p>
           <button style={S.btn} onClick={() => setView("setup")}>다른 상황 연습하기</button>
         </>
       )}
