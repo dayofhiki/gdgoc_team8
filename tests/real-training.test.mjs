@@ -258,3 +258,38 @@ test("phone actions require actual source choices but never an AI-provided sugge
   assert.equal(installed.closed, false);
   assert.ok(installed.messages.at(-1).text.includes("공식 앱"));
 });
+
+
+test("early verification is useful but cannot complete or claim full request-response practice", () => {
+  const early = recordChoice(state(4), SCENARIOS[4], "verify", undefined, undefined, "bank_app").state;
+  assert.equal(early.turns, 0);
+  assert.equal(early.closed, false);
+  assert.equal(early.verification, "confirmed");
+  assert.equal(evaluate(early, SCENARIOS[4], "legitimate").coverage, "early");
+  const endedEarly = recordChoice(early, SCENARIOS[4], "stop").state;
+  assert.equal(endedEarly.closed, true);
+  assert.equal(evaluate(endedEarly, SCENARIOS[4], "legitimate").coverage, "early");
+  const continued = { ...early, turns: 2 };
+  assert.equal(evaluate(continued, SCENARIOS[4], "legitimate").coverage, "conversation_only");
+  const requestState = {
+    ...continued,
+    messages: [...continued.messages, {
+      actor: "them",
+      text: "보안 절차를 위해 이체를 부탁드립니다.",
+      actions: [{ kind: "transfer", origin: "sender", target: "은행", task: "보안 이체", id: "2-0", label: "송금하기" }],
+    }],
+  };
+  assert.equal(evaluate(requestState, SCENARIOS[4], "uncertain").coverage, "request_reached");
+});
+
+test("phone panel cue is non-accusatory, appears once after interaction and respects reduced motion", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(ui, /next\.turns >= 2/);
+  assert.match(ui, /phoneHintShown\.current = true/);
+  assert.match(ui, /setPhoneHint\(false\)/);
+  assert.match(css, /\.rt-header-more--hint/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  assert.match(ui, /coverage === "early"/);
+});
