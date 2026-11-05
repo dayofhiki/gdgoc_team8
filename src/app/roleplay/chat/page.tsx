@@ -485,7 +485,7 @@ export default function RealTraining() {
                 <div className="fb-scenario-detail">
                   <strong>{result.identity === "fraud" ? "사칭 연락" : "실제 연락"}</strong>
                   <p>{result.purpose}</p>
-                  <p>{result.verificationEvidence}</p>
+                  {result.checked && result.verificationEvidence && <p>{result.verificationEvidence}</p>}
                   <p className="fb-note">이 대화는 공개된 수법을 바탕으로 재구성한 교육용 상황이에요.</p>
                   {result.caseSource && (
                     <>
