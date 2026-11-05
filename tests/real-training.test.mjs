@@ -127,7 +127,7 @@ test("a single message can contain independent official app and official call ac
   s.messages[source].offers = ["official_app", "official_call"];
   const checked = recordChoice(s, SCENARIOS[4], "verify", source).state;
   assert.equal(checked.verification, "confirmed");
-  assert.equal(checked.closed, true);
+  assert.equal(checked.closed, false);
 });
 
 test("an official app offer is not created unless it was actually suggested", () => {
