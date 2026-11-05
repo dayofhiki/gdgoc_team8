@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
 import { CheckIcon, ChevronRight, LockIcon, SendIcon } from "@/components/Icons";
 import { Screen } from "@/components/ui";
+import { randomTrainingTopic, type TrainingTopicId, topicDescriptor } from "@/lib/trainingCatalog";
 
 export default function Home() {
   const { ready, nickname } = useAppState();
   const router = useRouter();
+  const [recommendedId, setRecommendedId] = useState<TrainingTopicId>();
+  useEffect(() => { setRecommendedId(randomTrainingTopic().id); }, []);
+  const recommended = recommendedId ? topicDescriptor(recommendedId) : undefined;
   useEffect(() => {
     if (ready && !nickname) router.replace("/onboarding");
   }, [ready, nickname, router]);
@@ -18,37 +22,46 @@ export default function Home() {
         <img src="/images/logo.svg" alt="미끼주의보" width={121} height={24} />
       </div>
 
-      <section className="hero" aria-label="오늘의 실전 훈련">
-        <span className="hero__chip">오늘의 실전 훈련</span>
-        <h2 className="hero__title">{"어떤 문자가 올지\n미리 알 수 없습니다."}</h2>
-        <p className="hero__sub">예고 없이 오는 연락에도 안전하게 대응하는 연습을 해보세요.</p>
+      <section className="hero" aria-label="추천 훈련">
+        <span className="hero__chip">추천 훈련</span>
+        <h2 className="hero__title">{recommended?.title ?? "추천 상황을 고르는 중이에요"}</h2>
+        <p className="hero__sub">{recommended && `${recommended.description}. 어떤 행동을 할지 연습해 보세요.`}</p>
         <img className="hero__bobber float" src="/images/bobber.png" alt="" />
-        <Link href="/roleplay" className="btn btn--primary hero__btn">훈련 시작하기</Link>
+        {recommended && (
+          <Link href={`/roleplay?topic=${recommended.id}&entry=live`} className="btn btn--primary hero__btn">추천 훈련 시작하기</Link>
+        )}
       </section>
 
       <div className="home__sections">
         <section>
           <div className="sec__head">
             <h3 className="sec__title">혼자 연습하기</h3>
-            <Link href="/roleplay" className="sec__more">전체 보기</Link>
+            <Link href="/practice" className="sec__more">전체 보기</Link>
           </div>
-          <div className="grid2">
-            <Link href="/roleplay" className="tile">
-              <img src="/images/icon-chat.png" alt="" width={40} height={40} />
-              <div>
-                <p className="tile__title">실전 대응 훈련</p>
-                <p className="tile__desc">다양한 연락에 안전하게 대응하는 연습</p>
-              </div>
+          <div className="list">
+            <Link href="/roleplay" className="list-row">
+              <span className="list-row__icon"><img src="/images/icon-chat.png" alt="" width={32} height={32} /></span>
+              <span className="list-row__text">
+                <span className="list-row__title">실전 대응 훈련</span>
+                <span className="list-row__desc">실전 훈련 · 상황별 연습</span>
+              </span>
+              <ChevronRight />
             </Link>
-            <Link href="/quiz" className="tile">
-              <div className="ox-badges">
-                <span className="ox-badge" style={{ background: "var(--blue)" }}>O</span>
-                <span className="ox-badge" style={{ background: "var(--red)" }}>X</span>
-              </div>
-              <div>
-                <p className="tile__title">OX 퀴즈</p>
-                <p className="tile__desc">10문제로 실력 확인해요</p>
-              </div>
+            <Link href="/roleplay/case" className="list-row">
+              <span className="list-row__icon"><img src="/images/fish-clipboard.png" alt="" width={32} height={32} /></span>
+              <span className="list-row__text">
+                <span className="list-row__title">사례로 배우기</span>
+                <span className="list-row__desc">대화 속에서 대처 방법을 살펴봐요</span>
+              </span>
+              <ChevronRight />
+            </Link>
+            <Link href="/quiz" className="list-row">
+              <span className="list-row__icon"><CheckIcon /></span>
+              <span className="list-row__text">
+                <span className="list-row__title">OX 퀴즈</span>
+                <span className="list-row__desc">10문제로 대처 방법을 확인해요</span>
+              </span>
+              <ChevronRight />
             </Link>
           </div>
         </section>
@@ -77,8 +90,8 @@ export default function Home() {
             <Link href="/family-practice" className="list-row">
               <span className="list-row__icon"><CheckIcon /></span>
               <span className="list-row__text">
-                <span className="list-row__title">가족 연습 기록 보기</span>
-                <span className="list-row__desc">공유한 연습 요약과 내 공개 설정</span>
+                <span className="list-row__title">우리 가족 연습 리포트</span>
+                <span className="list-row__desc">가족이 공유한 결과를 보고 함께 복습해요</span>
               </span>
               <ChevronRight />
             </Link>

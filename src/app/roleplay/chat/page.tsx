@@ -11,7 +11,7 @@ import { copyText } from "@/lib/share";
 import { saveRecord } from "@/lib/records";
 import type { BehaviorFeedback } from "@/lib/trainingFeedback";
 import type { Choice, PhoneMethod } from "@/lib/realTraining";
-import { topicDescriptor, type TrainingTopicId } from "@/lib/trainingCatalog";
+import { randomTrainingTopic, topicDescriptor, type TrainingTopicId } from "@/lib/trainingCatalog";
 import { shouldCuePhonePanel } from "@/lib/trainingPhoneCue";
 import { trainingReplyExamples } from "@/lib/trainingReplyExamples";
 import TrainingPhonePanel, { TrainingPhoneIcon, type PhoneTransferRequest } from "@/components/TrainingPhonePanel";
@@ -82,7 +82,9 @@ const INTRO_HIDE_KEY = "mikki:training-phone-intro-hidden-v1";
 function saveReview(result: Result) {
   try {
     sessionStorage.setItem(REVIEW_KEY, JSON.stringify(result));
-    window.history.replaceState(window.history.state, "", "/roleplay/chat?review=1");
+    const url = new URL(location.href);
+    url.searchParams.set("review", "1");
+    window.history.replaceState(window.history.state, "", url);
   } catch { /* 저장소를 못 쓰면 복원 없이 진행 */ }
 }
 
@@ -105,6 +107,7 @@ export default function RealTraining() {
   const { ready: familyReady, familyQuestion } = useAppState();
   const started = useRef(false);
   const historyRef = useRef<HTMLDivElement>(null);
+  const [liveEntry, setLiveEntry] = useState(false);
   const [phase, setPhase] = useState<Phase>("chat");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -134,7 +137,15 @@ export default function RealTraining() {
   const [ending, setEnding] = useState<Ending | null>(null);
 
   async function start(replayTopic?: TrainingTopicId) {
-    if (replayTopic) window.history.replaceState(window.history.state, "", "/roleplay/chat?topic=" + replayTopic);
+    const url = new URL(location.href);
+    const live = url.searchParams.get("entry") === "live" || !url.searchParams.has("topic");
+    if (replayTopic) {
+      url.searchParams.set("topic", replayTopic);
+      if (live) url.searchParams.set("entry", "live");
+    }
+    url.searchParams.delete("review");
+    window.history.replaceState(window.history.state, "", url);
+    setLiveEntry(live);
     autoReviewed.current = null;
     setPhase("chat");
     setError("");
@@ -189,6 +200,8 @@ export default function RealTraining() {
     started.current = true;
     const saved = takeSavedReview();
     if (saved) {
+      const params = new URLSearchParams(location.search);
+      setLiveEntry(params.get("entry") === "live" || !params.has("topic"));
       setResult(saved);
       setReviewPage("truth");
       setPhase("result");
@@ -354,7 +367,7 @@ export default function RealTraining() {
       const r = answer.result;
       void saveRecord({
         kind: "training",
-        title: (session.title ?? "").slice(0, 60),
+        title: session.topic ? topicDescriptor(session.topic).title : (session.title ?? "").slice(0, 60),
         safe: r.dangerousAction || r.linkOpened || r.followedSenderNumber ? false :
           r.checked || r.coverage === "request_reached" && r.behavior.receipts.some(item => item.label === "대화 중단") ? true : undefined,
       });
@@ -475,10 +488,11 @@ export default function RealTraining() {
         </section>
         {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
         <BottomCTA row>
-          <button className="btn btn--gray" onClick={() => router.replace("/roleplay/mode")}>다른 훈련하기</button>
-          {result.topic
-            ? <button className="btn btn--primary" onClick={() => void start(result.topic)}>같은 상황 다시 연습</button>
-            : <button className="btn btn--primary" onClick={() => router.replace("/home")}>홈으로</button>}
+          <button className="btn btn--gray" onClick={() => void start(result.topic)}>다시 연습</button>
+          <button className="btn btn--primary" onClick={() => {
+            if (liveEntry) void start(randomTrainingTopic(result.topic).id);
+            else router.replace("/roleplay/select");
+          }}>{liveEntry ? "다음 실전 훈련" : "다른 상황 고르기"}</button>
         </BottomCTA>
       </Screen>
     );
@@ -577,7 +591,7 @@ export default function RealTraining() {
   return (
     <main className="screen rt-screen">
       <header className="rt-header">
-        <button type="button" className="rt-nav-back" onClick={() => router.replace(new URLSearchParams(window.location.search).has("topic") ? "/roleplay/select" : "/roleplay/mode")} aria-label="뒤로 가기">
+        <button type="button" className="rt-nav-back" onClick={() => router.replace(liveEntry ? "/roleplay/mode" : "/roleplay/select")} aria-label="뒤로 가기">
           <span aria-hidden="true">‹</span>
         </button>
         <div className="rt-avatar" aria-hidden="true"><PersonIcon /></div>
@@ -585,14 +599,6 @@ export default function RealTraining() {
           <strong>{contact}</strong>
           <span>문자 메시지</span>
         </div>
-        <button type="button"
-          className={phoneHint ? "rt-header-more rt-header-more--hint" : "rt-header-more"}
-          onClick={() => openActions()}
-          disabled={!session || session.closed || busy}
-          aria-label="내 휴대전화 기능 열기" aria-expanded={actionsOpen}
-          title="내 휴대전화">
-          <TrainingPhoneIcon /><span>내 휴대전화</span>
-        </button>
       </header>
       <div className="rt-history" ref={historyRef} role="log" aria-live="polite" aria-relevant="additions text">
         <div className="rt-day">오늘 · 새로운 대화</div>
@@ -703,7 +709,8 @@ export default function RealTraining() {
                 if (!writeReply) requestAnimationFrame(() => inputRef.current?.focus());
               }}>{writeReply ? "답장 예시 보기" : "직접 쓰기"}</button>
             <div className="rt-main-actions" role="group" aria-label="문자 밖에서 할 수 있는 행동">
-              <button type="button" className="rt-choice" disabled={busy} onClick={() => openActions()}>전화·앱 열기</button>
+              <button type="button" className={phoneHint ? "rt-choice rt-phone-button--hint" : "rt-choice"}
+                disabled={busy} aria-expanded={actionsOpen} onClick={() => openActions()}>전화·앱 열기</button>
               <button type="button" className="rt-choice" disabled={busy} onClick={() => setConfirmStop(true)}>대화 끝내기</button>
             </div>
           </>

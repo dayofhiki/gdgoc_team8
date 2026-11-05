@@ -3,16 +3,19 @@ import { isTrainingTopicId, topicDescriptor } from "@/lib/trainingCatalog";
 import { BottomCTA, Header, Screen } from "@/components/ui";
 
 /** 실전 대응 훈련 · 시작 전 안내 */
-export default async function RoleplayIntro({ searchParams }: { searchParams: Promise<{ topic?: string | string[] }> }) {
-  const { topic: requestedTopic } = await searchParams;
+export default async function RoleplayIntro({ searchParams }: { searchParams: Promise<{ topic?: string | string[]; entry?: string | string[]; mode?: string | string[] }> }) {
+  const { topic: requestedTopic, entry, mode } = await searchParams;
   const topic = isTrainingTopicId(requestedTopic) ? requestedTopic : undefined;
+  const destination = topic
+    ? `/roleplay/chat?topic=${topic}${entry === "live" ? "&entry=live" : ""}`
+    : mode === "live" ? "/roleplay/chat" : "/roleplay/mode";
   return (
     <Screen>
       <Header title="실전 대응 훈련" back="/home" />
       <section className="screen__body">
         <img className="rp-intro__img" src="/images/fish-clipboard.png" alt="안내문을 든 뻐끄미" />
         <h2 className="rp-intro__title">시작 전에 확인해주세요</h2>
-        {topic && <p className="rp-intro__p">함께 연습할 상황 · {topicDescriptor(topic).title}</p>}
+        {topic && <p className="rp-intro__p">{entry === "live" ? "추천 상황" : "함께 연습할 상황"} · {topicDescriptor(topic).title}</p>}
         <div className="rp-intro__blocks">
           <div>
             <p className="rp-intro__h">가상의 대화예요.</p>
@@ -27,7 +30,7 @@ export default async function RoleplayIntro({ searchParams }: { searchParams: Pr
         </div>
       </section>
       <BottomCTA>
-        <Link href={topic ? "/roleplay/chat?topic=" + topic : "/roleplay/mode"} className="btn btn--primary btn--lg" style={{ fontWeight: 600 }}>확인했어요</Link>
+        <Link href={destination} className="btn btn--primary btn--lg" style={{ fontWeight: 600 }}>확인했어요</Link>
       </BottomCTA>
     </Screen>
   );
