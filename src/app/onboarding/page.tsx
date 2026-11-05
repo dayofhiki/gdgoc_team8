@@ -31,7 +31,7 @@ export default function Onboarding() {
           <>
             <div className="onb__copy" style={{ marginTop: 39 }}>
               <h2 className="onb__title">
-                사기인지 모르는 순간에도{"\n"}
+                갑작스러운 연락 앞에서도{"\n"}
                 <span className="hl">안전한 대응</span>을{"\n"}뻐끄미와 함께 연습해 봐요.
               </h2>
             </div>
