@@ -145,10 +145,12 @@ test("links carry reserved non-resolving addresses and message-preview metadata"
   assert.equal(evaluate(opened, SCENARIOS[3], "uncertain").linkOpened, true);
 });
 
-test("global menu offers family contact and ignore, not an unrelated official-app shortcut", () => {
+test("global menu offers learner-initiated verification separately from sender proposals", () => {
   const request = withOffer(state(4), "transfer", "송금해 주세요.");
   assert.throws(() => recordChoice(request.state, SCENARIOS[4], "verify", request.source));
-  assert.throws(() => recordChoice(request.state, SCENARIOS[4], "verify"));
+  const independent = recordChoice(request.state, SCENARIOS[4], "verify").state;
+  assert.equal(independent.verification, "confirmed");
+  assert.equal(independent.closed, true);
   const familyBank = recordChoice(state(4), SCENARIOS[4], "family_contact").state;
   assert.equal(familyBank.closed, true);
   assert.equal(familyBank.verification, "none");
