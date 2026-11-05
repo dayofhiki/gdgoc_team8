@@ -30,7 +30,7 @@ type Session = {
   maxTurns: number;
   verified: boolean;
   closed: boolean;
-  endReason?: "natural" | "turn_limit" | "action" | null;
+  endReason?: "natural" | "turn_limit" | "action" | "resolved" | null;
 };
 type Result = {
   identity: "legitimate" | "fraud";
@@ -265,7 +265,7 @@ export default function RealTraining() {
       }
       if (next.closed) {
         // 대화가 저절로 끝나면 입력창 자리의 버튼을 눌러 결과로 넘어간다.
-        if (next.endReason !== "natural" && next.endReason !== "turn_limit") setPhase("judge");
+        if (next.endReason !== "natural" && next.endReason !== "turn_limit" && next.endReason !== "resolved") setPhase("judge");
       }
     } catch (err) {
       // 네트워크 실패 시 보낸 것처럼 남겨 두지 않고 입력창에 복구한다.
@@ -297,7 +297,9 @@ export default function RealTraining() {
       } else {
         setPreviewIndex(null);
         setPreviewActionId(null);
-        if (next.closed && (choice === "verify" || choice === "family_contact" || choice === "stop" || choice === "comply" || choice === "share")) {
+        if (next.closed && next.endReason === "resolved") {
+          // 확인 결과를 문자에서 읽고 사용자가 직접 피드백으로 이동하도록 둔다.
+        } else if (next.closed && (choice === "verify" || choice === "family_contact" || choice === "stop" || choice === "comply" || choice === "share")) {
           setEnding({ choice, stage: "receipt" });
         } else if (next.closed || next.turns >= next.maxTurns) {
           setPhase("judge");
@@ -656,7 +658,14 @@ export default function RealTraining() {
       <div className="rt-compose-zone">
         {error && <p className="rt-error" role="alert">{error}</p>}
         {session?.closed && !ending ? (
-          <button type="button" className="btn btn--primary" onClick={() => setPhase("judge")}>내 대응 결과 확인하기</button>
+          <button type="button" className="btn btn--primary" disabled={busy}
+            onClick={() => {
+              if (session.endReason === "resolved" && session.verified) void finish();
+              else setPhase("judge");
+            }}>
+            {busy ? "대응 분석 중…" : session.endReason === "resolved" && session.verified
+              ? "내 대응 피드백 보기" : "내 대응 결과 확인하기"}
+          </button>
         ) : (
           <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
             <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
