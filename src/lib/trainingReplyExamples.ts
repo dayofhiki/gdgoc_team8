@@ -19,6 +19,19 @@ const openingReplies: Record<TrainingTopicId, string[]> = {
 };
 
 const informalTopics = new Set<TrainingTopicId>(["family"]);
+const topicClues: Record<TrainingTopicId, RegExp> = {
+  family: /엄마|아빠|아들|딸|폰|휴대|액정|수리/,
+  delivery: /택배|배송|운송장|반송/,
+  bank: /결제|거래|승인|계좌|금융|은행/,
+  invitation: /결혼|청첩장|예식|식장/,
+  obituary: /부고|별세|빈소|돌아가셨|장례/,
+  traffic: /교통|위반|과태료|범칙금/,
+  loan: /대출|금리|한도/,
+  job: /일자리|업무|근무|채용|급여/,
+  health: /검진|예약|병원|건강/,
+  card: /카드|배송|반송/,
+  team_mission: /후기|부업|정산|쇼핑/,
+};
 const requestedMoney = /송금|이체|입금|선입금|보증금|수수료|계좌로|돈을?\s*보내|금액을?\s*보내|수리비/;
 const requestedLink = /링크|URL|사이트|주소를?\s*(?:눌러|클릭|접속|열어)|청첩장\s*(?:확인|보기)|부고장\s*(?:확인|보기)/i;
 const requestedData = /인증번호|비밀번호|주민등록|계좌번호|카드번호|개인정보|생년월일|잔액|신분증|보안카드/;
@@ -44,8 +57,8 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
   // 위험 요청이 있는 마지막 문자에는 그 요청 자체를 묻는 답장을 우선한다.
   // '보냈어요/확인했어요'처럼 훈련 앱에서 실행하지 않은 행동은 추천하지 않는다.
   if (kinds.has("transfer") || requested && requestedMoney.test(line)) {
-    if (informal) add(110, "갑자기 돈이 왜 필요해?", "얼마가 필요한데?");
-    else add(110, "왜 돈을 보내야 하나요?", "어떤 비용인지 설명해 주세요.");
+    if (informal) add(110, "갑자기 돈이 왜 필요해?", "잠깐 생각해 볼게.", "얼마가 필요한데?");
+    else add(110, "왜 돈을 보내야 하나요?", "잠깐 생각해 볼게요.", "어떤 비용인지 설명해 주세요.");
   }
   if (kinds.has("provide_data") || requested && requestedData.test(line)) {
     add(108, "그 정보가 왜 필요한가요?", "어디에 사용하는 정보인가요?");
@@ -94,8 +107,19 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
     add(65, "어떤 일을 해야 하나요?", "돈은 어떻게 정산되나요?");
   }
 
-  // 첫 연락의 중립적인 정보 질문은 마지막 문자에 직접 맞는 답이 없을 때만 사용한다.
-  openingReplies[topic].forEach((text, i) => add(30 - i, text));
+  // 실제 발신자가 언급하기 전에는 훈련 주제(결혼, 부고, 금융 등)를 드러내지 않는다.
+  // 주제명은 UI 분류일 뿐, 상대가 이미 말한 사실이라는 뜻이 아니다.
+  const topicMentioned = messages.some(message =>
+    message.actor === "them" && topicClues[topic].test(message.text));
+  if (topicMentioned) {
+    openingReplies[topic].forEach((text, i) => add(30 - i, text));
+  } else if (informal) {
+    add(25, "무슨 일이야?", "어떻게 된 건지 말해 줘.", "지금 무슨 상황인데?");
+  } else if (/소식/.test(line)) {
+    add(25, "무슨 소식인가요?", "어떤 일인가요?", "좀 더 설명해 주시겠어요?");
+  } else {
+    add(25, "어떤 내용으로 연락하셨나요?", "조금 더 자세히 설명해 주세요.", "무슨 일인지 알려주시겠어요?");
+  }
   const unique = new Set<string>();
   return candidates.sort((a, b) => b.weight - a.weight)
     .map(candidate => candidate.text)
