@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { BottomSheet } from "./ui";
 import type { PhoneMethod } from "@/lib/realTraining";
+import { isPersonalTopic, type TrainingTopicId } from "@/lib/trainingCatalog";
 import type { Action } from "@/lib/trainingActions";
 
 type Screen = "home" | "contacts" | "phone" | "apps" | "transfer" | "transfer_confirm" | "outcome";
-type Topic = "family" | "delivery" | "bank";
+type Topic = TrainingTopicId;
 type ActionChoice = "verify" | "verify_sender" | "family_contact";
 export type PhoneTransferRequest = { sourceIndex: number; action: Action };
 
@@ -98,7 +99,7 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
   }
 
   function openInstalledApp(app: "bank_app" | "delivery_app") {
-    if ((app === "bank_app" && topic !== "bank") || (app === "delivery_app" && topic !== "delivery")) {
+    if ((app === "bank_app" && topic !== "bank" && topic !== "loan") || (app === "delivery_app" && topic !== "delivery")) {
       setNotice("이 앱에서는 현재 메시지에 해당하는 내용을 찾을 수 없어요.");
       setScreen("outcome");
       return;
@@ -148,7 +149,7 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
         )}
         {screen === "contacts" && (
           <div className="rt-device-options">
-            {option("family", "저장된 가족 연락처", "평소 사용하던 연락처", () => void act("family_contact", "saved_family"))}
+            {option("family", isPersonalTopic(topic) ? "저장된 가족·지인 연락처" : "저장된 가족 연락처", "평소 사용하던 연락처", () => void act("family_contact", "saved_family"))}
             {option("sender", "현재 문자 발신자", "이번에 메시지를 보낸 번호", () => void act("verify_sender", "recent_sender"))}
           </div>
         )}
@@ -161,9 +162,9 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
               request.action.target || request.action.task || "상대가 문자로 제시한 연락 방법",
               () => void senderPhoneCall(request),
             ))}
-            {topic !== "family"
+            {!isPersonalTopic(topic)
               ? option("official", "기관 번호 검색", "전화 앱의 연락처 검색", () => void act("verify", "official_directory"))
-              : option("family", "기존 가족 연락처", "저장된 연락처로 전화", () => void act("family_contact", "saved_family"))}
+              : option("family", "기존 가족·지인 연락처", "평소 저장해 둔 연락처로 전화", () => void act("family_contact", "saved_family"))}
           </div>
         )}
         {screen === "apps" && (

@@ -5,6 +5,7 @@
  */
 import type { Scenario, TrainingState, Choice } from "./realTraining.ts";
 import { hasConcreteRequest } from "./trainingResolution.ts";
+import { isPersonalTopic } from "./trainingCatalog.ts";
 
 export type BehaviorTone = "good" | "caution" | "neutral";
 export type FeedbackPoint = { keyword: string; text: string };
@@ -28,7 +29,8 @@ const distinct = (points: FeedbackPoint[]) =>
 
 export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario): BehaviorFeedback {
   const events = state.events;
-  const isFamily = scenario.id.startsWith("0-");
+  const isFamily = isPersonalTopic(scenario.topic);
+  const person = scenario.topic === "family" ? "가족" : "지인";
   const used = (choice: Choice) => events.some(e => e.choice === choice);
   const verified = used("verify") || (isFamily && used("family_contact"));
   const consulted = used("family_contact");
@@ -47,52 +49,52 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   const improve: FeedbackPoint[] = [];
 
   if (verified) good.push({
-    keyword: "독립 확인",
+    keyword: isFamily ? "저장된 연락처로 직접 확인했어요" : "공식 연락처로 직접 확인했어요",
     text: isFamily
-      ? "새로운 연락만 믿지 않고 원래 저장된 가족 번호로 확인했어요."
+      ? `새로운 연락만 믿지 않고 원래 저장된 ${person} 연락처로 확인했어요.`
       : "상대가 제시한 연락처가 아닌 공식 경로로 직접 확인했어요.",
   });
   if (consulted && !isFamily) good.push({
-    keyword: "도움 요청",
+    keyword: "가족에게 먼저 물어봤어요",
     text: "혼자서 판단하지 않고 가족에게 상황을 공유했어요.",
   });
   if (stopped) good.push({
-    keyword: "멈추기",
+    keyword: "요청에 바로 응하지 않고 멈췄어요",
     text: "상대의 요구에 바로 응하지 않고 대화를 중단했어요.",
   });
   if (deliberatePause) good.push({
-    keyword: "요청 보류",
+    keyword: "확인 전에는 돈과 정보를 보내지 않았어요",
     text: "확인 없이 돈이나 정보를 보내지 않고 다른 행동을 선택했어요.",
   });
 
   if (sentData) improve.push({
-    keyword: "정보 보호",
+    keyword: "개인정보를 보내기 전에 확인하세요",
     text: "요청받은 정보를 전송했어요. 실제 상황에서는 신원을 먼저 확인해 주세요.",
   });
   if (moneyWithoutVerification) improve.push({
-    keyword: "송금 전 확인",
+    keyword: "돈을 보내기 전에 먼저 확인하세요",
     text: "확인하기 전에 송금했어요. 원래 연락처로 먼저 확인해 주세요.",
   });
   if (openedLink) improve.push({
-    keyword: "문자 링크",
+    keyword: "문자 속 링크를 바로 누르지 마세요",
     text: "문자 속 링크를 열었어요. 다음에는 설치된 공식 앱에서 직접 조회해 보세요.",
   });
   if (followedSender) improve.push({
-    keyword: "연락처 확인",
+    keyword: "상대가 알려준 번호만 믿지 마세요",
     text: "상대가 알려준 번호는 독립적인 확인 경로가 아니에요.",
   });
   if (reliedOnChat) improve.push({
-    keyword: "대화만으로는 부족",
+    keyword: "상대의 말만으로 신원을 믿지 마세요",
     text: "상대가 스스로 진짜라고 말해도 신원이 확인되지는 않아요.",
   });
   if (!verified) improve.push({
-    keyword: "독립 확인",
+    keyword: isFamily ? "원래 저장된 번호로 직접 전화하세요" : "공식 앱이나 대표번호로 직접 확인하세요",
     text: isFamily
-      ? "원래 저장된 가족 번호로 직접 연락해 사실을 확인해 보세요."
+      ? `원래 저장된 ${person} 번호로 직접 연락해 사실을 확인해 보세요.`
       : "문자에 적힌 번호가 아니라 공식 앱이나 직접 찾은 대표번호로 확인해 보세요.",
   });
   if (stopped && !verified) improve.push({
-    keyword: "중단 후 확인",
+    keyword: "대화를 끊은 뒤에도 확인하세요",
     text: "대화를 멈춘 뒤에도 필요한 연락이었는지 따로 확인할 수 있어요.",
   });
 
@@ -171,14 +173,14 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   const focus = verified
     ? "다음에도 낯선 연락이 오면 먼저 기존 번호·공식 앱으로 확인하세요."
     : isFamily
-      ? "다음에는 송금 여부를 결정하기 전에 저장된 가족 번호로 먼저 전화해 보세요."
+      ? `다음에는 송금이나 정보 제공을 결정하기 전에 저장된 ${person} 연락처로 전화해 보세요.`
       : "다음에는 문자 속 링크 대신 공식 앱이나 대표번호로 직접 확인해 보세요.";
 
   const promises: FamilyPromise[] = [
     {
       id: "verify",
-      title: isFamily ? "원래 저장된 가족 번호로 다시 전화하기" : "내가 직접 찾은 공식 경로로 확인하기",
-      detail: isFamily ? "새 번호에서 가족이라고 해도 원래 연락처를 먼저 사용해요." :
+      title: isFamily ? `원래 저장된 ${person} 번호로 직접 전화하기` : "내가 직접 찾은 공식 경로로 확인하기",
+      detail: isFamily ? `새 번호에서 ${person}이라고 해도 원래 연락처를 먼저 사용해요.` :
         "문자 속 번호나 링크 대신 공식 앱·대표번호를 사용해요.",
       practiced: verified,
     },
@@ -190,8 +192,8 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     },
     {
       id: "family",
-      title: isFamily ? "가족과 정해 둔 확인 질문을 직접 확인하기" : "혼자 판단하기 어렵다면 가족과 상의하기",
-      detail: isFamily ? "답은 메시지에 적지 않고 직접 통화하거나 만나서 확인해요." :
+      title: scenario.topic === "family" ? "가족과 정해 둔 확인 질문을 직접 확인하기" : "혼자 판단하기 어렵다면 믿을 수 있는 사람에게 물어보기",
+      detail: scenario.topic === "family" ? "답은 메시지에 적지 않고 직접 통화하거나 만나서 확인해요." :
         "가족의 조언과 기관의 공식 신원 확인은 별개예요.",
       practiced: !isFamily && consulted,
     },

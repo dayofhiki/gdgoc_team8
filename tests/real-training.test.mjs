@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SCENARIOS, classifyOffer, classifyOffers, evaluate, normalizeKoreanReply, recordChoice, simulatedLink } from "../src/lib/realTraining.ts";
+import { TRAINING_TOPICS, isPersonalTopic, isTrainingTopicId } from "../src/lib/trainingCatalog.ts";
 
 function state(index) {
   return {
@@ -15,7 +16,7 @@ function withOffer(state, kind, text = "송금해 주세요") {
 }
 
 test("normal/fraud pair starts with an identical message", () => {
-  assert.equal(SCENARIOS.length, 6);
+  assert.equal(SCENARIOS.length, 18);
   for (let i = 0; i < SCENARIOS.length; i += 2) {
     assert.equal(SCENARIOS[i].identity, "legitimate");
     assert.equal(SCENARIOS[i+1].identity, "fraud");
@@ -188,7 +189,7 @@ test("mentioning official apps in a warning or unrelated sentence does not creat
 test("phone choices allow verification for every scenario without automatically ending the training", () => {
   for (const scenario of SCENARIOS) {
     const s = state(SCENARIOS.indexOf(scenario));
-    const family = scenario.id.startsWith("0-");
+    const family = isPersonalTopic(scenario.topic);
     const choice = family ? "family_contact" : "verify";
     const method = family ? "saved_family" : "official_directory";
     const checked = recordChoice(s, scenario, choice, undefined, undefined, method).state;
@@ -470,4 +471,75 @@ test("closed verified resolution keeps its explanation visible before the user o
   assert.match(ui, /void finish\(\)/);
   assert.match(ui, /내 대응 피드백 보기/);
   assert.match(ui, /"resolved" \| null/);
+});
+
+
+test("all nine public topics map to an equally likely normal/fraud pair without exposing identity", () => {
+  assert.equal(TRAINING_TOPICS.length, 9);
+  assert.equal(SCENARIOS.length, TRAINING_TOPICS.length * 2);
+  assert.equal(new Set(TRAINING_TOPICS.map(t => t.id)).size, 9);
+  for (const [i, topic] of TRAINING_TOPICS.entries()) {
+    assert.equal(SCENARIOS[i*2].topic, topic.id);
+    assert.equal(SCENARIOS[i*2+1].topic, topic.id);
+    assert.equal(SCENARIOS[i*2].identity, "legitimate");
+    assert.equal(SCENARIOS[i*2+1].identity, "fraud");
+    assert.equal(SCENARIOS[i*2].opening, SCENARIOS[i*2+1].opening);
+    assert.ok(topic.description.length > 10);
+    assert.ok(isTrainingTopicId(topic.id));
+    assert.ok(!("identity" in topic));
+  }
+  assert.equal(isTrainingTopicId("invalid"), false);
+  assert.equal(isTrainingTopicId(0), false);
+});
+
+test("personal scenarios use saved contacts; institutional scenarios use independently found official numbers", () => {
+  for (const [index, scenario] of SCENARIOS.entries()) {
+    const s = state(index);
+    const personal = isPersonalTopic(scenario.topic);
+    if (personal) {
+      assert.throws(() => recordChoice(s, scenario, "verify", undefined, undefined, "official_directory"));
+      const result = recordChoice(s, scenario, "family_contact", undefined, undefined, "saved_family").state;
+      assert.equal(result.verification, scenario.identity === "fraud" ? "failed" : "confirmed");
+      assert.equal(result.closed, false);
+    } else {
+      const result = recordChoice(s, scenario, "verify", undefined, undefined, "official_directory").state;
+      assert.equal(result.verification, scenario.identity === "fraud" ? "failed" : "confirmed");
+      assert.equal(result.closed, false);
+      const familyAdvice = recordChoice(s, scenario, "family_contact", undefined, undefined, "saved_family").state;
+      assert.equal(familyAdvice.verification, "none");
+    }
+    if (scenario.topic === "loan" || scenario.topic === "bank") {
+      assert.equal(recordChoice(s, scenario, "verify", undefined, undefined, "bank_app").state.closed, false);
+    } else {
+      assert.throws(() => recordChoice(s, scenario, "verify", undefined, undefined, "bank_app"));
+    }
+  }
+});
+
+test("entry flow supports both random recommendation and chosen-topic training", async () => {
+  const { readFileSync } = await import("node:fs");
+  const selector = readFileSync(new URL("../src/app/roleplay/select/page.tsx", import.meta.url), "utf8");
+  const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  assert.match(selector, /추천 상황으로 바로 시작/);
+  assert.match(selector, /TRAINING_TOPICS\.filter/);
+  assert.match(selector, /\/roleplay\/chat\?topic=/);
+  assert.match(mode, /\/roleplay\/select/);
+  assert.match(chat, /new URLSearchParams\(window\.location\.search\)\.get\("topic"\)/);
+  assert.match(route, /if \(body\.topic !== undefined && !isTrainingTopicId\(body\.topic\)\)/);
+  assert.match(route, /topicIndex \* 2 \+ randomInt\(2\)/);
+  assert.match(route, /topic: scenario\.topic/);
+});
+
+test("training feedback uses concrete verb-first reminders instead of cryptic nouns", () => {
+  const example = state(3);
+  example.events.push({ choice: "share", verifiedBefore: false, turn: 1 });
+  example.events.push({ choice: "open_link", verifiedBefore: false, turn: 1 });
+  const summary = evaluate(example, SCENARIOS[3], "uncertain").behavior;
+  assert.ok(summary.improve.every(p => /세요$/.test(p.keyword)), summary.improve.map(x=>x.keyword).join(", "));
+  assert.ok(summary.improve.some(p => p.keyword.includes("개인정보를 보내기 전에")));
+  assert.ok(summary.improve.some(p => p.keyword.includes("문자 속 링크를")));
+  assert.ok(summary.promises.every(p => /기$/.test(p.title)));
+  assert.ok(summary.receipts.some(r => r.label === "모의 정보 전송"));
 });

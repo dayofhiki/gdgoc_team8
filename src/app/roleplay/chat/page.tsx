@@ -12,6 +12,7 @@ import { familyShareUrl } from "@/lib/invite";
 import { saveRecord } from "@/lib/records";
 import type { BehaviorFeedback } from "@/lib/trainingFeedback";
 import type { PhoneMethod } from "@/lib/realTraining";
+import { topicDescriptor, type TrainingTopicId } from "@/lib/trainingCatalog";
 import { shouldCuePhonePanel } from "@/lib/trainingPhoneCue";
 import TrainingPhonePanel, { TrainingPhoneIcon, type PhoneTransferRequest } from "@/components/TrainingPhonePanel";
 
@@ -24,6 +25,7 @@ type Phase = "chat" | "judge" | "result";
 type Ending = { choice: "verify" | "family_contact" | "stop" | "comply" | "share"; stage: "receipt" | "review" };
 type Session = {
   token: string;
+  topic?: TrainingTopicId;
   title?: string;
   messages: Message[];
   turns: number;
@@ -71,11 +73,8 @@ async function request(payload: object): Promise<Reply> {
   return data as Reply;
 }
 
-function contactTitle(title?: string): string {
-  if (title?.includes("가족")) return "처음 보는 번호";
-  if (title?.includes("택배")) return "배송 안내";
-  if (title?.includes("은행")) return "거래 안내";
-  return "새 메시지";
+function contactTitle(topic?: TrainingTopicId): string {
+  return topic ? topicDescriptor(topic).contactLabel : "새 메시지";
 }
 
 // 결과 화면에서 가족 질문 화면으로 나갔다 돌아올 때 결과를 복원한다.
@@ -154,7 +153,9 @@ export default function RealTraining() {
     phoneHintShown.current = false;
     setBusy(true);
     try {
-      const initial = await request({ action: "start" });
+      const topic = new URLSearchParams(window.location.search).get("topic");
+      // 서버가 주제 허용 목록을 검사하며 정상/사칭 배역은 매번 내부에서 결정한다.
+      const initial = await request({ action: "start", ...(topic ? { topic } : {}) });
       setSession(initial);
       // 새로운 훈련 시작 시에만 확인한다. 결과 화면으로 돌아올 때는 띄우지 않는다.
       try {
@@ -253,7 +254,7 @@ export default function RealTraining() {
       // 빠른 응답도 잠깐 입력 중을 보여 준다. 지연된 답은 추가로 늦추지 않는다.
       const remaining = Math.max(0, 840 - (Date.now() - sentAt));
       if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
-      setSession({ ...next, title: session.title });
+      setSession({ ...next, title: session.title, topic: session.topic });
       setPendingMessage(null);
       // 정체/위험도를 추측하지 않고, 방금 등장한 구체적 행동 요청이나 사용자의
       // 외부 확인 의사만 참고한다. 단순히 두 턴 지났다는 이유로 정답 힌트를 주지 않는다.
@@ -378,8 +379,6 @@ export default function RealTraining() {
     const feedback = result.behavior;
     const hasFamilyQuestion = familyReady && familyQuestion.trim();
     const nextPromise = feedback.promises.find(p => !p.practiced) ?? feedback.promises[0];
-    const shortPromise = (id: string) => id === "verify" ? "독립 확인" :
-      id === "hold" ? "돈·정보 보류" : "가족과 상의";
     return (
       <Screen>
         <Header title="정체 확인" back={() => setReviewPage("feedback")} />
@@ -411,7 +410,7 @@ export default function RealTraining() {
                 {feedback.promises.map((promise, index) => (
                   <div className="fb-promise-tile" key={promise.id}>
                     <span className="fb-promise-number">0{index + 1}</span>
-                    <strong>{shortPromise(promise.id)}</strong>
+                    <strong>{promise.title}</strong>
                     <span className={promise.practiced ? "fb-promise-status fb-promise-status--done" : "fb-promise-status"}>
                       {promise.practiced ? "✓ 이번에 실천" : "다음에 기억"}
                     </span>
@@ -451,7 +450,7 @@ export default function RealTraining() {
         {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
         <BottomCTA row>
           <button className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
-          <button className="btn btn--primary" onClick={() => router.replace("/roleplay/mode")}>다시 연습하기</button>
+          <button className="btn btn--primary" onClick={() => router.replace("/roleplay/select")}>다시 연습하기</button>
         </BottomCTA>
       </Screen>
     );
@@ -555,9 +554,8 @@ export default function RealTraining() {
     );
   }
 
-  const contact = contactTitle(session?.title);
-  const phoneTopic = session?.title?.includes("가족") ? "family" :
-    session?.title?.includes("택배") ? "delivery" : "bank";
+  const contact = contactTitle(session?.topic);
+  const phoneTopic: TrainingTopicId = session?.topic ?? "family";
   // 메시지의 서버 봉인 actionId를 그대로 사용한다. 패널에서 임의의 송금/번호를 만들지 않는다.
   const panelActions = (session?.messages ?? []).flatMap((message, sourceIndex) =>
     message.actor === "them"
@@ -572,7 +570,7 @@ export default function RealTraining() {
   return (
     <main className="screen rt-screen">
       <header className="rt-header">
-        <button type="button" className="rt-nav-back" onClick={() => router.replace("/roleplay/mode")} aria-label="뒤로 가기">
+        <button type="button" className="rt-nav-back" onClick={() => router.replace("/roleplay/select")} aria-label="뒤로 가기">
           <span aria-hidden="true">‹</span>
         </button>
         <div className="rt-avatar" aria-hidden="true"><PersonIcon /></div>

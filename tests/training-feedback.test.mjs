@@ -49,7 +49,7 @@ test("independent verification promotes confirmed behavior rather than guessing 
     assert.equal(result.tone, "good");
     assert.ok(result.headline.includes("직접 확인"));
     assert.equal(result.promises[0].practiced, true);
-    assert.ok(result.good.some(point => point.keyword === "독립 확인"));
+    assert.ok(result.good.some(point => point.keyword.includes("직접 확인했어요")));
   }
 });
 
@@ -59,7 +59,7 @@ test("family consultation is not institution verification and includes follow-up
   const result = feedback(bank);
   assert.equal(result.promises[0].practiced, false);
   assert.equal(result.promises[2].practiced, true);
-  assert.ok(result.improve.some(x => x.keyword === "독립 확인"));
+  assert.ok(result.improve.some(x => x.keyword.includes("공식 앱이나 대표번호")));
   assert.ok(result.receipts[0].detail.includes("기관 확인"));
 });
 
@@ -75,7 +75,7 @@ test("a risky request alone does not award automatic restraint or a perfect scor
   s.events.push(event("stop"));
   const deliberatelyStopped = feedback(s);
   assert.equal(deliberatelyStopped.promises[1].practiced,true);
-  assert.ok(deliberatelyStopped.good.some(x=>x.keyword==="요청 보류"));
+  assert.ok(deliberatelyStopped.good.some(x=>x.keyword.includes("확인 전에는 돈과 정보를 보내지")));
 });
 
 test("sensitive information, links and sender-provided phone are reported as distinct choices", () => {
@@ -84,9 +84,9 @@ test("sensitive information, links and sender-provided phone are reported as dis
   const result = feedback(s);
   assert.equal(result.tone,"caution");
   assert.equal(result.receipts.length,3);
-  assert.ok(result.improve.some(x=>x.keyword==="정보 보호"));
-  assert.ok(result.improve.some(x=>x.keyword==="문자 링크"));
-  assert.ok(result.improve.some(x=>x.keyword==="연락처 확인"));
+  assert.ok(result.improve.some(x=>x.keyword.includes("개인정보를 보내기 전에")));
+  assert.ok(result.improve.some(x=>x.keyword.includes("문자 속 링크를")));
+  assert.ok(result.improve.some(x=>x.keyword.includes("상대가 알려준 번호")));
   assert.equal(result.promises[1].practiced,false);
 });
 

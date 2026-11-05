@@ -6,7 +6,7 @@ import { BottomCTA, Header, Notice, Screen } from "@/components/ui";
 
 type Mode = "chat" | "case";
 const OPTIONS: { id: Mode; title: string; desc: string; icon: string; size: number }[] = [
-  { id: "chat", title: "실전 대화에 참여하기", desc: "AI와 직접 대화하고 안전하게 확인해요.", icon: "/images/icon-chat.png", size: 54 },
+  { id: "chat", title: "실전 대화에 참여하기", desc: "9가지 상황 중 직접 고르거나 무작위로 연습해요.", icon: "/images/icon-chat.png", size: 54 },
   { id: "case", title: "사례로 먼저 배우기", desc: "진행되는 대화를 보며 위험한 순간을 익혀요.", icon: "/images/fish-clipboard.png", size: 54 },
 ];
 
@@ -41,7 +41,7 @@ export default function RoleplayMode() {
         </div>
       </section>
       <BottomCTA>
-        <button className="btn btn--primary" onClick={() => router.push(mode === "chat" ? "/roleplay/chat" : "/roleplay/case")}>
+        <button className="btn btn--primary" onClick={() => router.push(mode === "chat" ? "/roleplay/select" : "/roleplay/case")}>
           {mode === "chat" ? "실전 대응 훈련 시작" : "사례 학습 시작"}
         </button>
       </BottomCTA>
