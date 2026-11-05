@@ -131,21 +131,6 @@ export async function familySize(): Promise<number | null> {
   }
 }
 
-/** 지금 이 가족에게 내 결과를 보여주는 중인지. 가족이 없거나 오프라인이면 null */
-export async function shareResults(): Promise<boolean | null> {
-  const fid = configured() ? load(KEY_FAMILY) : null;
-  if (!fid) return null;
-  try {
-    await ensureAnon();
-    const { data: me } = await sb().auth.getUser();
-    const { data, error } = await sb().from("family_members").select("share_results").eq("family_id", fid).eq("user_id", me.user!.id).maybeSingle();
-    if (error) throw error;
-    return data?.share_results ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** 이 가족에게 내 연습 결과를 보여줄지 (가족별 동의, 기본 꺼짐). 성공 여부 반환 */
 export async function setShareResults(share: boolean): Promise<boolean> {
   const fid = configured() ? load(KEY_FAMILY) : null;
@@ -189,6 +174,19 @@ export async function familyOverview(): Promise<FamilyMemberSummary[] | null> {
   } catch (e) {
     console.warn("가족 요약 불러오기 실패", e);
     return null;
+  }
+}
+
+/** 별명을 정하거나 바꾸면 가족 목록 이름도 맞춤 (초대 링크로 먼저 들어와 이름이 비어 있던 경우 포함). 실패해도 무시 */
+export async function syncFamilyNickname(nickname: string): Promise<void> {
+  const fid = configured() ? load(KEY_FAMILY) : null;
+  if (!fid || !nickname) return;
+  try {
+    await ensureAnon();
+    const { data: me } = await sb().auth.getUser();
+    await sb().from("family_members").update({ nickname: nickname.slice(0, 20) }).eq("family_id", fid).eq("user_id", me.user!.id);
+  } catch {
+    /* 다음에 별명을 바꿀 때 다시 시도 */
   }
 }
 

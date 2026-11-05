@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { syncFamilyNickname } from "@/lib/invite";
 
 /**
  * 앱 전역 상태.
@@ -52,6 +53,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const setNickname = useCallback((v: string) => {
     setNick(v);
     write(KEY_NICK, v);
+    void syncFamilyNickname(v);
   }, []);
   const setFamilyQuestion = useCallback((v: string) => {
     setQ(v);

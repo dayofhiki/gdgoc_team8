@@ -229,8 +229,10 @@ const { count } = await sb().from("family_members").select("user_id", { count: "
 | 4 | `/roleplay/chat` 안전 약속 공유 | `familyShareUrl()` 링크로 공유 | ✅ 완료 |
 | 5 | `QuizRunner` 결과 화면 | `saveRecord({ kind: quiz/challenge, score, total })` 1회 | ✅ 완료 |
 | 6 | `/roleplay/chat` 결과 | `saveRecord({ kind: "training", title, safe })` | ✅ 완료 |
-| 7 | 공유 동의 | 홈 "가족에게 내 연습 결과 보여주기" → `shareResults()` / `setShareResults()` (가족 연결 시에만 보임) | ✅ 완료 |
-| 8 | 보호자 화면 (새 화면) | `familyOverview()` 결과를 그대로 렌더링 | ❌ 새 화면 |
+| 7 | 공유 동의 | `/family-practice` "가족에게 내 연습 결과 보여주기" → `setShareResults()` | ✅ 완료 |
+| 7-1 | 연결된 가족 목록 | `/family-practice` → `familyOverview()` 별명 | ✅ 완료 |
+| 7-2 | 링크 입장 시 이름 | 기존 흐름 그대로 (초대 링크 → 온보딩 → 홈). 온보딩에서 별명을 저장하면 `syncFamilyNickname()`이 가족 목록 이름을 맞춤 (`AppState.setNickname`) | ✅ 완료 |
+| 8 | 보호자 화면 | `/family-practice` → `familyOverview()` | ✅ 완료 |
 | - | 홈 (선택) | `familySize()`로 "연결된 가족 N명" | 선택 |
 | - | 가족 질문 표시 (선택) | `familyQuestions()` → 우리 가족 질문 목록 (최신순) | 선택 |
 
