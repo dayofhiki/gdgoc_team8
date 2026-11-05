@@ -526,12 +526,14 @@ test("entry flow separates unannounced real-life practice from focused scenario 
   const { readFileSync } = await import("node:fs");
   const selector = readFileSync(new URL("../src/app/roleplay/select/page.tsx", import.meta.url), "utf8");
   const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  const home = readFileSync(new URL("../src/app/home/page.tsx", import.meta.url), "utf8");
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   assert.match(mode, /실전 훈련/);
   assert.match(mode, /어떤 연락이 올지 모릅니다/);
   assert.match(mode, /상황별 연습/);
-  assert.match(mode, /사례로 배우기/);
+  assert.doesNotMatch(mode, /사례로 배우기/);
+  assert.match(home, /사례로 배우기/);
   assert.match(mode, /path: "\/roleplay\/chat"/);
   assert.match(mode, /path: "\/roleplay\/select"/);
   assert.match(selector, /상황별 연습/);
@@ -540,6 +542,9 @@ test("entry flow separates unannounced real-life practice from focused scenario 
   assert.match(selector, /\/roleplay\/chat\?topic=/);
   assert.match(mode, /\/roleplay\/select/);
   assert.match(chat, /new URLSearchParams\(window\.location\.search\)\.get\("topic"\)/);
+  assert.match(chat, /router\.replace\("\/home"\)\}>홈으로<\/button>/);
+  assert.match(chat, /다음 실전 훈련/);
+  assert.match(chat, /다른 상황 고르기/);
   assert.match(route, /if \(body\.topic !== undefined && !isTrainingTopicId\(body\.topic\)\)/);
   assert.match(route, /topicIndex \* 2 \+ 1/);
   assert.match(route, /topic: scenario\.topic/);
