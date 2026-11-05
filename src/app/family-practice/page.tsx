@@ -45,7 +45,7 @@ export default function FamilyPractice() {
       <Header title="우리 가족 연습 리포트" back={() => router.replace("/home")} />
       <section className="screen__body family-practice">
         <section className="family-report__hero">
-          <p className="hero__chip">가족과 함께하기</p>
+          <p className="chip">가족과 함께하기</p>
           <h2>한 번 연습한 상황, 가족과 다시</h2>
           <p>가족이 공유한 최근 연습을 살펴보고, 같은 상황에 어떻게 대응할지 함께 이야기해 보세요.</p>
           {members && members.length > 0 && <strong>연결된 가족 {members.length}명</strong>}

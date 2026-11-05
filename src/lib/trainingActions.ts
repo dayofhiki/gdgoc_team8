@@ -7,7 +7,7 @@ export type Origin = "installed" | "preexisting" | "sender";
 export type Proposed = { kind: Kind; origin: Origin; target: string; task: string; previewTitle: string; previewDescription: string };
 export type Action = {
   id: string; kind: Kind; origin: Origin; target: string; task: string; label: string;
-  linkPreview?: { url: string; domain: string; title: string; description: string; interaction?: "install" };
+  linkPreview?: { url: string; domain: string; title: string; description: string; pageField?: string; interaction?: "install" };
 };
 const KINDS: Kind[] = ["app", "phone", "link", "transfer", "provide_data"];
 const ORIGINS: Origin[] = ["installed", "preexisting", "sender"];

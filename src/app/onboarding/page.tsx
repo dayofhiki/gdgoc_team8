@@ -102,13 +102,13 @@ export default function Onboarding() {
 
       {step < 4 ? (
         <BottomCTA>
-          <button className="btn btn--primary btn--lg" style={{ fontWeight: 600 }} onClick={() => setStep(step + 1)}>
+          <button className="btn btn--primary btn--lg" onClick={() => setStep(step + 1)}>
             다음으로
           </button>
         </BottomCTA>
       ) : (
         <BottomCTA>
-          <button className="btn btn--primary btn--lg" style={{ fontWeight: 600 }} disabled={!trimmed} onClick={() => finish("/home")}>
+          <button className="btn btn--primary btn--lg" disabled={!trimmed} onClick={() => finish("/home")}>
             나 혼자 시작하기
           </button>
           <button className="btn btn--outline" disabled={!trimmed} onClick={() => finish("/invite")}>

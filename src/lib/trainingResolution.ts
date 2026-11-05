@@ -31,13 +31,25 @@ function actualRequestInText(input: string): boolean {
 }
 
 /** 단순 연락·설명은 제외. 배우가 실제로 제시한 선택/요구만 진행의 증거로 삼는다. */
-export function hasConcreteRequest(messages: Message[]): boolean {
-  return messages.some(m => m.actor === "them" && (
+function isRequestMessage(m: Message): boolean {
+  return m.actor === "them" && (
     (m.actions ?? []).some(a => requestKinds.has(a.kind) ||
       (a.kind === "phone" && a.origin === "sender")) ||
     (m.offers ?? (m.offer ? [m.offer] : [])).some(v => legacyRequests.has(v)) ||
     actualRequestInText(m.text)
-  ));
+  );
+}
+
+export function hasConcreteRequest(messages: Message[]): boolean {
+  return messages.some(isRequestMessage);
+}
+
+/** After two follow-up replies, leave the next move to the learner. */
+export function requestHasTwoReplies(messages: Message[]): boolean {
+  const latestAction = messages.findLastIndex(m => m.actor === "them" &&
+    m.actions?.some(a => a.origin === "sender" && (requestKinds.has(a.kind) || a.kind === "phone")));
+  const checkpoint = latestAction >= 0 ? latestAction : messages.findIndex(isRequestMessage);
+  return checkpoint >= 0 && messages.slice(checkpoint + 1).filter(m => m.actor === "me").length >= 2;
 }
 
 /** 사칭 의심 질문은 대화 중단이 아니다. 사용자 스스로 분명히 거절했는지만 판단한다. */

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertIcon, CheckIcon, ChevronRight, PersonIcon, ShieldIcon } from "@/components/Icons";
+import { AlertIcon, BackIcon, CheckIcon, ChevronRight, PersonIcon, ShieldIcon } from "@/components/Icons";
 import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
 import { actionChoice, type Action } from "@/lib/trainingActions";
 import { useAppState } from "@/components/AppState";
@@ -35,6 +35,7 @@ type Result = {
   topic?: TrainingTopicId;
   coverage?: "early" | "conversation_only" | "request_reached";
   behavior: BehaviorFeedback;
+  caseSource?: { name: string; url: string; detail?: string };
   truthLabel: string;
   purpose: string;
   checked: boolean;
@@ -86,14 +87,14 @@ function recentCases(): Record<string, number[]> {
     return Object.fromEntries(Object.entries(raw)
       .filter(([topic, indices]) => typeof topic === "string" && Array.isArray(indices))
       .map(([topic, indices]) => [topic, (indices as unknown[]).filter(
-        (v): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < 20).slice(-2)]));
+        (v): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < 20).slice(-8)]));
   } catch { return {}; }
 }
 function rememberCase(topic?: TrainingTopicId, variant?: number) {
   if (!topic || variant === undefined || !Number.isInteger(variant)) return;
   try {
     const history = recentCases();
-    history[topic] = [...(history[topic] ?? []).filter(i => i !== variant), variant].slice(-2);
+    history[topic] = [...(history[topic] ?? []).filter(i => i !== variant), variant].slice(-8);
     sessionStorage.setItem(RECENT_CASES_KEY, JSON.stringify(history));
   } catch { /* 저장소가 꺼져도 훈련은 정상 진행 */ }
 }
@@ -153,6 +154,12 @@ export default function RealTraining() {
   const finishInFlight = useRef(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [typingVisible, setTypingVisible] = useState(false);
+
+  useEffect(() => {
+    if (!shareNotice) return;
+    const timer = setTimeout(() => setShareNotice(""), 5000);
+    return () => clearTimeout(timer);
+  }, [shareNotice]);
 
   async function start(replayTopic?: TrainingTopicId) {
     const url = new URL(location.href);
@@ -479,7 +486,13 @@ export default function RealTraining() {
                   <strong>{result.identity === "fraud" ? "사칭 연락" : "실제 연락"}</strong>
                   <p>{result.purpose}</p>
                   <p>{result.verificationEvidence}</p>
-                  <p className="fb-note">이는 가상 시나리오의 설정이에요. 이번 훈련에서 실제로 선택한 행동은 앞쪽 피드백에서 확인할 수 있어요.</p>
+                  <p className="fb-note">이 대화는 공개된 수법을 바탕으로 재구성한 교육용 상황이에요.</p>
+                  {result.caseSource && (
+                    <>
+                      {result.caseSource.detail && <p>{result.caseSource.detail}</p>}
+                      <a href={result.caseSource.url} target="_blank" rel="noopener noreferrer">{result.caseSource.name} 원문 보기 ↗</a>
+                    </>
+                  )}
                 </div>
               </details>
             </section>
@@ -591,7 +604,7 @@ export default function RealTraining() {
     <main className="screen rt-screen">
       <header className="rt-header">
         <button type="button" className="rt-nav-back" onClick={() => router.replace(liveEntry ? "/roleplay/mode" : "/roleplay/select")} aria-label="뒤로 가기">
-          <span aria-hidden="true">‹</span>
+          <BackIcon />
         </button>
         <div className="rt-avatar" aria-hidden="true"><PersonIcon /></div>
         <div className="rt-contact">
@@ -793,8 +806,8 @@ export default function RealTraining() {
             <div className="rt-browser-content">
               <span className="rt-browser-symbol" aria-hidden="true">▣</span>
               <h2>{activeLink.title}</h2>
-              <p>{activeLink.interaction === "install" ? "이 페이지에서 원격 지원 앱을 설치할까요?" : "정보 확인을 위해 아래 항목을 작성하시겠어요?"}</p>
-              <div className="rt-browser-field">{activeLink.description}</div>
+              <p>{activeLink.interaction === "install" ? "안내를 보려면 앱을 설치해 주세요." : "정보 확인을 위해 아래 항목을 작성하시겠어요?"}</p>
+              <div className="rt-browser-field">{activeLink.pageField ?? activeLink.description}</div>
               <button className="btn btn--primary" disabled={busy} onClick={() => void perform(activeLink.interaction === "install" ? "install" : "share", previewIndex, previewActionId ?? undefined)}>
                 {activeLink.interaction === "install" ? "앱을 설치한 것으로 선택" : "정보 입력 후 전송"}
               </button>

@@ -36,10 +36,9 @@ export function riskDecisionDue(state: TrainingState, scenario: Scenario, userTe
     !clearlyDisengaged(userText);
 }
 
-export function meaningfulRiskRequest(reply: string, proposals: Proposed[], topic?: Scenario["topic"]): boolean {
+export function meaningfulRiskRequest(reply: string, proposals: Proposed[]): boolean {
   return groundedProposals(reply, proposals, undefined, "fraud").some(a =>
-    a.origin === "sender" && (topic === "team_mission"
-      ? a.kind === "transfer" : ["transfer", "link", "provide_data", "phone"].includes(a.kind)));
+    a.origin === "sender" && ["transfer", "link", "provide_data", "phone"].includes(a.kind));
 }
 
 export function bankQuestionNeedsSpecifics(userText: string): boolean {
@@ -73,7 +72,7 @@ export function replyQualityIssue(
   }
   if (riskDecisionDue(state, scenario, userText)) {
     const expected = caseBranch(scenario, state.caseVariant ?? 0);
-    if (!meaningfulRiskRequest(reply, actions, scenario.topic) ||
+    if (!meaningfulRiskRequest(reply, actions) ||
       !actions.some(action => action.kind === expected.kind && action.origin === "sender")) {
       return "이제 상대가 선택해야 할 구체적인 잘못된 요청을 한 가지 제시할 차례입니다. 이번 사건에 지정된 요청만 수행하세요: " +
         expected.request + ". 대사에 이를 명시하고 actions 배열에도 kind=" + expected.kind +

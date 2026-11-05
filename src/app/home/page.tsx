@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
-import { CheckIcon, ChevronRight, LockIcon, SendIcon } from "@/components/Icons";
+import { ChevronRight, FlagIcon, LockIcon, SendIcon } from "@/components/Icons";
 import { Screen } from "@/components/ui";
 import { randomTrainingTopic, type TrainingTopicId, topicDescriptor } from "@/lib/trainingCatalog";
 
@@ -56,7 +56,12 @@ export default function Home() {
               <ChevronRight />
             </Link>
             <Link href="/quiz" className="list-row">
-              <span className="list-row__icon"><CheckIcon /></span>
+              <span className="list-row__icon">
+                <span className="ox-badges ox-badges--sm">
+                  <span className="ox-badge" style={{ background: "var(--blue)" }}>O</span>
+                  <span className="ox-badge" style={{ background: "var(--red)" }}>X</span>
+                </span>
+              </span>
               <span className="list-row__text">
                 <span className="list-row__title">OX 퀴즈</span>
                 <span className="list-row__desc">매번 새로운 10문제와 틀린 개념 복습</span>
@@ -88,7 +93,7 @@ export default function Home() {
               <ChevronRight />
             </Link>
             <Link href="/family-practice" className="list-row">
-              <span className="list-row__icon"><CheckIcon /></span>
+              <span className="list-row__icon"><FlagIcon /></span>
               <span className="list-row__text">
                 <span className="list-row__title">우리 가족 연습 리포트</span>
                 <span className="list-row__desc">가족이 공유한 결과를 보고 함께 복습해요</span>

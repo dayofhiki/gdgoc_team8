@@ -69,3 +69,20 @@ test("training never jumps automatically from action receipt to feedback", () =>
   assert.doesNotMatch(phone, /이 문자 대화 끝내기/);
   assert.match(phone, /setScreen\("outcome"\)/);
 });
+
+test("offers a statement at the opening and a bounded, actionable refusal after the request", async () => {
+  const { clearlyDisengaged, requestHasTwoReplies } = await import("../src/lib/trainingResolution.ts");
+  const opening = trainingReplyExamples("invitation", [them("우리 딸이 다음 달에 결혼해요.")]);
+  assert.ok(opening.includes("결혼 축하해요."));
+  for (const kind of ["phone", "link", "provide_data", "transfer"]) {
+    const messages = [them("아래 내용을 확인해 주세요.", [{ kind, origin: "sender" }]),
+      me("무슨 일인가요?"), them("이 절차를 거치셔야 합니다.")];
+    const replies = trainingReplyExamples("bank", messages);
+    assert.ok(clearlyDisengaged(replies[0]), kind);
+    assert.equal(requestHasTwoReplies(messages), false);
+    messages.push(me("다른 방법은 없나요?"), them("이 방법으로만 가능합니다."));
+    assert.equal(requestHasTwoReplies(messages), true);
+    messages.push(them("새로 보내드린 인증번호를 알려주세요.", [{ kind: "provide_data", origin: "sender" }]));
+    assert.equal(requestHasTwoReplies(messages), false);
+  }
+});

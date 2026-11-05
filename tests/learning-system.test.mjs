@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { QUIZ, quizCategory, pickQuiz } from "../src/lib/quiz.ts";
 import { CASE_STORIES } from "../src/lib/caseStories.ts";
 import { CASE_EXPERIENCES } from "../src/lib/caseExperience.ts";
-import { CASE_VARIANT_COUNT, caseBranch } from "../src/lib/trainingCaseFacts.ts";
+import { caseVariantCount, caseBranch } from "../src/lib/trainingCaseFacts.ts";
 import { TRAINING_TOPICS } from "../src/lib/trainingCatalog.ts";
 import { SCENARIOS } from "../src/lib/realTraining.ts";
 import { fallbackTrainingTurn } from "../src/lib/trainingFallback.ts";
@@ -35,7 +35,7 @@ test("OX supports targeted retry and gives preference to prior mistakes", () => 
   }
 });
 
-test("case records have verifiable sources and offer meaningful rewind actions", () => {
+test("case records have verifiable sources and offer a forward comparison of actions", () => {
   assert.ok(CASE_STORIES.length >= 6);
   assert.equal(new Set(CASE_STORIES.map(story => story.id)).size, CASE_STORIES.length);
   for (const story of CASE_STORIES) {
@@ -51,13 +51,18 @@ test("case records have verifiable sources and offer meaningful rewind actions",
     assert.ok(story.actions.every(a => a.effect.length > 20 && a.followUp.length > 10));
   }
   const page = readFileSync(new URL("../src/app/roleplay/case/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /사건 되감기/);
+  assert.match(page, /선택할 순간/);
   assert.match(page, /기관 원문 자료 확인하기/);
   assert.doesNotMatch(page, /setTimeout/); // seniors must advance at their own pace
   assert.doesNotMatch(page, /실전에서 연습|실전 연습|\/roleplay\/chat\?topic=/);
   assert.match(page, /case-play-device/);
   assert.match(page, /case-play-action-option/);
-  assert.match(page, /다른 행동 해보기/);
+  assert.match(page, /다른 대응과 비교/);
+  assert.match(page, /내가 고른 행동/);
+  assert.doesNotMatch(page, /다른 행동 해보기|setPhase\("retry"\)/);
+  const invitation = CASE_STORIES.find(item => item.id === "invitation");
+  assert.deepEqual(invitation.events.slice(0, 3).map(event => event.surface), [undefined, "notice", "page"]);
+  assert.match(invitation.events[1].text, /링크를 열어 봤어요/);
   assert.match(page, /<details className="case-play-sources">/);
   assert.match(page, /setPhase\("outcome"\)/);
   assert.match(page, /case-play-my-route/);
@@ -73,23 +78,20 @@ test("case records have verifiable sources and offer meaningful rewind actions",
   }
 });
 
-test("eleven topics contain forty-four genuinely different case premises and bounded pacing", () => {
+test("eleven topics contain fifty-six genuinely different case premises and bounded pacing", () => {
   assert.equal(TRAINING_TOPICS.length, 11);
-  assert.equal(CASE_VARIANT_COUNT, 4);
   const all = [];
   for (const scenario of SCENARIOS.filter(s => s.identity === "fraud")) {
-    const branches = Array.from({ length: CASE_VARIANT_COUNT }, (_, n) => caseBranch(scenario, n));
-    assert.equal(new Set(branches.map(b => b.incident)).size, 4, scenario.topic);
-    assert.equal(new Set(branches.map(b => b.opening)).size, 4, scenario.topic);
-    assert.equal(new Set(branches.map(b => b.request)).size, 4, scenario.topic);
+    const branches = Array.from({ length: caseVariantCount(scenario) }, (_, n) => caseBranch(scenario, n));
+    assert.equal(new Set(branches.map(b => b.incident)).size, branches.length, scenario.topic);
+    assert.equal(new Set(branches.map(b => b.opening)).size, branches.length, scenario.topic);
+    assert.equal(new Set(branches.map(b => b.request)).size, branches.length, scenario.topic);
     assert.ok(branches.every(b => b.context.length > 12 && b.request.length > 15), scenario.topic);
     assert.ok(branches.every(b => b.facts.length > 30 && b.sourceUrl.startsWith("https://")));
     assert.ok(branches.every(b => [0, 1, 2].includes(b.requestAfterTurns)), scenario.topic);
     assert.ok(branches.some(b => b.requestAfterTurns === 0) && branches.some(b => b.requestAfterTurns === 2), scenario.topic);
-    if (scenario.topic === "team_mission") assert.ok(branches.every(b => b.kind === "transfer"));
-    if (scenario.topic !== "team_mission") {
-      assert.ok(new Set(branches.map(b => b.kind)).size >= 2, scenario.topic);
-    }
+    assert.ok(new Set(branches.map(b => b.kind)).size >= 2, scenario.topic);
+    assert.ok(branches.length > 4 && branches.slice(4).every(branch => branch.sourceDetail?.length > 20));
     for (const [variant, branch] of branches.entries()) {
       const state = {
         version: 1, scenario: Number(scenario.id.split("-")[0]) * 2 + 1,
@@ -101,13 +103,13 @@ test("eleven topics contain forty-four genuinely different case premises and bou
       assert.ok(turn.reply.includes(branch.request), scenario.topic + "/" + variant);
       assert.equal(turn.actions[0]?.kind, branch.kind, scenario.topic + "/" + variant);
       assert.equal(turn.actions[0]?.origin, "sender");
-      assert.ok(meaningfulRiskRequest(turn.reply, turn.actions, scenario.topic), scenario.topic + "/" + variant);
+      assert.ok(meaningfulRiskRequest(turn.reply, turn.actions), scenario.topic + "/" + variant);
       assert.ok(branch.alternateOpening.length >= 10);
       all.push(branch.id);
     }
   }
-  assert.equal(all.length, 44);
-  assert.equal(new Set(all).size, 44);
+  assert.equal(all.length, 56);
+  assert.equal(new Set(all).size, 56);
 });
 
 test("the chat API fixes a branch in the sealed state and prevents action drift", () => {

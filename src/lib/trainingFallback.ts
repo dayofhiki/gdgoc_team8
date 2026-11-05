@@ -20,7 +20,7 @@ export function fallbackTrainingTurn(state: TrainingState, scenario: Scenario, t
   const bankClaim = BANK_CLAIMS[state.caseVariant ?? 0];
   const previous = state.dialogue?.lastReply;
   const topicIndex = Number(scenario.id.split("-")[0]);
-  const authored = FALLBACK_SCENE_LINES[topicIndex][state.caseVariant ?? 0];
+  const authored = FALLBACK_SCENE_LINES[topicIndex][state.caseVariant ?? 0] ?? [beat.context, beat.followUp ?? beat.context];
   const context = specific ? bankClaim : authored[Math.min(state.turns, 1)];
   const ask = riskDecisionDue(state, scenario, text);
   let reply = context;
