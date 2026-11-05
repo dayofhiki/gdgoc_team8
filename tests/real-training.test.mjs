@@ -633,7 +633,9 @@ test("bank transaction facts are fictional and specific enough to answer 'what t
   assert.match(introIssue, /거래 유형과 금액/);
   assert.equal(replyQualityIssue(bank, s, "무슨 거래인데요?",
     "모바일 상품권 48만 원 결제 시도가 있었다는 연락입니다.", []), undefined);
-  s.turns = 1;
+  s.turns = 2;
+  assert.equal(riskDecisionDue(s, bank, "제가 한 거래가 아닌데요."), false);
+  s.turns = 3;
   assert.equal(riskDecisionDue(s, bank, "제가 한 거래가 아닌데요."), true);
   assert.match(replyQualityIssue(bank, s, "제가 한 거래가 아닌데요.",
     "본인 거래가 맞는지 확인 부탁드립니다.", []), /잘못된 요청/);
@@ -670,7 +672,7 @@ test("AI cannot silently replace an actionable fraud choice with an official app
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   assert.match(route, /replyQualityIssue\(scenario, state, text, reply, first\.value\.actions\)/);
   assert.match(route, /INCOMPLETE_TRAINING_DECISION/);
-  assert.match(route, /caseBranch\(scenario, state\.caseVariant \?\? 0\)\.incident/);
+  assert.match(route, /branch\.incident/);
 });
 
 test("a bank app lookup is inconclusive but the independent callback can resolve the same request", () => {

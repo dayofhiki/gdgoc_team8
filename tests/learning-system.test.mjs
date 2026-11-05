@@ -8,7 +8,7 @@ import { caseVariantCount, caseBranch } from "../src/lib/trainingCaseFacts.ts";
 import { TRAINING_TOPICS } from "../src/lib/trainingCatalog.ts";
 import { SCENARIOS } from "../src/lib/realTraining.ts";
 import { fallbackTrainingTurn } from "../src/lib/trainingFallback.ts";
-import { meaningfulRiskRequest } from "../src/lib/trainingDecision.ts";
+import { isActionableReply, meaningfulRiskRequest, replyQualityIssue } from "../src/lib/trainingDecision.ts";
 
 test("OX uses 50 unique source-authored questions and a balanced ten-question session", () => {
   assert.equal(QUIZ.length, 50);
@@ -88,17 +88,33 @@ test("eleven topics contain fifty-six genuinely different case premises and boun
     assert.equal(new Set(branches.map(b => b.request)).size, branches.length, scenario.topic);
     assert.ok(branches.every(b => b.context.length > 12 && b.request.length > 15), scenario.topic);
     assert.ok(branches.every(b => b.facts.length > 30 && b.sourceUrl.startsWith("https://")));
-    assert.ok(branches.every(b => [0, 1, 2].includes(b.requestAfterTurns)), scenario.topic);
-    assert.ok(branches.some(b => b.requestAfterTurns === 0) && branches.some(b => b.requestAfterTurns === 2), scenario.topic);
+    assert.ok(branches.every(b => [1, 2, 3].includes(b.requestAfterTurns)), scenario.topic);
+    assert.ok(branches.some(b => b.requestAfterTurns === 1) && branches.some(b => b.requestAfterTurns === 3), scenario.topic);
     assert.ok(new Set(branches.map(b => b.kind)).size >= 2, scenario.topic);
     assert.ok(branches.length > 4 && branches.slice(4).every(branch => branch.sourceDetail?.length > 20));
     for (const [variant, branch] of branches.entries()) {
       const state = {
         version: 1, scenario: Number(scenario.id.split("-")[0]) * 2 + 1,
-        caseVariant: variant, createdAt: Date.now(), turns: branch.requestAfterTurns,
+        caseVariant: variant, createdAt: Date.now(), turns: 0,
         messages: [{ actor: "them", text: branch.opening }],
         events: [], verification: "none", closed: false,
       };
+      const scenes = new Set();
+      for (; state.turns < branch.requestAfterTurns; state.turns++) {
+        const lead = fallbackTrainingTurn(state, scenario, "네, 설명해 주세요.");
+        assert.equal(isActionableReply(lead.reply, lead.actions), false, branch.id + ": " + lead.reply);
+        assert.ok(!scenes.has(lead.reply), branch.id);
+        scenes.add(lead.reply);
+        state.messages.push({ actor: "me", text: "네, 설명해 주세요." }, { actor: "them", text: lead.reply });
+      }
+      const objection = "이거 사기 아니에요?";
+      const response = fallbackTrainingTurn(state, scenario, objection);
+      assert.equal(isActionableReply(response.reply, response.actions), false, branch.id);
+      assert.ok(!scenes.has(response.reply), branch.id);
+      const earlyOffer = [{ kind: branch.kind, origin: "sender", target: branch.target, task: branch.task, previewTitle: "", previewDescription: "" }];
+      assert.match(replyQualityIssue(scenario, state, objection, branch.request, earlyOffer), /아직/);
+      state.messages.push({ actor: "me", text: objection }, { actor: "them", text: response.reply });
+      state.turns++;
       const turn = fallbackTrainingTurn(state, scenario, "네, 설명해 주세요.");
       assert.ok(turn.reply.includes(branch.request), scenario.topic + "/" + variant);
       assert.equal(turn.actions[0]?.kind, branch.kind, scenario.topic + "/" + variant);

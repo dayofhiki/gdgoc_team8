@@ -35,8 +35,8 @@ const claimsVerification = (text: string) =>
 
 /** '그만 연락해'라는 사칭범에 대한 거절은 훈련 중단으로 취급하지 않는다. */
 export function isExplicitTrainingStop(text: string): boolean {
-  return /(?:연습|훈련|상황극)(?:을|은)?\s*(?:그만|중단|종료|끝내|멈춰|마칠)/.test(text) ||
-    /(?:그만|중단|종료|끝내|멈춰)\s*(?:할래|할게|해줘|하고싶어)?\s*(?:이\s*연습|이\s*훈련|이\s*상황극)/.test(text);
+  return /(?:연습|훈련|상황극)(?:을|은)?\s*(?:그만|중단|종료|끝내|끝낼|멈춰|멈출|마칠|마치)/.test(text) ||
+    /(?:그만|중단|종료|끝내|끝낼|멈춰|멈출)\s*(?:할래|할게|해줘|하고싶어)?\s*(?:이\s*연습|이\s*훈련|이\s*상황극)/.test(text);
 }
 
 export function learnerContext(messages: Message[], input: string): LearnerContext {

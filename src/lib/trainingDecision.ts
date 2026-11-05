@@ -24,16 +24,22 @@ export const SCENARIO_DECISIONS: Record<Scenario["topic"], string> = {
   health: "검진 안내를 설명한 뒤 문자 속 가상 예약·결과 확인 링크를 사용해 달라는 요청. 검사 결과나 질병은 지어내지 않는다.",
 };
 
+export function raisesObjection(text: string): boolean {
+  return /사기|피싱|수상|의심|믿기|본인\s*맞|누구세요|(?:너|정말|진짜).{0,10}(?:맞아|맞나요|맞으세요)|신청.{0,10}(?:안|없|않)|제가.{0,8}(?:한\s*(?:거래|결제|게).{0,5}아[니닌닙]|한\s*적\s*없)|(?:원래|기존|공식).{0,12}(?:번호|앱|연락)|왜.{0,12}(?:문자|전화|안내)/.test(text);
+}
+
 export function riskDecisionDue(state: TrainingState, scenario: Scenario, userText: string): boolean {
-  // 에피소드마다 다른 시점에 판단 기회를 배치하되, 세 번째 답장 안에 제시한다.
   const episode = caseBranch(scenario, state.caseVariant ?? 0);
-  const deniedCard = scenario.topic === "card" &&
-    /신청.{0,12}(?:안|없|않)|카드.{0,12}(?:없|아니)/.test(userText);
-  return scenario.identity === "fraud" &&
-    (state.turns >= episode.requestAfterTurns || deniedCard && episode.kind === "phone") &&
-    !state.closed &&
-    !hasConcreteRequest(state.messages) &&
-    !clearlyDisengaged(userText);
+  // 한 번은 새로 나온 의심을 받아 준다. 계속 의심해도 요구 시점이 무한히 밀리지는 않는다.
+  const respondFirst = state.turns === episode.requestAfterTurns && raisesObjection(userText);
+  return scenario.identity === "fraud" && state.turns >= episode.requestAfterTurns &&
+    !respondFirst && !state.closed && !hasConcreteRequest(state.messages) && !clearlyDisengaged(userText);
+}
+
+export function isActionableReply(reply: string, actions: Proposed[]): boolean {
+  return actions.some(action => action.origin === "sender") ||
+    hasConcreteRequest([{ actor: "them", text: reply }]) ||
+    /(?:이|아래|첨부한|적힌|안내한|보낸|저희)\s*번호로.{0,14}(?:전화|통화|연락)\s*(?:해|하|주)|(?:앱|프로그램).{0,10}설치\s*(?:해|하|가\s*필요)/.test(reply);
 }
 
 export function meaningfulRiskRequest(reply: string, proposals: Proposed[]): boolean {
@@ -70,7 +76,11 @@ export function replyQualityIssue(
       (!bankAnswerIsConcrete(reply) || (state.caseVariant !== undefined && !bankClaimMatches(reply, state.caseVariant)))) {
     return "상대가 '어떤 거래/얼마'인지 물었습니다. 세션에 고정된 가상 거래 유형과 금액을 자연스럽게 설명하세요. 그냥 '본인 확인 부탁드립니다'를 반복하지 마세요.";
   }
-  if (riskDecisionDue(state, scenario, userText)) {
+  const due = riskDecisionDue(state, scenario, userText);
+  if (scenario.identity === "fraud" && !due && isActionableReply(reply, actions)) {
+    return "지금은 아직 새 행동을 요구하지 말고, 직전 반응에 답하면서 설정에 맞는 설명을 한 가지 더 전하세요.";
+  }
+  if (due) {
     const expected = caseBranch(scenario, state.caseVariant ?? 0);
     if (!meaningfulRiskRequest(reply, actions) ||
       !actions.some(action => action.kind === expected.kind && action.origin === "sender")) {

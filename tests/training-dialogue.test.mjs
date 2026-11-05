@@ -286,6 +286,7 @@ test("SY-derived learner context separates speech claims, suspicion and real act
   assert.equal(learnerContext(history, "진짜 너 맞아?").suspectsSender, false);
   assert.equal(isExplicitTrainingStop("연습 그만할래요"), true);
   assert.equal(isExplicitTrainingStop("상황극 종료"), true);
+  assert.equal(isExplicitTrainingStop("이제 훈련을 끝낼게요."), true);
   assert.equal(isExplicitTrainingStop("그만 연락해"), false);
   assert.equal(isExplicitTrainingStop("돈은 안 보낼게요"), false);
 });
@@ -312,7 +313,7 @@ test("real training route handles explicit training stop and rejects invented ge
   const { readFileSync } = await import("node:fs");
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   assert.match(route, /if \(isExplicitTrainingStop\(text\)\)/);
-  assert.match(route, /recordChoice\(withMessage, scenario, "stop"\)/);
+  assert.match(route, /recordChoice\(state, scenario, "stop"\)/);
   assert.match(route, /scenario\.identity === "legitimate"/);
   assert.match(route, /groundedProposals\(reply, first\.value\.actions, auditActions, scenario\.identity\)/);
 });

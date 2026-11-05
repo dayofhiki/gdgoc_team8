@@ -146,11 +146,11 @@ function buildEpisodeActions(proposals: Proposed[], state: TrainingState) {
 
 async function generateResponse(state: TrainingState, text: string) {
   const scenario = SCENARIOS[state.scenario];
+  const turn = fallbackTrainingTurn(state, scenario, text);
   try {
-    return await generateActorResponse(state, text, scenario);
+    return await generateActorResponse(state, text, scenario, turn.reply);
   } catch (err) {
     console.warn("training: using authored continuation", scenario.topic, err instanceof Error ? err.name : "unknown");
-    const turn = fallbackTrainingTurn(state, scenario, text);
     const actions = buildEpisodeActions(turn.actions, state);
     const next = decideDialogueTurn({
       memory: state.dialogue, primary: turn.dialogue, reply: turn.reply, userText: text,
@@ -160,30 +160,39 @@ async function generateResponse(state: TrainingState, text: string) {
   }
 }
 
-async function generateActorResponse(state: TrainingState, text: string, scenario: (typeof SCENARIOS)[number]) {
+async function generateActorResponse(
+  state: TrainingState, text: string, scenario: (typeof SCENARIOS)[number], plannedReply: string,
+) {
   const available = trainingProviders();
   if (!available.length) throw new Error("AI_NOT_CONFIGURED");
   const dialogue = state.dialogue ?? INITIAL_DIALOGUE;
   const currentContext = learnerContext(state.messages, text);
+  const branch = caseBranch(scenario, state.caseVariant ?? 0);
+  const due = riskDecisionDue(state, scenario, text);
+  const hasRequest = hasConcreteRequest(state.messages);
   const instruction = [
     "당신은 사용자가 참여한 금융사기 예방 문자 훈련에서 실제 문자 대화 상대를 연기하는 배우다. 대사에 훈련·AI·시나리오라는 말을 꺼내지 않는다.",
     "당신은 훈련의 상대 인물을 연기하는 '배우'이며, 대화 종료·안전 평가·보안 정책은 서버가 결정한다.",
     "아래 역할 정보와 이미 오간 대화에서 확정된 사실을 일관되게 유지한다. 아직 정해지지 않은 세부사항을 새로운 사실로 만들어내지 않는다.",
     actorBrief(scenario, dialogue, state.turns, caseDetail(scenario, state.caseVariant ?? 0)),
     ...(scenario.identity === "fraud" ? [
-      "### 이번 훈련에서 사용자가 실제로 판단해야 할 위험한 요청",
-      "공통 주제 설명은 학습 범위일 뿐 사건의 줄거리가 아닙니다. 이번에 배정된 에피소드의 사실만 유지하세요.",
-      "이번 사건의 접촉 상황: " + caseBranch(scenario, state.caseVariant ?? 0).incident,
-      "발신자가 알고 있을 수 없는 사실: " + caseBranch(scenario, state.caseVariant ?? 0).factConstraint,
-      "이번 분기에서 실제로 제시할 잘못된 요청: " + caseBranch(scenario, state.caseVariant ?? 0).request,
-      "이 요청의 행동 종류: " + caseBranch(scenario, state.caseVariant ?? 0).kind +
-        ". 실제로 이 요청을 말할 때 actions에도 이 종류와 origin=sender를 지정한다.",
-      "이 사건의 정황: " + caseBranch(scenario, state.caseVariant ?? 0).context,
-      "사건마다 속도가 다릅니다. 이번 에피소드는 대화 답장 " +
-        (caseBranch(scenario, state.caseVariant ?? 0).requestAfterTurns + 1) +
-        "번째 무렵에 대응을 요구합니다. 사용자의 직전 질문에 먼저 답하면서 진행하세요. 세 번째 답장 뒤까지 배경 설명만 늘어놓지 마세요.",
-      "사용자가 이미 거절하거나 독립적으로 확인했다면 설득을 되풀이하지 말고 마무리합니다.",
-      "요청에 실제 번호·계좌·링크 주소·비밀번호·인증정보 값은 작성하지 않는다. 행동이 필요한 경우 대사에 요청을 분명하게 말하고 actions에도 해당 종류와 sender 출처를 기록한다.",
+      "### 이번 차례의 사건 진행",
+      "공통 주제 설명은 학습 범위일 뿐 줄거리가 아니다. 현재 사건의 사실만 사용한다.",
+      "이번 사건: " + branch.incident,
+      "화자가 말할 수 없는 사실: " + branch.factConstraint,
+      "직전 발화에 먼저 응답한 뒤 이번 차례에 허용된 정보만 전한다.",
+      "이번 차례에 활용할 사건 맥락(사용자 질문에 맞춰 자연스럽게 변형): " + plannedReply,
+      ...(due ? [
+        "이번 차례에 한 가지 요구를 구체적으로 제시한다: " + branch.request,
+        "요구가 대사에 실제로 등장하면 actions에 kind=" + branch.kind + ", origin=sender를 지정한다.",
+      ] : hasRequest ? [
+        "이미 요구를 보냈다. 반문이나 망설임에 한 번 짧게 응답하며, 이전 문구를 다시 보내거나 새 요구·새 질문을 꺼내지 않는다.",
+        "문자로 얘기했다고 해서 통화·송금·확인이 이미 일어났다고 가정하지 않는다. actions는 빈 배열이다.",
+      ] : [
+        "지금은 사용자가 믿을 만하다고 느낄 이유를 만드는 단계다. 접촉 이유, 절차의 근거, 관계나 상황의 구체적인 단서 중 아직 말하지 않은 것 한 가지만 자연스럽게 보탠다.",
+        "의심하면 의심한 이유에 먼저 답한다. 대화를 넘기기 위해 바로 송금, 정보 입력, 설치, 문자 속 링크나 번호를 요구하지 않는다. actions는 빈 배열이다.",
+      ]),
+      "실제 번호·계좌·링크 주소·비밀번호·인증정보 값은 작성하지 않는다.",
     ] : []),
     "### 학습자의 이번 발화와 반복 패턴(해석은 추정, 채점 근거 아님)",
     learnerTurnGuidance(currentContext, scenario.identity, state.events.length),
@@ -196,9 +205,6 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
     "이전 말풍선은 실제로 오간 대화다. 현재 상대의 입장에서 마지막 사용자의 질문·의심·감정에 먼저 반응하라.",
     "답변은 미리 정한 다음 대사를 읽는 방식이 아니다. 상황의 확정 사실, 화자의 목적, 현재 국면을 기준으로 즉흥적으로 결정하라.",
     "요청을 하고 싶더라도 사용자 말에 대한 응답 없이 기계적으로 송금·링크·정보 제공을 반복하지 마라.",
-    ...(hasConcreteRequest(state.messages) ? [
-      "상대가 판단할 요청은 이미 보냈다. 직전 답장에 짧게 반응하고 새 요청이나 새 질문을 추가하지 않는다.",
-    ] : []),
     "정상인 역할은 아무 이유 없이 악의적인 말을 하지 않고, 사칭자 역할도 시작부터 수상하거나 악역 같은 말투를 쓰지 않는다.",
     "대사 길이는 상황에 따라 짧은 한마디 또는 자연스러운 두세 문장으로 조절하되 250자를 넘기지 않는다. 특히 가족 문자는 고객센터 안내문처럼 쓰지 않는다.",
     "대화가 끝났는데 인사를 반복하지 않는다. 아무 답도 필요 없는 경우 reply=''로 종료할 수 있다.",
@@ -228,9 +234,14 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
     throw new Error("UNSOLICITED_SOLUTION");
   }
   if (first.value.actions.some(action => action.origin === "sender" &&
-        action.kind !== caseBranch(scenario, state.caseVariant ?? 0).kind) ||
+        action.kind !== branch.kind) ||
       replyQualityIssue(scenario, state, text, reply, first.value.actions)) {
     throw new Error("INCOMPLETE_TRAINING_DECISION");
+  }
+  if (scenario.identity === "fraud" && !hasRequest && !due && (!reply ||
+      state.messages.slice(-5).some(message =>
+        message.actor === "them" && replySimilarity(message.text, reply) >= 0.82))) {
+    throw new Error("REPEATED_TRAINING_SETUP");
   }
   // 일상 답변에는 2차 LLM 호출을 하지 않아 비용/대기 시간을 줄인다.
   // 행동 버튼이 있거나 실제 대화 종료를 제안할 때만 두 번째 검수를 요청한다.
@@ -274,10 +285,9 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
   // 검수 단독 제안은 절대로 버튼이 되지 않는다. 발화의 명시적 표현과 모델 간
   // 행동 종류·출처가 맞는 것만 통과한다. 검수 장애 시에도 표면적 요청 근거는 필수다.
   const grounded = groundedProposals(reply, first.value.actions, auditActions, scenario.identity);
-  const newRiskRequest = !hasConcreteRequest(state.messages) && hasConcreteRequest([{ actor: "them", text: reply }]);
-  if ((riskDecisionDue(state, scenario, text) || newRiskRequest) &&
+  if (due &&
     (!meaningfulRiskRequest(reply, grounded) ||
-     !grounded.some(action => action.kind === caseBranch(scenario, state.caseVariant ?? 0).kind &&
+     !grounded.some(action => action.kind === branch.kind &&
        action.origin === "sender"))) {
     throw new Error("INCOMPLETE_TRAINING_DECISION");
   }
@@ -295,8 +305,8 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
     memory: dialogue, primary: first.value.dialogue, audit: auditSignal,
     reply, userText: text, actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
   });
-  if (scenario.identity === "fraud" && decision.closed && !hasConcreteRequest(state.messages) &&
-    !hasConcreteRequest([{ actor: "them", text: reply, actions }])) {
+  // Until the follow-up limit, keep earlier action buttons usable unless the learner ends the conversation.
+  if (scenario.identity === "fraud" && decision.closed && decision.reason !== "turn_limit") {
     throw new Error("PREMATURE_TRAINING_END");
   }
   if (!reply && !decision.closed) {
@@ -364,11 +374,11 @@ export async function POST(req: NextRequest) {
       if (isExplicitTrainingStop(text)) {
         // SY/AI_System의 명시적 중단 원칙: 앱에서 종료한다는 말만 즉시 중단.
         // "그만 연락해" 같은 발신자에 대한 거절은 일반 대화로 처리한다.
-        const withMessage: TrainingState = {
-          ...state, turns: state.turns + 1,
-          messages: [...state.messages, { actor: "me", text }],
+        const ended = {
+          ...recordChoice(state, scenario, "stop").state,
+          turns: state.turns + 1,
+          messages: [...state.messages, { actor: "me" as const, text }],
         };
-        const ended = recordChoice(withMessage, scenario, "stop").state;
         return apiOk({
           token: seal(ended), topic: scenario.topic, messages: ended.messages, turns: ended.turns,
           maxTurns: MAX_TURNS, verified: ended.verification !== "none",
