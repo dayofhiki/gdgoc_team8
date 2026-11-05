@@ -118,6 +118,8 @@ test("v3 uses only actions actually requested by the actor, confirmed by indepen
   assert.equal(groundedProposals("링크는 누르지 마시고 공식 앱에서 확인하세요.", [link, app], [link, app], "fraud").length, 1);
   assert.equal(groundedProposals("수리비 좀 보내줄 수 있어?", [money], [money], "legitimate").length, 1);
   assert.equal(groundedProposals("수리비가 필요하긴 해.", [money], [money], "legitimate").length, 0);
+  assert.equal(groundedProposals("돈은 보내지 마세요.", [money], [money], "fraud").length, 0);
+  assert.equal(groundedProposals("수리비 조금 도와주실 수 있어?", [money], [money], "legitimate").length, 1);
   assert.equal(groundedProposals("은행 앱에서 직접 확인해 주세요.", [app], [app], "legitimate").length, 0);
   assert.equal(groundedProposals("", [link], [link], "fraud").length, 0);
 });
