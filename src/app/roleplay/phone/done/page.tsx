@@ -13,7 +13,7 @@ function Done() {
 
   return (
     <Screen>
-      <Header back={() => router.push("/home")} />
+      <Header back={() => router.replace("/home")} />
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 20, gap: 8 }}>
           <h2 className="title">{"전화 화면 미리보기를\n마치셨어요!"}</h2>
@@ -35,8 +35,8 @@ function Done() {
         </div>
       </section>
       <BottomCTA row>
-        <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-        <button className="btn btn--primary" onClick={() => router.push("/roleplay/mode")}>다시 연습하기</button>
+        <button className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
+        <button className="btn btn--primary" onClick={() => router.replace("/roleplay/mode")}>다시 연습하기</button>
       </BottomCTA>
     </Screen>
   );

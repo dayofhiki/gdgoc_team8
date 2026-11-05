@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PersonIcon } from "@/components/Icons";
-import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
+import { AlertIcon, CheckIcon, ChevronRight, FlagIcon, PersonIcon, SearchIcon, ShieldIcon } from "@/components/Icons";
+import { BottomCTA, BottomSheet, Header, Notice, Screen } from "@/components/ui";
 import { actionChoice, type Action } from "@/lib/trainingActions";
-import { useAppState } from "@/components/AppState";
+import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 import { copyText } from "@/lib/share";
 import { familyShareUrl } from "@/lib/invite";
 import { saveRecord } from "@/lib/records";
@@ -18,7 +18,7 @@ type Message = { actor: "them" | "me" | "system"; text: string; actions?: Action
 type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
 type Guess = "legitimate" | "fraud" | "uncertain";
 type Phase = "chat" | "judge" | "result";
-type Ending = { choice: "verify" | "family_contact" | "stop" | "comply" | "share" | "natural" | "turn_limit"; stage: "receipt" | "review" };
+type Ending = { choice: "verify" | "family_contact" | "stop" | "comply" | "share"; stage: "receipt" | "review" };
 type Session = {
   token: string;
   title?: string;
@@ -74,9 +74,34 @@ function contactTitle(title?: string): string {
   return "새 메시지";
 }
 
+// 결과 화면에서 가족 질문 화면으로 나갔다 돌아올 때 결과를 복원한다.
+// 복원 표시(?review=1)는 그 방문 기록 항목에만 남으므로, 새 훈련에는 옛 결과가 뜨지 않는다.
+const REVIEW_KEY = "mikki:training-review";
+
+function saveReview(result: Result) {
+  try {
+    sessionStorage.setItem(REVIEW_KEY, JSON.stringify(result));
+    window.history.replaceState(window.history.state, "", "/roleplay/chat?review=1");
+  } catch { /* 저장소를 못 쓰면 복원 없이 진행 */ }
+}
+
+function takeSavedReview(): Result | null {
+  try {
+    const saved = sessionStorage.getItem(REVIEW_KEY);
+    if (new URLSearchParams(location.search).get("review") !== "1") {
+      sessionStorage.removeItem(REVIEW_KEY);
+      return null;
+    }
+    const parsed = saved ? JSON.parse(saved) as Result : null;
+    return parsed?.behavior ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function RealTraining() {
   const router = useRouter();
-  const { ready: familyReady, familyQuestion } = useAppState();
+  const { ready: familyReady, familyQuestion, nickname } = useAppState();
   const started = useRef(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>("chat");
@@ -91,6 +116,7 @@ export default function RealTraining() {
   const [openedLinks, setOpenedLinks] = useState<string[]>([]);
   const [guess, setGuess] = useState<Guess>("uncertain");
   const [result, setResult] = useState<Result | null>(null);
+  const [reviewPage, setReviewPage] = useState<"feedback" | "truth">("feedback");
   const [shareNotice, setShareNotice] = useState("");
   // 결과가 나오면 미리 만들어 둠 (공유 시트는 클릭 직후 바로 열려야 해서). 준비 전이면 안내 화면 링크
   const [shareUrl, setShareUrl] = useState("");
@@ -105,6 +131,7 @@ export default function RealTraining() {
     setSession(null);
     setGuess("uncertain");
     setResult(null);
+    setReviewPage("feedback");
     setShareNotice("");
     setPendingMessage(null);
     setTypingVisible(false);
@@ -117,8 +144,7 @@ export default function RealTraining() {
     try {
       const initial = await request({ action: "start" });
       setSession(initial);
-      try { setTipVisible(localStorage.getItem("mikki-menu-guide-v2") !== "seen"); }
-      catch { setTipVisible(true); }
+      setTipVisible(true);
       setPhase("chat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "훈련을 시작하지 못했습니다.");
@@ -127,9 +153,21 @@ export default function RealTraining() {
     }
   }
 
+  // 결과의 다음 페이지는 항상 맨 위부터 읽도록 한다.
+  useEffect(() => {
+    if (phase === "result") window.scrollTo(0, 0);
+  }, [phase, reviewPage]);
+
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    const saved = takeSavedReview();
+    if (saved) {
+      setResult(saved);
+      setReviewPage("truth");
+      setPhase("result");
+      return;
+    }
     void start();
   }, []);
 
@@ -150,13 +188,6 @@ export default function RealTraining() {
 
   useEffect(() => {
     if (!ending) return;
-    if (ending.choice === "natural" || ending.choice === "turn_limit") {
-      // 마지막 문자와 종료 안내를 충분히 확인하고 판단 단계로 이동.
-      // 동작 감소를 선호하는 기기에서는 자동 화면 이동을 생략한다.
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      const timeout = window.setTimeout(() => { setEnding(null); setPhase("judge"); }, 3400);
-      return () => window.clearTimeout(timeout);
-    }
     if (ending.stage === "receipt") {
       const timeout = window.setTimeout(() => setEnding({ choice: ending.choice, stage: "review" }), 500);
       return () => window.clearTimeout(timeout);
@@ -170,7 +201,6 @@ export default function RealTraining() {
 
   function dismissGuide() {
     setTipVisible(false);
-    try { localStorage.setItem("mikki-menu-guide-v2", "seen"); } catch { /* storage disabled */ }
   }
 
   function openActions() {
@@ -197,11 +227,8 @@ export default function RealTraining() {
       setPendingMessage(null);
       if (next.closed) {
         setTipVisible(false);
-        if (next.endReason === "natural" || next.endReason === "turn_limit") {
-          setEnding({ choice: next.endReason, stage: "review" });
-        } else {
-          setPhase("judge");
-        }
+        // 대화가 저절로 끝나면 입력창 자리의 버튼을 눌러 결과로 넘어간다.
+        if (next.endReason !== "natural" && next.endReason !== "turn_limit") setPhase("judge");
       }
     } catch (err) {
       // 네트워크 실패 시 보낸 것처럼 남겨 두지 않고 입력창에 복구한다.
@@ -259,6 +286,7 @@ export default function RealTraining() {
       const answer = await request({ action: "finish", token: session.token, guess });
       if (!answer.result) throw new Error("훈련 결과를 불러오지 못했습니다.");
       setResult(answer.result);
+      setReviewPage("feedback");
       setPhase("result");
       const r = answer.result;
       void saveRecord({
@@ -297,119 +325,150 @@ export default function RealTraining() {
     setShareNotice(copied ? "우리 가족 안전 약속을 복사했어요." : "공유하지 못했어요. 다시 시도해 주세요.");
   }
 
+  if (phase === "result" && result && reviewPage === "truth") {
+    const feedback = result.behavior;
+    const hasFamilyQuestion = familyReady && familyQuestion.trim();
+    return (
+      <Screen>
+        <Header title="정체 확인" back={() => setReviewPage("feedback")} />
+        <section className="screen__body">
+          <div className="stack" style={{ marginTop: 20, gap: 20 }}>
+            <section className="card" aria-labelledby="fb-truth">
+              <div className="fb-title">
+                <span className="fb-title__icon fb-title__icon--gray"><SearchIcon /></span>
+                <h2 className="card__title fb-card-title" id="fb-truth">가상 연락의 정체와 확인 결과</h2>
+              </div>
+              <p className={"fb-item__title " + (result.identity === "fraud" ? "fb-truth-label--fraud" : "fb-truth-label--real")}>{result.truthLabel}</p>
+              <p className="fb-item__text">{result.purpose}</p>
+              <p className="fb-item__text">{result.verificationEvidence}</p>
+              <p className="fb-note">이것은 훈련을 위해 정해진 가상 상황의 정체예요. 실제 연락에서는 말투나 정답 추측보다 독립 확인이 중요해요.</p>
+            </section>
+
+            <div className="card card--blue">
+              <div className="fb-title">
+                <span className="fb-title__icon fb-title__icon--white"><FlagIcon /></span>
+                <p className="card__title fb-card-title">다음 연습의 목표</p>
+              </div>
+              <p className="card__text--blue">{feedback.focus}</p>
+            </div>
+
+            <section className="card" aria-labelledby="fb-promise">
+              <div className="fb-title">
+                <span className="fb-title__icon"><ShieldIcon /></span>
+                <h3 className="card__title fb-card-title" id="fb-promise">우리 가족의 안전 약속</h3>
+              </div>
+              <p className="fb-item__text">가족과 함께 정하고, 낯선 연락이 올 때마다 이 순서를 떠올려 보세요.</p>
+              <ol className="fb-list">
+                {feedback.promises.map((promise, index) => (
+                  <li className="fb-item" key={promise.id}>
+                    <span className="fb-mark" aria-hidden="true">{index + 1}</span>
+                    <div>
+                      <p className="fb-item__title">{promise.title}</p>
+                      <p className="fb-item__text">{promise.detail}</p>
+                      <span className={promise.practiced ? "tag tag--blue" : "tag tag--gray"} style={{ marginTop: 4 }}>
+                        {promise.practiced ? "이번 훈련에서 실천" : "다음에 기억할 약속"}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="fb-subcard">
+                <p className="fb-item__title">가족 확인 질문</p>
+                {hasFamilyQuestion ? (
+                  <>
+                    <p className="fb-item__text">{familyQuestion}</p>
+                    <p className="fb-note">이 기기에 저장된 질문이에요. 실제 답은 문자로 보내지 말고 가족과 직접 정하세요.</p>
+                  </>
+                ) : (
+                  <p className="fb-item__text">아직 이 기기에 저장된 확인 질문이 없어요. 가족과 직접 만나 함께 정해 보세요.</p>
+                )}
+                <Link className="fb-link" href={hasFamilyQuestion ? "/family-code/question" : "/family-code/guide"} onClick={() => saveReview(result)}>
+                  {hasFamilyQuestion ? "질문 변경하기" : "가족 확인 질문 정하기"}
+                  <ChevronRight size={18} />
+                </Link>
+              </div>
+              <button type="button" className="btn btn--secondary" onClick={() => void shareFamilyPromises()}>가족에게 안전 약속 공유하기</button>
+              <Notice>안전 약속만 공유하고, 가족 확인 질문과 답은 외부로 보내지 않아요.</Notice>
+            </section>
+
+            <p className="fb-note">{result.note}</p>
+          </div>
+        </section>
+        {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
+        <BottomCTA row>
+          <button className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
+          <button className="btn btn--primary" onClick={() => router.replace("/roleplay/mode")}>다시 연습하기</button>
+        </BottomCTA>
+      </Screen>
+    );
+  }
+
   if (phase === "result" && result) {
     const feedback = result.behavior;
     return (
       <Screen>
-        <Header title="내 대응 돌아보기" back={() => router.push("/home")} />
-        <section className="screen__body rt-feedback rt-feedback--behavior">
-          <section className={"rt-feedback-behavior-hero rt-feedback-behavior-hero--" + feedback.tone} aria-label="이번 대응의 핵심 피드백">
-            <span className="rt-feedback-behavior-eyebrow">오늘의 대응 피드백</span>
-            <h2>{feedback.headline}</h2>
-            <p>{feedback.explanation}</p>
-            <span className="rt-feedback-evidence-note">정답이 아닌, 실제로 선택한 행동을 기준으로 살펴봤어요.</span>
-          </section>
+        <Header title="내 대응 돌아보기" back={() => router.replace("/home")} />
+        <section className="screen__body">
+          <div className="stack" style={{ marginTop: 20, gap: 8 }}>
+            <h2 className="title">{feedback.headline}</h2>
+            <p className="desc"><strong className="fb-nick">{nickname || DEFAULT_NICKNAME}</strong>님의 대응 피드백</p>
+            <p className="desc">{feedback.explanation}</p>
+            <p className="fb-note">정답이 아닌, 실제로 선택한 행동을 기준으로 살펴봤어요.</p>
+          </div>
 
-          <section className="rt-feedback-receipts" aria-labelledby="rt-actions-heading">
-            <div className="rt-feedback-block-heading">
-              <h3 id="rt-actions-heading">이번에 내가 한 행동</h3>
-              <span>실제 선택 기록</span>
-            </div>
-            <ol className="rt-feedback-receipt-list">
-              {feedback.receipts.map((receipt, i) => (
-                <li key={i} className={"rt-feedback-receipt rt-feedback-receipt--" + receipt.tone}>
-                  <span className="rt-feedback-receipt-mark" aria-hidden="true">{i + 1}</span>
-                  <div><strong>{receipt.label}</strong><p>{receipt.detail}</p></div>
-                </li>
-              ))}
-            </ol>
-          </section>
+          <div className="stack" style={{ marginTop: 40, gap: 20 }}>
+            <section className="card" aria-labelledby="fb-actions">
+              <h3 className="card__title fb-card-title" id="fb-actions">이번에 내가 한 행동</h3>
+              <ol className="fb-list">
+                {feedback.receipts.map((receipt, i) => (
+                  <li key={i} className="fb-item">
+                    <span className={receipt.tone === "good" ? "fb-mark" : "fb-mark fb-mark--" + receipt.tone} aria-hidden="true">{i + 1}</span>
+                    <div>
+                      <p className="fb-item__title">{receipt.label}</p>
+                      <p className="fb-item__text">{receipt.detail}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
 
-          <section className="rt-feedback-panel rt-feedback-panel--good" aria-label="잘한 점">
-            <div className="rt-feedback-section-head">
-              <span aria-hidden="true">✓</span>
-              <h3>잘한 점</h3>
-            </div>
-            {feedback.good.length > 0 ? feedback.good.map((item, i) => (
-              <div className="rt-feedback-point" key={i}>
-                <strong>{item.keyword}</strong>
-                <span>{item.text}</span>
+            <section className="card" aria-labelledby="fb-good">
+              <div className="fb-title">
+                <span className="fb-title__icon"><CheckIcon /></span>
+                <h3 className="card__title fb-card-title" id="fb-good">잘한 점</h3>
               </div>
-            )) : <p className="rt-feedback-empty">이번에는 확인된 안전 행동이 없었어요. 다음 연습에서는 직접 확인하는 행동부터 선택해 보세요.</p>}
-          </section>
+              {feedback.good.length > 0 ? (
+                <div className="fb-points">
+                  {feedback.good.map((item, i) => (
+                    <div className="fb-point" key={i}>
+                      <p className="fb-item__title">{item.keyword}</p>
+                      <p className="fb-item__text">{item.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="fb-item__text">이번에는 확인된 안전 행동이 없었어요. 다음 연습에서는 직접 확인하는 행동부터 선택해 보세요.</p>}
+            </section>
 
-          <section className="rt-feedback-panel rt-feedback-panel--improve" aria-label="개선할 점">
-            <div className="rt-feedback-section-head">
-              <span aria-hidden="true">!</span>
-              <h3>다음에는 이렇게 해봐요</h3>
-            </div>
-            {feedback.improve.length > 0 ? feedback.improve.map((item, i) => (
-              <div className="rt-feedback-point" key={i}>
-                <strong>{item.keyword}</strong>
-                <span>{item.text}</span>
+            <section className="card" aria-labelledby="fb-improve">
+              <div className="fb-title">
+                <span className="fb-title__icon fb-title__icon--amber"><AlertIcon /></span>
+                <h3 className="card__title fb-card-title" id="fb-improve">다음에는 이렇게 해봐요</h3>
               </div>
-            )) : <p className="rt-feedback-empty">이번에는 크게 고칠 행동이 없어요. 다음 상황에서도 같은 확인 습관을 이어가세요.</p>}
-          </section>
-
-          <section className="rt-feedback-promise" aria-labelledby="rt-promise-heading">
-            <div className="rt-feedback-promise-intro">
-              <span className="rt-feedback-promise-overline">연습을 일상 속 안전 습관으로</span>
-              <h3 id="rt-promise-heading">우리 가족의 안전 약속</h3>
-              <p>가족과 함께 정하고, 낯선 연락이 올 때마다 이 순서를 떠올려 보세요.</p>
-            </div>
-            <ol className="rt-feedback-promise-list">
-              {feedback.promises.map((promise, index) => (
-                <li className="rt-feedback-promise-item" key={promise.id}>
-                  <span className="rt-feedback-promise-number" aria-hidden="true">{index + 1}</span>
-                  <div>
-                    <strong>{promise.title}</strong>
-                    <p>{promise.detail}</p>
-                    <span className={promise.practiced ? "rt-feedback-promise-practiced" : "rt-feedback-promise-reminder"}>
-                      {promise.practiced ? "이번 훈련에서 실천" : "다음에 기억할 약속"}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ol>
-            <div className="rt-feedback-family-question">
-              <strong>가족 확인 질문</strong>
-              {familyReady && familyQuestion.trim() ? (
-                <>
-                  <p>{familyQuestion}</p>
-                  <small>이 기기에 저장된 질문이에요. 실제 답은 문자로 보내지 말고 가족과 직접 정하세요.</small>
-                </>
-              ) : (
-                <p>아직 이 기기에 저장된 확인 질문이 없어요. 가족과 직접 만나 함께 정해 보세요.</p>
-              )}
-              <Link href={familyReady && familyQuestion.trim() ? "/family-code/question" : "/family-code/guide"}>
-                {familyReady && familyQuestion.trim() ? "질문 변경하기" : "가족 확인 질문 정하기"} <span aria-hidden="true">›</span>
-              </Link>
-            </div>
-            <div className="rt-feedback-promise-action">
-              <button type="button" onClick={() => void shareFamilyPromises()}>가족에게 안전 약속 공유하기</button>
-              <p>안전 약속만 공유하고, 가족 확인 질문과 답은 외부로 보내지 않아요.</p>
-            </div>
-            <p className="rt-feedback-promise-focus"><strong>다음 연습의 목표</strong>{feedback.focus}</p>
-          </section>
-
-          <details className="rt-feedback-truth" aria-label="이번 가상 연락의 설정 확인">
-            <summary>
-              <span>이번 가상 연락의 정체와 확인 결과</span>
-              <span aria-hidden="true">⌄</span>
-            </summary>
-            <div className="rt-feedback-truth-content">
-              <strong>{result.truthLabel}</strong>
-              <p>{result.purpose}</p>
-              <p>{result.verificationEvidence}</p>
-              <p>이것은 훈련을 위해 정해진 가상 상황의 정체예요. 실제 연락에서는 말투나 정답 추측보다 독립 확인이 중요해요.</p>
-            </div>
-          </details>
-          <p className="rt-feedback-disclaimer">{result.note}</p>
-          {shareNotice && <p className="rt-feedback-share-notice" role="status">{shareNotice}</p>}
+              {feedback.improve.length > 0 ? (
+                <div className="fb-points">
+                  {feedback.improve.map((item, i) => (
+                    <div className="fb-point" key={i}>
+                      <p className="fb-item__title">{item.keyword}</p>
+                      <p className="fb-item__text">{item.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="fb-item__text">이번에는 크게 고칠 행동이 없어요. 다음 상황에서도 같은 확인 습관을 이어가세요.</p>}
+            </section>
+          </div>
         </section>
-        <BottomCTA row>
-          <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
-          <button className="btn btn--primary" onClick={() => void start()}>한 번 더 연습하기</button>
+        <BottomCTA>
+          <button className="btn btn--primary" onClick={() => setReviewPage("truth")}>정체 확인하기</button>
         </BottomCTA>
       </Screen>
     );
@@ -452,7 +511,7 @@ export default function RealTraining() {
   return (
     <main className="screen rt-screen">
       <header className="rt-header">
-        <button type="button" className="rt-nav-back" onClick={() => router.push("/roleplay/mode")} aria-label="뒤로 가기">
+        <button type="button" className="rt-nav-back" onClick={() => router.replace("/roleplay/mode")} aria-label="뒤로 가기">
           <span aria-hidden="true">‹</span>
         </button>
         <div className="rt-avatar" aria-hidden="true"><PersonIcon /></div>
@@ -535,18 +594,8 @@ export default function RealTraining() {
 
       <div className="rt-compose-zone">
         {error && <p className="rt-error" role="alert">{error}</p>}
-        {session?.closed && (session.endReason === "natural" || session.endReason === "turn_limit") ? (
-          <div className="rt-conversation-ended" role="status" aria-live="polite">
-            <span className="rt-conversation-ended__icon" aria-hidden="true">✓</span>
-            <div>
-              <strong>{session.endReason === "natural" ? "이번 문자 대화가 마무리되었어요" : "여기까지 연습해 볼게요"}</strong>
-              <p>어떻게 대응하셨는지 함께 살펴볼까요?</p>
-            </div>
-            <button type="button" className="rt-conversation-ended__button"
-              onClick={() => { setEnding(null); setPhase("judge"); }}>
-              내 대응 결과 확인하기 <span aria-hidden="true">›</span>
-            </button>
-          </div>
+        {session?.closed && !ending ? (
+          <button type="button" className="btn btn--primary" onClick={() => setPhase("judge")}>내 대응 결과 확인하기</button>
         ) : (
           <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
             <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
@@ -579,7 +628,7 @@ export default function RealTraining() {
         </BottomSheet>
       )}
 
-      {ending && ending.choice !== "natural" && ending.choice !== "turn_limit" && (
+      {ending && (
         <div className={ending.stage === "review" ? "rt-transition rt-transition--visible" : "rt-action-receipt"} role="status" aria-live="polite">
           <div className="rt-transition__symbol" aria-hidden="true">{ending.choice === "verify" || ending.choice === "family_contact" ? "✓" : ending.choice === "stop" ? "✕" : "↗"}</div>
           <strong>{ending.choice === "verify" ? "공식 경로로 확인했어요" :

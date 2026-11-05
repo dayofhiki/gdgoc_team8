@@ -16,7 +16,7 @@ export default function RoleplayMode() {
   const router = useRouter();
   return (
     <Screen>
-      <Header title="실전 대응 훈련" />
+      <Header title="실전 대응 훈련" back={() => router.replace("/roleplay")} />
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 16, gap: 8 }}>
           <span className="chip">상대를 모르는 현실적인 상황</span>
