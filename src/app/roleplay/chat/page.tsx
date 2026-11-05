@@ -425,6 +425,33 @@ export default function RealTraining() {
       : "공유하지 못했어요. 다시 시도해 주세요.");
   }
 
+  if (phase === "result" && result && reviewPage === "feedback" && memoryStage !== "details") {
+    const promise = result.behavior.promises.find(p => !p.practiced) ?? result.behavior.promises[0];
+    const learning = promise?.title ?? result.behavior.focus;
+    return (
+      <Screen>
+        <Header back={() => setMemoryStage("details")} onClose={() => router.replace("/home")} />
+        <section className="screen__body figma-flashcard-page">
+          <p className="figma-flashcard-instruction">카드를 눌러 뒤집어보세요</p>
+          <button type="button" className={"figma-flashcard " + (memoryStage === "flipped" ? "figma-flashcard--turned" : "figma-flashcard--front")}
+            onClick={() => setMemoryStage(memoryStage === "card" ? "flipped" : "card")}>
+            <span>똑똑한 물고기 오늘의 배움</span>
+            <strong>{memoryStage === "card" ? "우리 가족에게도 공유하기" : learning}</strong>
+            {memoryStage === "flipped" && <small>{promise?.detail ?? result.behavior.focus}</small>}
+          </button>
+          <button type="button" className="figma-flashcard-more" onClick={() => setMemoryStage("details")}>
+            상세 피드백 보기 <span aria-hidden="true">⌄</span>
+          </button>
+        </section>
+        <BottomCTA row>
+          <button type="button" className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
+          <button type="button" className="btn btn--primary" onClick={() => void shareFamilyPractice(false)}>공유하기</button>
+        </BottomCTA>
+        {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
+      </Screen>
+    );
+  }
+
   if (phase === "result" && result && reviewPage === "truth") {
     const feedback = result.behavior;
     const hasFamilyQuestion = familyReady && familyQuestion.trim();
