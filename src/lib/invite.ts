@@ -1,15 +1,18 @@
 /**
- * 가족 키 + 초대 링크(도전장) ↔ Supabase families / invites 연결.
+ * 가족 키 + 초대 링크(도전장) ↔ 서버(/api/backend, Firestore) 연결.
  * - 가족(families)은 영구, 초대 링크(invites)는 7일짜리 입장권. 링크로 들어온 사람은 그 가족 구성원이 됨.
  * - 구성원 누구나 자기 가족 링크를 만들 수 있어서, 받은 사람이 다시 공유해도 같은 가족으로 묶임.
- * - 가족 암호 질문은 family_questions에 저장 (답은 저장하지 않음).
- * Supabase 설정(.env.local)이 없거나 연결이 안 되면 null/"offline"을 돌려주고, 화면은 기존(토큰 없는) 방식으로 동작합니다.
+ * - 가족 암호 질문은 가족별로 저장 (답은 저장하지 않음).
+ * Firebase 설정(.env.local)이 없거나 연결이 안 되면 null/"offline"을 돌려주고, 화면은 기존(토큰 없는) 방식으로 동작합니다.
  */
-import type { InviteJoinResponse } from "@/server/types";
-import { callFn, configured, ensureAnon, sb } from "./supabase";
+import type { FamilyMemberSummary, InviteJoinResponse } from "@/server/types";
+import { callFn, configured } from "./firebase";
 
-const KEY_INVITE = "mikki:invite:v2"; // v1 캐시는 가족 없는 초대라 버림
-const KEY_FAMILY = "mikki:family";
+export type { FamilyMemberSummary };
+
+// v3 / v2: Supabase 시절 id 캐시는 Firebase에 없는 가족이라 버림
+const KEY_INVITE = "mikki:invite:v3";
+const KEY_FAMILY = "mikki:family:v2";
 /** 가족 단톡방에 공유될 수 있어 여러 명 입장 허용 (백엔드 허용 범위 1~200) */
 const MAX_PARTICIPANTS = 10;
 /** 만료 하루 전부터는 새 링크를 만듦 */
@@ -42,15 +45,7 @@ const storedNickname = () => (load("mikki:nickname") ?? "").slice(0, 20);
 async function myFamilyId(nickname: string): Promise<string> {
   const cached = load(KEY_FAMILY);
   if (cached) return cached;
-  await ensureAnon();
-  const { data: rows, error } = await sb().from("family_members").select("family_id").order("joined_at").limit(1);
-  if (error) throw error;
-  let fid = rows[0]?.family_id as string | undefined;
-  if (!fid) {
-    const { data, error: e2 } = await sb().rpc("create_family", { p_nickname: nickname });
-    if (e2) throw e2;
-    fid = data as string;
-  }
+  const { familyId: fid } = await callFn<{ familyId: string }>("myFamily", { nickname });
   save(KEY_FAMILY, fid);
   return fid;
 }
@@ -62,12 +57,7 @@ export async function getInviteToken(nickname = storedNickname()): Promise<strin
     const fid = await myFamilyId(nickname);
     const c = JSON.parse(load(KEY_INVITE) ?? "null") as Cached | null;
     if (c?.token && c.family_id === fid && new Date(c.expires_at).getTime() - Date.now() > RENEW_BEFORE_MS) return c.token;
-    const { data, error } = await sb()
-      .from("invites")
-      .insert({ max_participants: MAX_PARTICIPANTS, family_id: fid, inviter_name: nickname.slice(0, 20) })
-      .select("token, expires_at, family_id")
-      .single();
-    if (error) throw error;
+    const data = await callFn<Cached>("createInvite", { maxParticipants: MAX_PARTICIPANTS, familyId: fid, nickname: nickname.slice(0, 20) });
     save(KEY_INVITE, JSON.stringify(data));
     return data.token as string;
   } catch (e) {
@@ -88,11 +78,7 @@ export async function saveFamilyQuestion(question: string, nickname = storedNick
   if (!configured() || !question) return;
   try {
     const fid = await myFamilyId(nickname);
-    const { data, error } = await sb().from("family_questions").select("id").eq("family_id", fid).eq("question", question).limit(1);
-    if (error) throw error;
-    if (data.length) return;
-    const { error: e2 } = await sb().from("family_questions").insert({ family_id: fid, question });
-    if (e2) throw e2;
+    await callFn("saveQuestion", { familyId: fid, question });
   } catch (e) {
     console.warn("가족 질문 저장 실패", e);
   }
@@ -103,14 +89,7 @@ export async function familyQuestions(): Promise<{ id: string; question: string;
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return null;
   try {
-    await ensureAnon();
-    const { data, error } = await sb()
-      .from("family_questions")
-      .select("id, question, created_at")
-      .eq("family_id", fid)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data;
+    return await callFn<{ id: string; question: string; created_at: string }[]>("questions", { familyId: fid });
   } catch (e) {
     console.warn("가족 질문 불러오기 실패", e);
     return null;
@@ -122,10 +101,7 @@ export async function familySize(): Promise<number | null> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return null;
   try {
-    await ensureAnon();
-    const { count, error } = await sb().from("family_members").select("user_id", { count: "exact", head: true }).eq("family_id", fid);
-    if (error) throw error;
-    return count;
+    return (await callFn<{ count: number }>("familySize", { familyId: fid })).count;
   } catch {
     return null;
   }
@@ -136,41 +112,20 @@ export async function setShareResults(share: boolean): Promise<boolean> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return false;
   try {
-    await ensureAnon();
-    const { data: me } = await sb().auth.getUser();
-    const { data, error } = await sb().from("family_members")
-      .update({ share_results: share }).eq("family_id", fid).eq("user_id", me.user!.id)
-      .select("share_results").maybeSingle();
-    if (error) throw error;
-    return data?.share_results === share;
+    const data = await callFn<{ share_results: boolean }>("setShare", { familyId: fid, share });
+    return data.share_results === share;
   } catch (e) {
     console.warn("공유 설정 실패", e);
     return false;
   }
 }
 
-export type FamilyMemberSummary = {
-  user_id: string;
-  nickname: string;
-  is_me: boolean;
-  share_results: boolean;
-  joined_at: string;
-  /** 공유를 끈 구성원은 아래가 null */
-  record_count: number | null;
-  safe_count: number | null;
-  last_at: string | null;
-  recent: { kind: "quiz" | "challenge" | "training"; title: string; safe: boolean | null; score: number | null; total: number | null; created_at: string }[] | null;
-};
-
 /** 보호자 화면용: 가족 구성원별 연습 요약. 가족이 없거나 오프라인이면 null */
 export async function familyOverview(): Promise<FamilyMemberSummary[] | null> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return null;
   try {
-    await ensureAnon();
-    const { data, error } = await sb().rpc("family_overview", { p_family: fid });
-    if (error) throw error;
-    return data as FamilyMemberSummary[];
+    return await callFn<FamilyMemberSummary[]>("overview", { familyId: fid });
   } catch (e) {
     console.warn("가족 요약 불러오기 실패", e);
     return null;
@@ -182,9 +137,7 @@ export async function syncFamilyNickname(nickname: string): Promise<void> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid || !nickname) return;
   try {
-    await ensureAnon();
-    const { data: me } = await sb().auth.getUser();
-    await sb().from("family_members").update({ nickname: nickname.slice(0, 20) }).eq("family_id", fid).eq("user_id", me.user!.id);
+    await callFn("syncNickname", { familyId: fid, nickname: nickname.slice(0, 20) });
   } catch {
     /* 다음에 별명을 바꿀 때 다시 시도 */
   }
@@ -196,8 +149,7 @@ export type JoinResult = "ok" | "invalid" | "offline";
 export async function joinInvite(token: string, nickname = storedNickname()): Promise<JoinResult> {
   if (!configured()) return "offline";
   try {
-    await ensureAnon();
-    const res = await callFn<InviteJoinResponse>("invite-join", { token, nickname });
+    const res = await callFn<InviteJoinResponse>("joinInvite", { token, nickname });
     if (res.invite.family_id) save(KEY_FAMILY, res.invite.family_id);
     return "ok";
   } catch (e) {
