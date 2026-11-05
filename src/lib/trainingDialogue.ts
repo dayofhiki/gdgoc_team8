@@ -315,10 +315,18 @@ export function decideDialogueTurn(args: {
   const loop = nextTurn >= 4 && repeats >= 2 &&
     !primary.hasPendingRequest && !audit?.hasPendingRequest &&
     learnerDone && !activeRequest && !explicitQuestion;
+  // 같은 말을 세 번째 반복하고 사용자가 새 질문을 하지 않았다면
+  // 아직 남은 요청이 있다는 AI 판단만으로 대화를 끝없이 재촉하게 두지 않는다.
+  // 요청 버튼이 있더라도 같은 발화의 반복이면 이전 말풍선에서 충분히 보였다.
+  const stalledRequest = nextTurn >= 4 && repeats >= 2 && !explicitQuestion &&
+    ["acknowledge", "decline", "suspect", "exit", "verified_claimed"].includes(primary.learnerMove) &&
+    (!audit || audit.learnerMove !== "question") &&
+    (primary.hasPendingRequest || audit?.hasPendingRequest || activeRequest);
   const turnLimit = nextTurn >= maxTurns;
-  const closed = natural || loop || turnLimit;
-  const reason: EndReason | undefined = natural || loop ? "natural" : turnLimit ? "turn_limit" : undefined;
+  const closed = natural || loop || stalledRequest || turnLimit;
+  const reason: EndReason | undefined = natural || loop || stalledRequest ? "natural" : turnLimit ? "turn_limit" : undefined;
   if (loop) issues.push("repetition_stopped");
+  if (stalledRequest) issues.push("stalled_request_stopped");
   const nextMemory: DialogueMemory = {
     stage: closed ? "closing" : primary.stage,
     hasPendingRequest: closed ? false : primary.hasPendingRequest,
