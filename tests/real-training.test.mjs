@@ -348,7 +348,7 @@ test("mock phone workspace replaces duplicate messages tile with transfer, requi
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   const panel = readFileSync(new URL("../src/components/TrainingPhonePanel.tsx", import.meta.url), "utf8");
-  assert.match(panel, /tile\("transfer", "송금"/);
+  assert.match(panel, /tile\("transfer", "송금하기 \(가상\)"/);
   assert.doesNotMatch(panel, /tile\("messages"/);
   assert.match(panel, /transferRequests\.length/);
   assert.match(panel, /선택할 송금 요청이 없어요/);
