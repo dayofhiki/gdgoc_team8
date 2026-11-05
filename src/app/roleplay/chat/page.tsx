@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertIcon, BackIcon, CheckIcon, ChevronRight, PersonIcon, ShieldIcon } from "@/components/Icons";
-import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
+import { BottomCTA, BottomSheet, Dialog, Header, Screen } from "@/components/ui";
 import { actionChoice, type Action } from "@/lib/trainingActions";
 import { useAppState } from "@/components/AppState";
 import { copyText } from "@/lib/share";
@@ -138,6 +138,9 @@ export default function RealTraining() {
   const [initialTransfer, setInitialTransfer] = useState<PhoneTransferRequest | null>(null);
   const [confirmStop, setConfirmStop] = useState(false);
   const [writeReply, setWriteReply] = useState(false);
+  const [fontMenuOpen, setFontMenuOpen] = useState(false);
+  const [fontSize, setFontSize] = useState<"regular" | "large" | "xlarge">("regular");
+  const [memoryStage, setMemoryStage] = useState<"card" | "flipped" | "details">("card");
   const inputRef = useRef<HTMLInputElement>(null);
   const [confirmData, setConfirmData] = useState<{ action: Action; index: number } | null>(null);
   const [phoneHint, setPhoneHint] = useState(false);
@@ -178,6 +181,8 @@ export default function RealTraining() {
     setSession(null);
     setResult(null);
     setReviewPage("feedback");
+    setMemoryStage("card");
+    setFontMenuOpen(false);
     setShareNotice("");
     setPendingMessage(null);
     setTypingVisible(false);
@@ -231,6 +236,7 @@ export default function RealTraining() {
       setLiveEntry(params.get("entry") === "live" || !params.has("topic"));
       setResult(saved);
       setReviewPage("truth");
+      setMemoryStage("details");
       setPhase("result");
       return;
     }
@@ -601,19 +607,16 @@ export default function RealTraining() {
   const activeLink = previewIndex !== null ? session?.messages[previewIndex]?.actions?.find(a => a.id === previewActionId)?.linkPreview : undefined;
 
   return (
-    <main className="screen rt-screen">
-      <header className="rt-header">
+    <main className={"screen rt-screen figma-chat figma-chat--" + fontSize}>
+      <header className="rt-header figma-chat-header">
         <button type="button" className="rt-nav-back" onClick={() => router.replace(liveEntry ? "/roleplay/mode" : "/roleplay/select")} aria-label="뒤로 가기">
           <BackIcon />
         </button>
-        <div className="rt-avatar" aria-hidden="true"><PersonIcon /></div>
-        <div className="rt-contact">
-          <strong>{contact}</strong>
-          <span>문자 메시지</span>
-        </div>
+        <button type="button" className="figma-font-control" onClick={() => setFontMenuOpen(true)}>글자 크게 보기</button>
       </header>
       <div className="rt-history" ref={historyRef} role="log" aria-live="polite" aria-relevant="additions text">
-        <div className="rt-day">오늘 · 새로운 대화</div>
+        <div className="figma-chat-situation">{phoneTopic === "family" ? "가족에게서 이런 문자가 왔어요." : (session?.title ?? "새로운 상황") + "에 관한 문자가 왔어요."}</div>
+        <div className="figma-chat-contact"><span className="figma-chat-contact-icon" aria-hidden="true"><PersonIcon /></span><span>{contact} · 모르는 번호</span></div>
         {!session && !error && <div className="rt-loading-message" role="status">새 메시지를 불러오는 중…</div>}
         {!session && error && (
           <div className="rt-loading-error" role="alert">
@@ -626,7 +629,7 @@ export default function RealTraining() {
             <div key={i} className="rt-system" role="status"><strong>훈련 진행 기록</strong><span>{m.text}</span></div>
           ) : (
             <div key={i} className={m.actor === "me" ? "rt-message rt-message--mine" : "rt-message"}>
-              {m.actor === "them" && <span className="rt-msg-avatar" aria-hidden="true"><PersonIcon /></span>}
+              {m.actor === "them" && <span className="rt-msg-avatar figma-chat-msg-avatar" aria-hidden="true"><PersonIcon /></span>}
               <div className="rt-msg-body">
                 <div className="rt-bubble">
                   <p>{m.text}</p>
@@ -704,6 +707,7 @@ export default function RealTraining() {
           </div>
         ) : session && !session.closed && (
           <>
+            <p className="figma-chat-reply-heading">선택지를 눌러 답장을 보내보세요.</p>
             {writeReply ? (
               <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
                 <input ref={inputRef} type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="답장 쓰기"
@@ -721,11 +725,11 @@ export default function RealTraining() {
                 ))}
               </div>
             )}
-            <button type="button" className="rt-write-toggle" aria-expanded={writeReply}
+            <button type="button" className="rt-write-toggle figma-chat-write" aria-expanded={writeReply}
               disabled={busy} onClick={() => {
                 setWriteReply(!writeReply);
                 if (!writeReply) requestAnimationFrame(() => inputRef.current?.focus());
-              }}>{writeReply ? "답장 예시 보기" : "직접 쓰기"}</button>
+              }}><span aria-hidden="true">✎</span>{writeReply ? "선택지로 돌아가기" : "직접 답장을 보낸다"}<span className="figma-write-arrow" aria-hidden="true">›</span></button>
             <div className="rt-main-actions" role="group" aria-label="문자 밖에서 할 수 있는 행동">
               <button type="button" className={phoneHint ? "rt-choice rt-phone-button--hint" : "rt-choice"}
                 disabled={busy} aria-expanded={actionsOpen} onClick={() => openActions()}>전화·앱 열기</button>
@@ -736,6 +740,20 @@ export default function RealTraining() {
         <div className="rt-training-note">모의 훈련 · 실제 송금·통화·정보 전송 없음</div>
       </div>
 
+      {fontMenuOpen && (
+        <Dialog onClose={() => setFontMenuOpen(false)}>
+          <div className="figma-font-dialog" aria-label="글자 크기 설정">
+            <h2>글자 크게 보기</h2>
+            {([["regular", "기본 보기"], ["large", "크게 보기"], ["xlarge", "더 크게 보기"]] as const).map(([value, label]) => (
+              <button type="button" className={"figma-font-option" + (fontSize === value ? " figma-font-option--selected" : "")}
+                key={value} aria-pressed={fontSize === value} onClick={() => setFontSize(value)}>
+                {label}<span aria-hidden="true">{fontSize === value ? "✓" : ""}</span>
+              </button>
+            ))}
+            <button type="button" className="btn btn--primary" onClick={() => setFontMenuOpen(false)}>설정하기</button>
+          </div>
+        </Dialog>
+      )}
       {introOpen && session && (
         <BottomSheet onClose={closeIntro}>
           <div className="rt-intro" aria-labelledby="rt-intro-title">
