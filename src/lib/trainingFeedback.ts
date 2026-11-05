@@ -48,6 +48,7 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   const offeredRisk = hasConcreteRequest(state.messages);
   const askedToInstall = state.messages.some(message => message.actor === "them" &&
     message.actions?.some(action => action.linkPreview?.interaction === "install"));
+  const remoteApp = scenario.topic === "card" && askedToInstall;
   const deliberatePause = offeredRisk && !sentMoney && !sentData && !installed && (stopped || verified || consulted);
 
   const good: FeedbackPoint[] = [];
@@ -77,8 +78,9 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   });
 
   if (installed) improve.push({
-    keyword: "안내받은 원격 지원 앱을 설치하지 마세요",
-    text: "원격 지원 앱은 휴대전화 화면이나 조작 권한을 넘기는 데 악용될 수 있어요. 통화를 끝내고 카드사 공식 연락처에서 따로 확인해 주세요.",
+    keyword: remoteApp ? "안내받은 원격 지원 앱을 설치하지 마세요" : "문자에서 요구한 앱을 설치하지 마세요",
+    text: remoteApp ? "원격 지원 앱은 휴대전화 화면이나 조작 권한을 넘기는 데 악용될 수 있어요. 통화를 끝내고 카드사 공식 연락처에서 따로 확인해 주세요." :
+      "익숙한 이름과 아이콘을 보여도 악성 앱일 수 있어요. 페이지를 닫고 문자와 별도로 확인해 주세요.",
   });
   if (sentData) improve.push({
     keyword: "개인정보를 보내기 전에 확인하세요",
@@ -140,8 +142,8 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
         label: "모의 정보 전송",
         detail: "정보 제공을 선택했어요. 실제 정보는 전달되지 않았습니다.", tone: "caution",
       } : e.choice === "install" ? {
-        label: "모의 원격 지원 앱 설치",
-        detail: "문자 링크에서 원격 지원 앱 설치를 선택했어요. 실제 앱은 설치되지 않았어요.", tone: "caution",
+        label: remoteApp ? "모의 원격 지원 앱 설치" : "모의 앱 설치",
+        detail: "문자 링크에서 앱 설치를 선택했어요. 실제 앱은 설치되지 않았어요.", tone: "caution",
       } : e.choice === "open_link" ? {
         label: "문자 링크 열람",
         detail: "실제 외부 사이트가 아닌 가상 페이지를 열어 봤어요.", tone: "caution",
@@ -167,8 +169,9 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   let explanation: string;
   if (installed) {
     tone = "caution";
-    headline = "원격 지원 앱 설치 요구에서 멈춰요";
-    explanation = "배송 안내 번호에 전화한 뒤 도착한 링크에서 설치를 선택했어요. 배송과 관계없는 설치 요구가 나오면 더 진행하지 말고 직접 찾은 카드사 번호로 확인해요.";
+    headline = remoteApp ? "원격 지원 앱 설치 요구에서 멈춰요" : "문자 링크에서 앱 설치 요구가 나오면 멈춰요";
+    explanation = remoteApp ? "배송 안내 번호에 전화한 뒤 도착한 링크에서 설치를 선택했어요. 직접 찾은 카드사 번호로 따로 확인해요." :
+      "문자 링크에서 모의 앱 설치를 선택했어요. 페이지를 닫은 뒤, 저장된 연락처나 직접 찾은 공식 경로로 확인해요.";
   } else if (sentData) {
     tone = "caution";
     headline = "정보를 보내기 전에 확인이 필요해요";
@@ -216,11 +219,11 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     },
     {
       id: "hold",
-      title: scenario.topic === "card" ? "문자나 전화에서 요구한 원격 지원 앱을 설치하지 않기" :
-        "확인 전에는 돈과 개인정보를 보내지 않기",
-      detail: scenario.topic === "card" ? "반송이나 취소를 이유로 설치를 요청하면 통화를 끝내고 카드사 공식 연락처로 문의해요." :
-        "급하다는 말보다 확인 절차가 먼저예요.",
-      practiced: scenario.topic === "card" ? askedToInstall && !installed && (stopped || verified) : deliberatePause,
+      title: remoteApp ? "문자나 전화에서 요구한 원격 지원 앱을 설치하지 않기" :
+        askedToInstall ? "문자에서 받은 링크로 앱을 설치하지 않기" : "확인 전에는 돈과 개인정보를 보내지 않기",
+      detail: remoteApp ? "반송이나 취소를 이유로 설치를 요청하면 통화를 끝내고 카드사 공식 연락처로 문의해요." :
+        askedToInstall ? "안내 페이지를 닫고 발신자에게 별도로 확인해요." : "급하다는 말보다 확인 절차가 먼저예요.",
+      practiced: askedToInstall ? askedToInstall && !installed && (stopped || verified) : deliberatePause,
     },
     {
       id: "family",

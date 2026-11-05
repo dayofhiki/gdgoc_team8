@@ -6,10 +6,13 @@ import type { Scenario } from "./realTraining.ts";
 import { TRAINING_EPISODES, type TrainingEpisode } from "./trainingEpisodes.ts";
 
 export const CASE_VARIANTS = TRAINING_EPISODES.map(group => group.map(episode => episode.facts));
-export const CASE_VARIANT_COUNT = TRAINING_EPISODES[0].length;
 export const BANK_CLAIMS = TRAINING_EPISODES[2].map(episode => episode.bankClaim ?? "");
 
 export type CaseBranch = TrainingEpisode;
+
+export function caseVariantCount(scenario: Pick<Scenario, "id">): number {
+  return TRAINING_EPISODES[Number(scenario.id.split("-")[0])]?.length ?? 0;
+}
 
 function checked(scenario: Pick<Scenario,"id">, variant: number): TrainingEpisode {
   const category = Number(scenario.id.split("-")[0]);

@@ -319,11 +319,10 @@ test("real training route handles explicit training stop and rejects invented ge
 
 
 test("v3 case variants are bounded, consistent across legitimate/fraud pairs and not identifiers", async () => {
-  const { caseDetail, CASE_VARIANT_COUNT } = await import("../src/lib/trainingCaseFacts.ts");
-  assert.equal(CASE_VARIANT_COUNT, 4);
+  const { caseDetail, caseVariantCount } = await import("../src/lib/trainingCaseFacts.ts");
   for (let index = 0; index < SCENARIOS.length; index += 2) {
     const normal = SCENARIOS[index], fraud = SCENARIOS[index + 1];
-    for (let variant = 0; variant < CASE_VARIANT_COUNT; variant++) {
+    for (let variant = 0; variant < caseVariantCount(normal); variant++) {
       const facts = caseDetail(normal, variant);
       assert.equal(facts, caseDetail(fraud, variant));
       assert.ok(facts.length > 45);
@@ -335,7 +334,7 @@ test("v3 case variants are bounded, consistent across legitimate/fraud pairs and
     }
     assert.notEqual(caseDetail(normal, 0), caseDetail(normal, 1));
   }
-  assert.throws(() => caseDetail(SCENARIOS[0], 4), /INVALID_CASE_VARIANT/);
+  assert.throws(() => caseDetail(SCENARIOS[0], caseVariantCount(SCENARIOS[0])), /INVALID_CASE_VARIANT/);
 });
 
 test("v3 ends conservatively after audit outages but never overrides an explicit negative audit", () => {
@@ -357,7 +356,7 @@ test("v3 uses second AI audit only for proposed actions, closing or near-duplica
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   assert.match(route, /const needsAudit = first\.value\.actions\.length > 0 \|\| first\.value\.dialogue\.conversationComplete/);
   assert.match(route, /if \(needsAudit\) \{/);
-  assert.match(route, /const caseVariant = nextCaseVariant\(req, scenario\.topic, recentByTopic\[scenario\.topic\]\)/);
+  assert.match(route, /const caseVariant = nextCaseVariant\(req, scenario, recentByTopic\[scenario\.topic\]\)/);
   assert.match(route, /caseVariant, createdAt/);
 });
 

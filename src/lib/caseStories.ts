@@ -1,7 +1,7 @@
 import type { TrainingTopicId } from "./trainingCatalog";
 
 export type CaseAction = { label: string; safe: boolean; effect: string; followUp: string };
-export type CaseEvent = { kicker: string; speaker: string; text: string; note: string };
+export type CaseEvent = { kicker: string; speaker: string; text: string; note: string; surface?: "notice" | "page" };
 export type CaseStory = {
   id: string; topic: TrainingTopicId; tag: string; title: string; subtitle: string;
   source: string; date: string; sourceUrl: string; sourceType: string;
@@ -31,20 +31,22 @@ export const CASE_STORIES: CaseStory[] = [
     "events": [
       {
         "kicker": "첫 연락",
-        "speaker": "문자 메시지",
-        "text": "결혼식 소식을 전합니다. 모바일 청첩장으로 장소를 확인해 주세요.",
+        "speaker": "저장된 지인 연락처",
+        "text": "오랜만이야. 나 다음 달에 결혼해. 식장 약도는 아래 청첩장에 넣어뒀어.",
         "note": "실제 문자 원문이 아닌 기관 경보의 전개를 교육용으로 재구성했습니다."
       },
       {
         "kicker": "신뢰의 이유",
-        "speaker": "받는 사람",
-        "text": "저장해 둔 지인 번호에서 왔으니 괜찮지 않을까요?",
+        "speaker": "화면 전환",
+        "surface": "notice",
+        "text": "익숙한 이름으로 온 문자라, 청첩장 링크를 열어 봤어요.",
         "note": "실제 발신번호처럼 보여도 감염된 기기에서 재발송됐을 수 있습니다."
       },
       {
         "kicker": "결정적인 순간",
-        "speaker": "안내 화면",
-        "text": "청첩장을 보려면 새 앱을 설치해 주세요.",
+        "speaker": "청첩장 페이지",
+        "surface": "page",
+        "text": "식장 약도를 보려면 청첩장 보기 앱을 설치해 주세요.",
         "note": "청첩장 확인을 앱 설치로 연결하는 것이 위험 신호입니다."
       },
       {
@@ -99,7 +101,7 @@ export const CASE_STORIES: CaseStory[] = [
       {
         "kicker": "작은 성공",
         "speaker": "담당자",
-        "text": "첫 작업 정산이 됐네요. 다음에는 팀 전체가 함께 진행합니다.",
+        "text": "첫 후기 작성비는 보내드렸어요. 다음 건부터는 팀으로 진행해서 구매를 마치면 한꺼번에 돌려드려요.",
         "note": "초기의 소액 지급은 신뢰를 만드는 장치가 될 수 있습니다."
       },
       {
@@ -153,7 +155,7 @@ export const CASE_STORIES: CaseStory[] = [
     "events": [
       {
         "kicker": "예상 못 한 연락",
-        "speaker": "배송 담당자 사칭",
+        "speaker": "배송 담당자",
         "text": "신청하신 카드가 배송 중입니다. 오늘 수령하실 수 있나요?",
         "note": "배송 안내 단계에서는 사기처럼 느껴지지 않을 수 있습니다."
       },
@@ -165,7 +167,7 @@ export const CASE_STORIES: CaseStory[] = [
       },
       {
         "kicker": "결정적인 순간",
-        "speaker": "배송 담당자 사칭",
+        "speaker": "배송 담당자",
         "text": "그럼 반송을 접수해야 합니다. 문자에 적힌 고객센터로 전화해 주세요.",
         "note": "반송 절차 자체보다 누가 제공한 번호인지가 중요합니다."
       },
@@ -226,7 +228,8 @@ export const CASE_STORIES: CaseStory[] = [
       },
       {
         "kicker": "결정적인 순간",
-        "speaker": "앱 권한 안내",
+        "speaker": "앱 권한 요청 화면",
+        "surface": "page",
         "text": "앱이 휴대전화 정보와 문자에 접근하도록 허용해 주세요.",
         "note": "무료 혜택과 무관한 과도한 권한은 위험 신호입니다."
       },
@@ -275,19 +278,20 @@ export const CASE_STORIES: CaseStory[] = [
     "events": [
       {
         "kicker": "긴급 경고",
-        "speaker": "계정 알림 사칭",
+        "speaker": "계정 알림",
         "text": "새 기기에서 로그인이 시도됐습니다. 본인인지 확인해 주세요.",
         "note": "실제 사용자 계정에 침입이 있었다는 뜻은 아닙니다."
       },
       {
         "kicker": "확인 요구",
         "speaker": "발신자",
-        "text": "지금 확인하지 않으면 계정이 중지될 수 있습니다.",
+        "text": "본인이 아니라면 아래 보안 확인 링크를 열어 주세요. 확인이 늦어지면 계정 이용이 제한될 수 있습니다.",
         "note": "기한을 앞세워 충분히 생각할 시간을 빼앗습니다."
       },
       {
         "kicker": "결정적인 순간",
-        "speaker": "가짜 로그인 화면",
+        "speaker": "문자 링크에서 열린 로그인 화면",
+        "surface": "page",
         "text": "아이디와 비밀번호를 입력하면 계정 상태를 확인할 수 있습니다.",
         "note": "공식 화면과 비슷한 디자인이어도 진짜 서비스라고 단정할 수 없습니다."
       },
@@ -336,13 +340,13 @@ export const CASE_STORIES: CaseStory[] = [
     "events": [
       {
         "kicker": "낯선 기관 연락",
-        "speaker": "기관 직원 사칭",
+        "speaker": "기관 담당자",
         "text": "본인 명의가 사건에 연루돼 확인이 필요합니다.",
         "note": "실제 사건번호나 기관명을 사칭 문구만으로 믿지 마세요."
       },
       {
         "kicker": "불안 조성",
-        "speaker": "기관 직원 사칭",
+        "speaker": "기관 담당자",
         "text": "본인 확인이 지연되면 곤란해질 수 있으니 지금 처리해 주세요.",
         "note": "긴급함을 이용해 독립 확인을 어렵게 만듭니다."
       },

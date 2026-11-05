@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BottomCTA, Header, Progress, Screen } from "@/components/ui";
 import { ChevronRight, ShieldIcon } from "@/components/Icons";
 import { CASE_STORIES, type CaseStory } from "@/lib/caseStories";
@@ -14,6 +14,17 @@ export default function CaseStudyPage() {
   const [step, setStep] = useState(0);
   const [choice, setChoice] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("scene");
+  const scene = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (phase === "debrief") {
+      window.scrollTo(0, 0);
+      scene.current?.querySelector("h2")?.focus({ preventScroll: true });
+    }
+    else if (step > 0 || phase === "outcome") {
+      scene.current?.querySelector("[data-current-event]")?.scrollIntoView({ block: "nearest" });
+    }
+  }, [phase, step]);
 
   const showList = () => {
     setStory(null);
@@ -27,15 +38,9 @@ export default function CaseStudyPage() {
     setChoice(null);
     setPhase("scene");
   };
-  const retry = () => {
-    if (!story) return;
-    setStep(story.checkpoint);
-    setChoice(null);
-    setPhase("scene");
-  };
   const goBack = () => {
     if (phase === "debrief") { setPhase("outcome"); return; }
-    if (phase === "outcome") { retry(); return; }
+    if (phase === "outcome") { showList(); return; }
     if (step > 0) { setStep(step - 1); return; }
     showList();
   };
@@ -78,29 +83,25 @@ export default function CaseStudyPage() {
     return (
       <Screen>
         <Header title="사건 되짚어보기" back={goBack} onClose={showList} />
-        <section className="screen__body case-play-summary">
+        <section className="screen__body case-play-summary" ref={scene}>
           <div className="case-play-summary-heading">
-            <span className="case-play-kicker">사건의 진짜 수법은?</span>
-            <h2>{story.title}</h2>
+            <span className="case-play-kicker">다른 대응과 결과 비교</span>
+            <h2 tabIndex={-1}>{story.title}</h2>
           </div>
-          <section className="case-play-route" aria-label="기관이 공개한 사기 수법의 흐름">
-            <h3>사기범이 노린 경로</h3>
-            {experience.riskPath.map((part, i) => (
-              <div className="case-play-route-step" key={part}>
-                <span>{i + 1}</span>
-                <strong>{part}</strong>
-                {i < experience.riskPath.length - 1 && <span className="case-play-route-arrow" aria-hidden="true">↓</span>}
-              </div>
-            ))}
-          </section>
-          {choiceData && choiceView && (
-            <section className={"case-play-my-route " + (choiceData.safe ? "case-play-my-route--safe" : "case-play-my-route--risk")} aria-label="내 선택의 가상 결과">
-              <span className="case-play-kicker">내가 직접 해 본 행동</span>
-              <h3>{choiceView.label}</h3>
-              <p>{choiceView.outcome}</p>
-              <small>위 결과는 교육용 가상 체험이에요.</small>
-            </section>
-          )}
+          <div className="case-play-comparison" aria-label="행동별 결과">
+            {[choice, ...story.actions.map((_, i) => i).filter(i => i !== choice)].map(i => {
+              if (i === null) return null;
+              const action = story.actions[i];
+              const view = experience.actions[i];
+              return (
+                <article key={i} className={`case-play-my-route ${action.safe ? "case-play-my-route--safe" : "case-play-my-route--risk"}`}>
+                  <span className="case-play-kicker">{i === choice ? "내가 고른 행동" : "이렇게 했다면"}</span>
+                  <h3>{view.label}</h3>
+                  <p>{view.outcome}</p>
+                </article>
+              );
+            })}
+          </div>
           <div className="case-play-takeaway">
             <span aria-hidden="true"><ShieldIcon /></span>
             <div>
@@ -110,6 +111,7 @@ export default function CaseStudyPage() {
           </div>
           <details className="case-play-sources">
             <summary>실제 발표 내용과 자료 출처 보기</summary>
+            <p>{experience.riskPath.join(" → ")}</p>
             <p>{story.sourceFact}</p>
             <p>{story.actual}</p>
             <p>{story.sourceType} · {story.source} · {story.date}</p>
@@ -117,9 +119,8 @@ export default function CaseStudyPage() {
             <small>대화와 내 선택의 결과는 교육용으로 재구성했습니다. 특정 피해자의 실제 행동을 재현한 것은 아니에요.</small>
           </details>
         </section>
-        <BottomCTA row>
-          <button type="button" className="btn btn--gray" onClick={showList}>사례 목록</button>
-          <button type="button" className="btn btn--primary" onClick={retry}>다른 행동 해보기</button>
+        <BottomCTA>
+          <button type="button" className="btn btn--primary" onClick={showList}>다른 사례 보기</button>
         </BottomCTA>
       </Screen>
     );
@@ -129,7 +130,7 @@ export default function CaseStudyPage() {
     <Screen>
       <Header title="사례로 배우기" back={goBack} onClose={showList} />
       <Progress value={phase === "outcome" ? story.checkpoint + 2 : step + 1} total={story.checkpoint + 2} dark={false} label={false} />
-      <section className="screen__body case-play-scene">
+      <section className="screen__body case-play-scene" ref={scene}>
         <div className="case-play-scene-head">
           <span className="case-play-kicker">{story.tag}</span>
           <h2>{story.title}</h2>
@@ -144,7 +145,9 @@ export default function CaseStudyPage() {
           </div>
           <div className="case-play-thread" role="log" aria-live="polite" aria-relevant="additions">
             {story.events.slice(0, step + 1).map((event, i) => (
-              <div className={"case-play-message " + (event.speaker === "받는 사람" ? "case-play-message--mine" : "")} key={i}>
+              <div className={"case-play-message " + (event.surface ? `case-play-event--${event.surface}` :
+                event.speaker === "받는 사람" ? "case-play-message--mine" : "")} key={i}
+                data-current-event={phase === "scene" && i === step ? "" : undefined}>
                 <span>{event.speaker}</span>
                 <p>{event.text}</p>
               </div>
@@ -154,9 +157,10 @@ export default function CaseStudyPage() {
                 <div className="case-play-action-confirm">
                   <div><small>내 휴대전화에서 실행한 행동</small><strong>{choiceView.label}</strong></div>
                 </div>
-                <div className={"case-play-device-result " + (choiceData.safe ? "case-play-device-result--safe" : "case-play-device-result--risk")}>
-                  <strong>{choiceData.safe ? "다른 경로로 대응했어요" : "이런 위험이 생길 수 있어요"}</strong>
+                <div data-current-event className={"case-play-device-result " + (choiceData.safe ? "case-play-device-result--safe" : "case-play-device-result--risk")}>
+                  <strong>{choiceData.safe ? "이렇게 대응했어요" : "이런 위험이 생길 수 있어요"}</strong>
                   <p>{choiceView.outcome}</p>
+                  {!choiceData.safe && <small>{choiceData.followUp}</small>}
                 </div>
               </>
             )}
@@ -165,7 +169,7 @@ export default function CaseStudyPage() {
 
         {phase === "scene" && isCheckpoint && (
           <section className="case-play-action-tray" aria-label="휴대전화에서 실행할 행동">
-            <span className="case-play-kicker">↶ 사건 되감기</span>
+            <span className="case-play-kicker">선택할 순간</span>
             <h3>지금, 어떻게 하시겠어요?</h3>
             <div className="case-play-action-options">
               {experience.actions.map((action, i) => (
@@ -182,25 +186,20 @@ export default function CaseStudyPage() {
           <p className="case-play-prompt">대화를 확인했으면 다음 메시지를 눌러 주세요.</p>
         )}
         {phase === "outcome" && (
-          <p className="case-play-prompt">다른 행동도 시도해 볼 수 있어요.</p>
+          <p className="case-play-prompt">이 선택과 다른 대응의 결과를 비교해 보세요.</p>
         )}
       </section>
 
       {phase === "outcome" ? (
-        <BottomCTA row>
-          <button type="button" className="btn btn--gray" onClick={retry}>다른 행동</button>
-          <button type="button" className="btn btn--primary" onClick={() => setPhase("debrief")}>사건 결과 보기</button>
+        <BottomCTA>
+          <button type="button" className="btn btn--primary" onClick={() => setPhase("debrief")}>다른 대응과 비교</button>
         </BottomCTA>
       ) : !isCheckpoint ? (
         <BottomCTA row>
           <button type="button" className="btn btn--gray" onClick={goBack}>{step === 0 ? "사례 목록" : "이전 장면"}</button>
           <button type="button" className="btn btn--primary" onClick={() => setStep(n => Math.min(story.checkpoint, n + 1))}>다음 메시지</button>
         </BottomCTA>
-      ) : (
-        <BottomCTA>
-          <button type="button" className="btn btn--gray" onClick={goBack}>이전 메시지</button>
-        </BottomCTA>
-      )}
+      ) : null}
     </Screen>
   );
 }

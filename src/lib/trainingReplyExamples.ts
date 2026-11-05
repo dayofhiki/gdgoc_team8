@@ -47,7 +47,11 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
   const line = last.text;
   const informal = informalTopics.has(topic);
   const sent = new Set(messages.filter(m => m.actor === "me").map(m => normalized(m.text)));
-  const kinds = new Set((last.actions ?? []).filter(a => a.origin === "sender").map(a => a.kind));
+  const latestRequest = messages.findLastIndex(message => message.actor === "them" &&
+    message.actions?.some(action => action.origin === "sender"));
+  const kinds = new Set((latestRequest >= 0 ? messages[latestRequest].actions ?? [] : [])
+    .filter(action => action.origin === "sender").map(action => action.kind));
+  const afterRequest = latestRequest >= 0 && latestRequest < messages.length - 1;
   const requested = isRequest.test(line);
   const candidates: { text: string; weight: number }[] = [];
   const add = (weight: number, ...texts: string[]) => {
@@ -130,14 +134,31 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
   } else {
     add(25, "어떤 내용으로 연락하셨나요?", "조금 더 자세히 설명해 주세요.", "무슨 일인지 알려주시겠어요?");
   }
+  const hold = informal ? "잠깐 생각해 볼게." : "잠깐 생각해 볼게요.";
+  const decline = kinds.has("transfer") ? (informal ? "돈은 안 보낼게." : "송금은 하지 않겠습니다.") :
+    kinds.has("provide_data") ? (informal ? "개인정보는 보내지 않을게." : "개인정보는 보내지 않겠습니다.") :
+    kinds.has("link") ? (informal ? "링크는 열지 않을게." : "링크는 열지 않겠습니다.") :
+    kinds.has("phone") ? "이 번호로 전화하지 않겠습니다." : hold;
+  const neutralReply = topic === "obituary" && /돌아가셨|별세/.test(line) ? "삼가 고인의 명복을 빕니다." :
+    topic === "invitation" && /결혼/.test(line) ? "결혼 축하해요." :
+    topic === "card" && /카드|배송/.test(line) ? "카드를 신청한 기억이 없어요." :
+    /가능|괜찮|시간/.test(line) ? (informal ? "응, 듣고 있어." : "네, 말씀해 주세요.") :
+    informal ? "무슨 일인지 조금 더 말해 줘." : "말씀하신 내용을 조금 더 알려 주세요.";
+  const direct = afterRequest ? [decline, hold] : kinds.size ? [hold, decline] : [neutralReply];
   const unique = new Set<string>();
-  return candidates.sort((a, b) => b.weight - a.weight)
+  const available = candidates.sort((a, b) => b.weight - a.weight)
     .map(candidate => candidate.text)
     .filter(text => {
       const key = normalized(text);
       if (sent.has(key) || unique.has(key)) return false;
       unique.add(key);
       return true;
-    })
-    .slice(0, 2);
+    });
+  const statement = direct.find(text => !sent.has(normalized(text)));
+  const question = available.find(text => /[?？]$/.test(text));
+  if (afterRequest && statement) return [statement, ...direct.filter(text =>
+    text !== statement && !sent.has(normalized(text))), question]
+    .filter((text): text is string => Boolean(text)).slice(0, 2);
+  return [question, statement, ...available.filter(text => text !== question && text !== statement)]
+    .filter((text): text is string => Boolean(text)).slice(0, 2);
 }

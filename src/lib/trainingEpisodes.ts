@@ -1,3 +1,5 @@
+import { ADDITIONAL_EPISODES } from "./trainingEpisodeAdditions.ts";
+
 /** 교육용 가상 인물·대사로, 기관/언론에 공개된 실제 피싱 수법의 구조를 재구성한 사건들.
  * 사건별 출처는 범행 유형에 대한 근거이며, 이 사건의 가상 메시지·금액·결과가
  * 특정 피해자의 실제 기록이라는 뜻은 아니다. 실제 번호·URL·계좌를 넣지 않는다.
@@ -8,6 +10,7 @@ export type TrainingEpisode = {
   alternateOpening: string;
   incident: string;
   context: string;
+  followUp?: string;
   factConstraint: string;
   facts: string;
   approach: string;
@@ -22,9 +25,20 @@ export type TrainingEpisode = {
   bankClaim?: string;
   sourceName: string;
   sourceUrl: string;
+  sourceDetail?: string;
+  linkInteraction?: "install";
+  callback?: {
+    text: string;
+    kind: "link" | "provide_data";
+    target: string;
+    task: string;
+    title?: string;
+    field?: string;
+    install?: true;
+  };
 };
 
-export const TRAINING_EPISODES: readonly (readonly TrainingEpisode[])[] = [
+const BASE_TRAINING_EPISODES: readonly (readonly TrainingEpisode[])[] = [
   [
     {
       "id": "family-1",
@@ -844,3 +858,9 @@ export const TRAINING_EPISODES: readonly (readonly TrainingEpisode[])[] = [
     }
   ]
 ];
+
+// New branches are appended because existing sessions and recent history use the array indices.
+export const TRAINING_EPISODES = BASE_TRAINING_EPISODES.map(group => [
+  ...group,
+  ...ADDITIONAL_EPISODES.filter(episode => episode.id.startsWith(group[0].id.split("-")[0] + "-")),
+]);

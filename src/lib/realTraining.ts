@@ -1,3 +1,4 @@
+import { caseBranch, type CaseBranch } from "./trainingCaseFacts.ts";
 import { actionChoice, buildActions } from "./trainingActions.ts";
 import { hasConcreteRequest, shouldResolveAfterIndependentCheck } from "./trainingResolution.ts";
 import { buildBehaviorFeedback } from "./trainingFeedback.ts";
@@ -311,27 +312,31 @@ export function recordChoice(
   };
   const verification = check && check.evidence !== "inconclusive" ? check.evidence : state.verification;
   const resolved = check?.evidence === "failed" && shouldResolveAfterIndependentCheck(state, scenario, choice, verification);
-  // 카드 사례에서 문자에 첨부한 번호를 골랐을 때만 후속 요청을 재현한다.
-  const cardCallback = scenario.topic === "card" && scenario.identity === "fraud" && choice === "verify_sender" &&
-    sourceNeeded && state.messages[sourceIndex!]?.actions?.some(action => action.id === actionId && action.kind === "phone") &&
-    !state.events.some(e => e.choice === "verify_sender" && e.actionId);
+  const episode = caseBranch(scenario, state.caseVariant ?? 0);
+  const followUp: CaseBranch["callback"] = episode.callback ?? (scenario.topic === "card" ? {
+    text: "반송 접수 담당입니다. 카드 신청 여부를 확인하려면 아래 링크를 열어서 원격 지원 앱을 설치해 주세요.",
+    kind: "link", target: "반송 확인 지원", task: "원격 지원 안내 보기",
+    title: "반송 확인 지원", field: "원격 지원 앱 설치", install: true,
+  } : undefined);
+  const callback = scenario.identity === "fraud" && choice === "verify_sender" && sourceNeeded &&
+    state.messages[sourceIndex!]?.actions?.some(action => action.id === actionId && action.kind === "phone") &&
+    !state.events.some(e => e.choice === "verify_sender" && e.actionId) ? followUp : undefined;
   const notice = check?.notice ?? (choice === "family_contact"
     ? "저장된 번호로 가족에게 상황을 말했어요. 가족은 지금 바로 결정하지 말고 따로 확인해 보자고 했어요."
-    : choice === "verify_sender" ? cardCallback
-      ? "문자에서 받은 번호로 전화했어요. 상담원은 반송 확인에 원격 지원이 필요하다며 새 문자를 보냈어요."
+    : choice === "verify_sender" ? callback
+      ? "문자에 적힌 번호로 전화했어요. 통화 뒤 상대가 새 문자를 보냈어요."
       : "선택한 번호로 전화했어요. 받은 사람은 자신이 담당자라고 답했어요."
     : choice === "verify_chat" ? "대화 상대는 자신이 맞다고 주장했습니다."
     : choice === "open_link" ? "메시지의 주소를 눌렀습니다. 가상의 페이지가 열렸습니다."
     : choice === "comply" ? "요청한 금액을 보낸 것으로 기록했습니다. 실제 돈은 이동하지 않았습니다."
     : choice === "share" ? "요청한 정보를 전송한 것으로 기록했습니다. 실제 정보는 전송하지 않았습니다."
-    : choice === "install" ? "원격 지원 앱 설치를 선택했어요. 실제 앱은 설치되지 않았어요."
+    : choice === "install" ? "앱 설치를 선택했어요. 실제 앱은 설치되지 않았어요."
     : "이 대화를 종료했습니다.");
   const terminal = ["comply", "share", "install", "stop"].includes(choice);
-  const callback = cardCallback ? buildActions([{
-    kind: "link", origin: "sender", target: "반송 확인 지원", task: "원격 지원 안내 보기",
-    previewTitle: "반송 확인 지원", previewDescription: "원격 지원 앱 설치",
+  const callbackActions = callback ? buildActions([{
+    ...callback, origin: "sender", previewTitle: callback.title ?? "", previewDescription: callback.field ?? "",
   }], state.turns + MAX_TURNS) : [];
-  if (callback[0]?.linkPreview) callback[0].linkPreview.interaction = "install";
+  if (callback?.install && callbackActions[0]?.linkPreview) callbackActions[0].linkPreview.interaction = "install";
 
   return {
     state: {
@@ -343,9 +348,9 @@ export function recordChoice(
       endReason: resolved ? "resolved" : terminal ? "action" : state.endReason,
       events: [...state.events, event],
       messages: [...state.messages, { actor: "system", text: notice },
-        ...(cardCallback ? [{
-          actor: "them" as const, text: "반송 접수 담당입니다. 카드 신청 여부를 확인하려면 아래 링크를 열어서 원격 지원 앱을 설치해 주세요.",
-          actions: callback,
+        ...(callback ? [{
+          actor: "them" as const, text: callback.text,
+          actions: callbackActions,
         }] : []),
         ...(resolved ? [{ actor: "system" as const, text: "확인한 내용과 상대의 요청이 일치하지 않아 문자 대화를 마무리했어요. 지금까지의 대응을 살펴보세요." }] : [])],
     },
@@ -414,13 +419,15 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
   const status = risk ? "위험 행동" : checked ? "안전 확인" : stopped ? "대화 중단" :
     consultedFamily ? "가족 상담" :
     linkOpened || followedSenderNumber ? "주의 행동" : "확인 미완료";
-  const actionTitle = shared ? "정보 전송" : complied ? "요청 수락" :
+  const actionTitle = installed ? "모의 앱 설치" : shared ? "정보 전송" : complied ? "요청 수락" :
     checked ? "직접 확인" : consultedFamily ? "가족에게 문의" : stopped ? "대화 중단" :
     linkOpened ? "링크 열람" : followedSenderNumber ? "안내 번호 연락" : "대화 종료";
 
+  const branch = state.caseVariant === undefined ? undefined : caseBranch(scenario, state.caseVariant);
   return {
     coverage,
     topic: scenario.topic,
+    caseSource: branch ? { name: branch.sourceName, url: branch.sourceUrl, detail: branch.sourceDetail } : undefined,
     installed,
     behavior: buildBehaviorFeedback(state, scenario),
     highlights: {
