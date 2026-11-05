@@ -24,7 +24,7 @@ const RATE_LIMIT = 40;
 const hits = new Map<string, { count: number; since: number }>();
 // Rotate branches for repeat plays without storing conversation text or personal details.
 const lastBranch = new Map<string, { index: number; time: number }>();
-function nextCaseVariant(req: NextRequest, topic: string): number {
+function nextCaseVariant(req: NextRequest, topic: string, recent?: unknown): number {
   const visitor = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous";
   const key = visitor + ":" + topic;
   const now = Date.now();
@@ -32,9 +32,15 @@ function nextCaseVariant(req: NextRequest, topic: string): number {
     if (now - entry.time > RATE_WINDOW_MS) lastBranch.delete(id);
   }
   const previous = lastBranch.get(key);
-  const index = previous && now - previous.time < RATE_WINDOW_MS
-    ? (previous.index + 1 + randomInt(CASE_VARIANT_COUNT - 1)) % CASE_VARIANT_COUNT
-    : randomInt(CASE_VARIANT_COUNT);
+  // 서버리스 인스턴스가 변경되어도 사용자의 최근 사건 2개를 되풀이하지 않는다.
+  // 입력값은 출제 취향만 결정하며 비밀 상태·정답·행동 평가에는 관여하지 않는다.
+  const seen = Array.isArray(recent) ? recent.filter((v): v is number =>
+    Number.isInteger(v) && v >= 0 && v < CASE_VARIANT_COUNT).slice(-2) : [];
+  if (!seen.length && previous && now - previous.time < RATE_WINDOW_MS) seen.push(previous.index);
+  const candidates = Array.from({ length: CASE_VARIANT_COUNT }, (_, i) => i)
+    .filter(i => !seen.includes(i));
+  const pool = candidates.length ? candidates : Array.from({ length: CASE_VARIANT_COUNT }, (_, i) => i);
+  const index = pool[randomInt(pool.length)];
   lastBranch.set(key, { index, time: now });
   return index;
 }
@@ -310,7 +316,9 @@ export async function POST(req: NextRequest) {
         TRAINING_TOPICS.findIndex(t => t.id === body.topic);
       const index = topicIndex * 2 + 1;
       const scenario = SCENARIOS[index];
-      const caseVariant = nextCaseVariant(req, scenario.topic);
+      const recentByTopic = body.recentBranches && typeof body.recentBranches === "object" &&
+        !Array.isArray(body.recentBranches) ? body.recentBranches as Record<string, unknown> : {};
+      const caseVariant = nextCaseVariant(req, scenario.topic, recentByTopic[scenario.topic]);
       const opening = await generateOpening(scenario, caseVariant);
       const state: TrainingState = {
         version: 1, scenario: index, caseVariant, createdAt: Date.now(), turns: 0,
@@ -318,7 +326,8 @@ export async function POST(req: NextRequest) {
         events: [], verification: "none", closed: false, dialogue: INITIAL_DIALOGUE,
       };
       return apiOk({
-        token: seal(state), title: scenario.title, topic: scenario.topic, messages: state.messages,
+        token: seal(state), title: scenario.title, topic: scenario.topic,
+        caseVariant, messages: state.messages,
         turns: 0, maxTurns: MAX_TURNS, verified: false, closed: false, endReason: null,
       });
     }
