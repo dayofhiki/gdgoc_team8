@@ -11,6 +11,8 @@ import { copyText } from "@/lib/share";
 import { familyShareUrl } from "@/lib/invite";
 import { saveRecord } from "@/lib/records";
 import type { BehaviorFeedback } from "@/lib/trainingFeedback";
+import type { PhoneMethod } from "@/lib/realTraining";
+import TrainingPhonePanel, { TrainingPhoneIcon } from "@/components/TrainingPhonePanel";
 
 type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
 type LinkPreview = { url: string; domain: string; title: string; description: string };
@@ -110,7 +112,8 @@ export default function RealTraining() {
   const [session, setSession] = useState<Session | null>(null);
   const [input, setInput] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [tipVisible, setTipVisible] = useState(false);
+  const [phoneHint, setPhoneHint] = useState(false);
+  const phoneHintShown = useRef(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [previewActionId, setPreviewActionId] = useState<string | null>(null);
   const [openedLinks, setOpenedLinks] = useState<string[]>([]);
@@ -140,11 +143,12 @@ export default function RealTraining() {
     setPreviewIndex(null);
     setPreviewActionId(null);
     setActionsOpen(false);
+    setPhoneHint(false);
+    phoneHintShown.current = false;
     setBusy(true);
     try {
       const initial = await request({ action: "start" });
       setSession(initial);
-      setTipVisible(true);
       setPhase("chat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "훈련을 시작하지 못했습니다.");
@@ -199,12 +203,15 @@ export default function RealTraining() {
     return () => window.clearTimeout(timeout);
   }, [ending]);
 
-  function dismissGuide() {
-    setTipVisible(false);
-  }
+  useEffect(() => {
+    if (!phoneHint) return;
+    const timeout = window.setTimeout(() => setPhoneHint(false), 1900);
+    return () => window.clearTimeout(timeout);
+  }, [phoneHint]);
 
   function openActions() {
-    dismissGuide();
+    setPhoneHint(false);
+    phoneHintShown.current = true;
     setActionsOpen(true);
   }
 
@@ -225,8 +232,14 @@ export default function RealTraining() {
       if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       setSession({ ...next, title: session.title });
       setPendingMessage(null);
+      // 정체·위험도와 무관하게 학습자의 외부 기능 의사 또는 두 번째 대화 이후
+      // 단 한 번만 조용히 버튼을 강조한다. 사기 메시지의 등장을 알려주는 신호가 아니다.
+      if (!phoneHintShown.current && !next.closed &&
+          (next.turns >= 2 || /(?:전화|통화|연락처|저장된|번호|앱|확인)/.test(text))) {
+        phoneHintShown.current = true;
+        setPhoneHint(true);
+      }
       if (next.closed) {
-        setTipVisible(false);
         // 대화가 저절로 끝나면 입력창 자리의 버튼을 눌러 결과로 넘어간다.
         if (next.endReason !== "natural" && next.endReason !== "turn_limit") setPhase("judge");
       }
@@ -240,14 +253,19 @@ export default function RealTraining() {
     }
   }
 
-  async function perform(choice: Choice, sourceIndex?: number, actionId?: string) {
+  async function perform(choice: Choice, sourceIndex?: number, actionId?: string, method?: PhoneMethod): Promise<string | undefined> {
     if (!session || busy || ending) return;
     setBusy(true);
     setError("");
     try {
-      const next = await request({ action: "choice", token: session.token, choice, ...(sourceIndex !== undefined ? { sourceIndex } : {}), ...(actionId ? { actionId } : {}) });
+      const next = await request({
+        action: "choice", token: session.token, choice,
+        ...(sourceIndex !== undefined ? { sourceIndex } : {}),
+        ...(actionId ? { actionId } : {}),
+        ...(method ? { method } : {}),
+      });
       setSession({ ...next, title: session.title });
-      setActionsOpen(false);
+      if (!method) setActionsOpen(false);
       if (choice === "open_link" && sourceIndex !== undefined && actionId) {
         setOpenedLinks((prev) => prev.includes(actionId) ? prev : [...prev, actionId]);
         setPreviewIndex(sourceIndex);
@@ -261,8 +279,13 @@ export default function RealTraining() {
           setPhase("judge");
         }
       }
+      if (method) {
+        return [...next.messages].reverse().find(m => m.actor === "system")?.text ??
+          "선택한 행동이 기록되었습니다.";
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "행동을 기록하지 못했습니다.");
+      if (method) throw err;
     } finally {
       setBusy(false);
     }
@@ -506,6 +529,8 @@ export default function RealTraining() {
   }
 
   const contact = contactTitle(session?.title);
+  const phoneTopic = session?.title?.includes("가족") ? "family" :
+    session?.title?.includes("택배") ? "delivery" : "bank";
   const activeLink = previewIndex !== null ? session?.messages[previewIndex]?.actions?.find(a => a.id === previewActionId)?.linkPreview : undefined;
 
   return (
@@ -519,15 +544,15 @@ export default function RealTraining() {
           <strong>{contact}</strong>
           <span>문자 메시지</span>
         </div>
-        <button type="button" className="rt-header-more" onClick={openActions} aria-label="직접 확인하거나 가족에게 연락하고 대화 중단하는 메뉴 열기" aria-expanded={actionsOpen}>···</button>
+        <button type="button"
+          className={phoneHint ? "rt-header-more rt-header-more--hint" : "rt-header-more"}
+          onClick={openActions}
+          disabled={!session || session.closed || busy}
+          aria-label="내 휴대전화 기능 열기" aria-expanded={actionsOpen}
+          title="내 휴대전화">
+          <TrainingPhoneIcon />
+        </button>
       </header>
-      {tipVisible && session && (
-        <div className="rt-menu-guide" role="status">
-          <span>위의 <b>···</b>에서 직접 확인, 가족 연락 또는 대화 중단을 선택할 수 있어요.</span>
-          <button type="button" onClick={dismissGuide} aria-label="안내 닫기">×</button>
-        </div>
-      )}
-
       <div className="rt-history" ref={historyRef} role="log" aria-live="polite" aria-relevant="additions text">
         <div className="rt-day">오늘 · 새로운 대화</div>
         {!session && !error && <div className="rt-loading-message" role="status">새 메시지를 불러오는 중…</div>}
@@ -610,26 +635,14 @@ export default function RealTraining() {
         <div className="rt-training-note">모의 훈련 · 실제 송금·통화·정보 전송 없음</div>
       </div>
 
-      {actionsOpen && (
-        <BottomSheet onClose={() => setActionsOpen(false)}>
-          <div className="rt-sheet-title">
-            <h2>다음에 어떻게 하시겠어요?</h2>
-            <p>대화 밖에서 할 수 있는 행동을 선택해 보세요.</p>
-          </div>
-          <button type="button" className="rt-sheet-action" onClick={() => void perform("verify")} disabled={busy || !session || session.closed}>
-            <span className="rt-sheet-icon">✓</span>
-            <span><strong>다른 경로로 직접 확인하기</strong><small>상대가 보내 준 번호·링크 말고, 기존 연락처나 공식 앱으로 확인</small></span><span aria-hidden="true">›</span>
-          </button>
-          <button type="button" className="rt-sheet-action" onClick={() => void perform("family_contact")} disabled={busy || !session || session.closed}>
-            <span className="rt-sheet-icon">☎</span>
-            <span><strong>저장된 번호로 가족에게 연락</strong><small>가족에게 직접 연락하고 대화 마무리</small></span><span aria-hidden="true">›</span>
-          </button>
-          <button type="button" className="rt-sheet-action" onClick={() => void perform("stop")} disabled={busy}>
-            <span className="rt-sheet-icon">✕</span>
-            <span><strong>대화 중단하기</strong><small>대화를 끝내고 판단 단계로 이동</small></span><span aria-hidden="true">›</span>
-          </button>
-          <button type="button" className="btn btn--gray" onClick={() => setActionsOpen(false)}>계속 대화하기</button>
-        </BottomSheet>
+      {actionsOpen && session && (
+        <TrainingPhonePanel
+          topic={phoneTopic}
+          busy={busy}
+          onClose={() => setActionsOpen(false)}
+          onAction={(choice, method) => perform(choice, undefined, undefined, method)}
+          onStop={() => void perform("stop")}
+        />
       )}
 
       {ending && (
