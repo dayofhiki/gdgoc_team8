@@ -572,3 +572,12 @@ test("action-first interface avoids identity-guessing quiz and prioritizes pract
   assert.match(intro, /어떤 연락이 오더라도 안전하게 대응하는 연습/);
   assert.match(mode, /안전하게 행동하는 연습/);
 });
+
+
+test("back navigation respects the selected mode while preserving the no-identity-quiz flow", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  assert.match(ui, /new URLSearchParams\(window\.location\.search\)\.has\("topic"\) \? "\/roleplay\/select" : "\/roleplay\/mode"/);
+  assert.match(ui, /onClick=\{\(\) => void finish\(\)\}/);
+  assert.doesNotMatch(ui, /setPhase\("judge"\)/);
+});
