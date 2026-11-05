@@ -215,7 +215,12 @@ async function generateResponse(state: TrainingState, text: string) {
   if (grounded.length !== first.value.actions.length) {
     console.info("training: dropped unsupported model-proposed actions");
   }
-  const actions = buildActions(grounded, state.turns);
+  // 독립 검증 수단은 발신자 말풍선 아래에 정답 버튼처럼 달지 않는다.
+  // 사용자가 별도의 모의 휴대전화 패널에서 직접 찾게 한다.
+  // 단, 상대가 보낸 링크·번호 및 송금·정보 요청은 그 메시지의 일부로 유지한다.
+  const inlineActions = grounded.filter(a => a.kind !== "app" &&
+    !(a.kind === "phone" && a.origin === "preexisting"));
+  const actions = buildActions(inlineActions, state.turns);
   const decision = decideDialogueTurn({
     memory: dialogue, primary: first.value.dialogue, audit: auditSignal,
     reply, userText: text, actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
