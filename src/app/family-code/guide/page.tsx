@@ -9,10 +9,10 @@ export default function FamilyCodeGuide() {
   return (
     <Screen>
       <Header title="가족 암호 정하기" small />
-      <section className="screen__body">
+      <section className="screen__body screen__body--two">
         <div className="stack" style={{ marginTop: 28, gap: 8 }}>
           <h2 className="title">{"우리 가족만 아는\n암호를 정해요"}</h2>
-          <p className="desc">{"사칭 전화가 오면 이 질문 하나로\n진짜 가족인지 확인할 수 있어요."}</p>
+          <p className="desc">{"가족만 아는 질문을 정해 두고,\n의심되는 연락은 원래 번호로 다시 확인해요."}</p>
         </div>
         <div className="stack" style={{ marginTop: 40, gap: 20 }}>
           <div className="card">
@@ -27,13 +27,14 @@ export default function FamilyCodeGuide() {
             </ol>
           </div>
           <div className="card card--blue">
-            <p className="card__title">답은 메시지로 주고받지 않아요</p>
-            <p className="card__text">답은 가족과 직접 만나거나 통화로 정해요. 앱은 질문만 가족에게 보내드려요.</p>
+            <p className="card__title">암호는 가족끼리만 공유해요</p>
+            <p className="card__text">질문과 답을 믿을 수 있는 가족과 공유해 두세요. 의심되는 연락에서는 답을 먼저 알려주지 마세요.</p>
           </div>
         </div>
       </section>
       <BottomCTA>
         <Link href="/family-code/question" className="btn btn--primary btn--lg">암호 정하러 가기</Link>
+        <Link href="/family-code/shared" className="btn btn--gray">저장한 가족 암호 보기</Link>
       </BottomCTA>
     </Screen>
   );

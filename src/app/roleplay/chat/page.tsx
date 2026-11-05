@@ -402,7 +402,7 @@ export default function RealTraining() {
       ? [title, topic ? topicDescriptor(topic).title : "실전 대응 훈련", result.behavior.headline,
           goal ? "다음에 함께 연습할 행동 · " + goal.title : "", "같은 상황을 연습해 보세요."].filter(Boolean).join("\n")
       : [title, ...promises.map((p, i) => (i + 1) + ". " + p.title),
-          "가족 확인 질문과 답은 직접 통화하거나 만나서 정해요.", "같은 상황을 함께 연습해 보세요."].join("\n");
+          "평소에 가족끼리 확인 질문을 정해 두고, 의심되는 연락에는 답을 알려주지 않아요.", "같은 상황을 함께 연습해 보세요."].join("\n");
     setShareNotice("");
     if (navigator.share) {
       try {
@@ -463,7 +463,7 @@ export default function RealTraining() {
                   {hasFamilyQuestion
                     ? <p className="fb-item__text">{familyQuestion}</p>
                     : <p className="fb-item__text">아직 정한 질문이 없어요. 가족과 직접 정해 보세요.</p>}
-                  <p className="fb-note">질문의 답은 문자로 보내지 않아요.</p>
+                  <p className="fb-note">의심되는 연락에는 질문의 답을 보내지 않아요.</p>
                   <Link className="fb-link" href={hasFamilyQuestion ? "/family-code/question" : "/family-code/guide"}
                     onClick={() => saveReview(result)}>
                     {hasFamilyQuestion ? "질문 변경하기" : "질문 만들기"} <ChevronRight size={18} />

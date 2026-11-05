@@ -19,6 +19,7 @@ const MAX_PARTICIPANTS = 10;
 const RENEW_BEFORE_MS = 24 * 60 * 60 * 1000;
 
 type Cached = { token: string; expires_at: string; family_id: string };
+type FamilyQuestion = { id: string; question: string; created_at: string };
 
 function load(key: string): string | null {
   try {
@@ -104,14 +105,7 @@ export async function getInviteToken(nickname = storedNickname()): Promise<strin
   }
 }
 
-/** 가족 공유 링크: 들어온 사람이 이 가족으로 묶이는 도전장 링크. 오프라인이면 안내 화면 링크 */
-export async function familyShareUrl(origin: string): Promise<string> {
-  const name = storedNickname();
-  const token = await getInviteToken(name);
-  return token ? `${origin}/challenge?invite=${token}&from=${encodeURIComponent(name || "가족")}` : `${origin}/family-code/guide`;
-}
-
-/** 가족 암호 질문을 가족에 저장 (같은 질문이 이미 있으면 그대로). 실패해도 화면 흐름은 계속 */
+/** 가족 암호의 질문만 가족 목록에 저장한다. */
 export async function saveFamilyQuestion(question: string, nickname = storedNickname()): Promise<void> {
   if (!configured() || !question) return;
   try {
@@ -122,11 +116,11 @@ export async function saveFamilyQuestion(question: string, nickname = storedNick
 }
 
 /** 우리 가족 암호 질문 목록 (최신순). 가족이 없거나 오프라인이면 null */
-export async function familyQuestions(): Promise<{ id: string; question: string; created_at: string }[] | null> {
+export async function familyQuestions(): Promise<FamilyQuestion[] | null> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return null;
   try {
-    return await callFamily<{ id: string; question: string; created_at: string }[]>("questions", fid);
+    return await callFamily<FamilyQuestion[]>("questions", fid);
   } catch (e) {
     console.warn("가족 질문 불러오기 실패", e);
     return null;

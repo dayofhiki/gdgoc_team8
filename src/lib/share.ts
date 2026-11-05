@@ -26,3 +26,38 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   }
 }
+
+const PUBLIC_ORIGIN = "https://team8.gdgoc-devfest.org";
+
+function shareOrigin(origin: string): string {
+  const url = new URL(origin);
+  const host = url.hostname;
+  // Local preview addresses cannot be reached by recipients on another network.
+  if (!host.includes(".") || host.endsWith(".local") || /^\d+(?:\.\d+){3}$/.test(host)) return PUBLIC_ORIGIN;
+  return url.origin;
+}
+
+export function quizInviteUrl(origin: string, name: string, token?: string | null): string {
+  const url = new URL("/challenge", shareOrigin(origin));
+  if (token) url.searchParams.set("invite", token);
+  url.searchParams.set("from", name);
+  return url.href;
+}
+
+export const SHARED_FAMILY_CODE_PATH = "/family-code/shared";
+
+export function familyCodeUrl(origin: string, token: string): string {
+  const url = new URL(SHARED_FAMILY_CODE_PATH, shareOrigin(origin));
+  url.hash = new URLSearchParams({ code: token }).toString();
+  return url.href;
+}
+
+export async function shareWithDevice(data: ShareData): Promise<"shared" | "cancelled" | "unavailable"> {
+  if (!navigator.share) return "unavailable";
+  try {
+    await navigator.share(data);
+    return "shared";
+  } catch (error) {
+    return error instanceof Error && error.name === "AbortError" ? "cancelled" : "unavailable";
+  }
+}

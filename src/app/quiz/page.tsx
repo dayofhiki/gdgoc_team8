@@ -5,7 +5,7 @@ import QuizRunner from "@/components/QuizRunner";
 
 function QuizPage() {
   const ids = useSearchParams().get("ids") ?? "";
-  // key: "틀린 문제 다시 풀기"로 같은 경로에 다시 들어와도 상태를 새로 시작
+  // 직접 링크로 들어온 문제 목록이 바뀌면 별도의 퀴즈로 시작한다.
   return <QuizRunner key={ids} ids={ids ? ids.split(",") : undefined} />;
 }
 

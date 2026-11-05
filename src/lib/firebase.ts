@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from "firebase/app";
-import { getAuth, signInAnonymously, type Auth } from "firebase/auth";
+import { getAuth, signInAnonymously, type Auth, type User } from "firebase/auth";
 import type { ApiError } from "@/server/types";
 
 /** .env.local이 없으면 서버 없이(오프라인) 동작 */
@@ -14,6 +14,13 @@ function auth(): Auth {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   });
   return getAuth(app);
+}
+
+export async function currentFirebaseUser(): Promise<User | null> {
+  if (!configured()) return null;
+  const a = auth();
+  await a.authStateReady();
+  return a.currentUser;
 }
 
 // 동시에 여러 번 불려도(StrictMode 이중 effect, 여러 화면) 익명 계정은 하나만 만들도록 진행 중인 로그인을 공유
