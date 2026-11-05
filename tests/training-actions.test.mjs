@@ -175,3 +175,18 @@ test("every authored fallback offers a grounded action by its scheduled third re
     }
   }
 });
+
+test("feedback describes the episode and only reports independently verified evidence from the learner's actions", async () => {
+  const { caseBranch } = await import("../src/lib/trainingCaseFacts.ts");
+  const scenario = SCENARIOS.find(item => item.topic === "card" && item.identity === "fraud");
+  const state = session(SCENARIOS.indexOf(scenario));
+  state.caseVariant = 4;
+  const stopped = recordChoice(state, scenario, "stop").state;
+  const stoppedResult = evaluate(stopped, scenario, "uncertain");
+  assert.equal(stoppedResult.purpose, caseBranch(scenario, state.caseVariant).incident);
+  assert.equal(stoppedResult.verificationEvidence, "");
+  const attempted = recordChoice(state, scenario, "verify", undefined, undefined, "card_app");
+  assert.equal(evaluate(attempted.state, scenario, "uncertain").verificationEvidence, "");
+  const confirmed = recordChoice(state, scenario, "verify", undefined, undefined, "official_directory");
+  assert.equal(evaluate(confirmed.state, scenario, "uncertain").verificationEvidence, confirmed.notice);
+});
