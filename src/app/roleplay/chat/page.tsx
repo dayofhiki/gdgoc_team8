@@ -284,7 +284,7 @@ export default function RealTraining() {
   }
 
   async function perform(choice: Choice, sourceIndex?: number, actionId?: string, method?: PhoneMethod, fromPhonePanel = false): Promise<string | undefined> {
-    if (!session || busy || session.closed || ending) return;
+    if (!session || busy || session.closed) return;
     setBusy(true);
     setError("");
     try {
