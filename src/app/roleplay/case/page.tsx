@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { BottomCTA, Header, Progress, Screen } from "@/components/ui";
-import { ChevronRight } from "@/components/Icons";
+import { ChevronRight, ShieldIcon } from "@/components/Icons";
 import { CASE_STORIES, type CaseStory } from "@/lib/caseStories";
 import { CASE_EXPERIENCES } from "@/lib/caseExperience";
 
@@ -96,13 +96,13 @@ export default function CaseStudyPage() {
           {choiceData && choiceView && (
             <section className={"case-play-my-route " + (choiceData.safe ? "case-play-my-route--safe" : "case-play-my-route--risk")} aria-label="내 선택의 가상 결과">
               <span className="case-play-kicker">내가 직접 해 본 행동</span>
-              <h3><span aria-hidden="true">{choiceView.icon}</span> {choiceView.label}</h3>
+              <h3>{choiceView.label}</h3>
               <p>{choiceView.outcome}</p>
               <small>위 결과는 교육용 가상 체험이에요.</small>
             </section>
           )}
           <div className="case-play-takeaway">
-            <span aria-hidden="true">🛡️</span>
+            <span aria-hidden="true"><ShieldIcon /></span>
             <div>
               <strong>다음엔 이렇게 기억해요</strong>
               <p>{story.lesson}</p>
@@ -152,7 +152,6 @@ export default function CaseStudyPage() {
             {phase === "outcome" && choiceData && choiceView && (
               <>
                 <div className="case-play-action-confirm">
-                  <span aria-hidden="true">{choiceView.icon}</span>
                   <div><small>내 휴대전화에서 실행한 행동</small><strong>{choiceView.label}</strong></div>
                 </div>
                 <div className={"case-play-device-result " + (choiceData.safe ? "case-play-device-result--safe" : "case-play-device-result--risk")}>
@@ -172,7 +171,6 @@ export default function CaseStudyPage() {
               {experience.actions.map((action, i) => (
                 <button key={action.label} type="button" onClick={() => { setChoice(i); setPhase("outcome"); }}
                   className="case-play-action-option">
-                  <span aria-hidden="true" className="case-play-action-icon">{action.icon}</span>
                   <strong>{action.label}</strong>
                   <ChevronRight size={19} />
                 </button>

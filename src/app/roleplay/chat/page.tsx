@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertIcon, CheckIcon, ChevronRight, PersonIcon, ShieldIcon } from "@/components/Icons";
+import { AlertIcon, BackIcon, CheckIcon, ChevronRight, PersonIcon, ShieldIcon } from "@/components/Icons";
 import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
 import { actionChoice, type Action } from "@/lib/trainingActions";
 import { useAppState } from "@/components/AppState";
@@ -153,6 +153,12 @@ export default function RealTraining() {
   const finishInFlight = useRef(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [typingVisible, setTypingVisible] = useState(false);
+
+  useEffect(() => {
+    if (!shareNotice) return;
+    const timer = setTimeout(() => setShareNotice(""), 5000);
+    return () => clearTimeout(timer);
+  }, [shareNotice]);
 
   async function start(replayTopic?: TrainingTopicId) {
     const url = new URL(location.href);
@@ -591,7 +597,7 @@ export default function RealTraining() {
     <main className="screen rt-screen">
       <header className="rt-header">
         <button type="button" className="rt-nav-back" onClick={() => router.replace(liveEntry ? "/roleplay/mode" : "/roleplay/select")} aria-label="뒤로 가기">
-          <span aria-hidden="true">‹</span>
+          <BackIcon />
         </button>
         <div className="rt-avatar" aria-hidden="true"><PersonIcon /></div>
         <div className="rt-contact">

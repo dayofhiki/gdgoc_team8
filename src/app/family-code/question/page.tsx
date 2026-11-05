@@ -31,8 +31,8 @@ export default function FamilyCodeQuestion() {
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 22, gap: 8 }}>
           <span className="chip chip--lg">가족 암호 정하기</span>
-          <h2 className="title" style={{ lineHeight: "34px", letterSpacing: "-0.4px" }}>어떤 질문으로 확인할까요?</h2>
-          <p className="desc" style={{ letterSpacing: "-0.4px" }}>{"가족만 답할 수 있고, 다른 사람은\n찾아볼 수 없는 질문이 좋아요."}</p>
+          <h2 className="title" style={{ lineHeight: "34px" }}>어떤 질문으로 확인할까요?</h2>
+          <p className="desc">{"가족만 답할 수 있고, 다른 사람은\n찾아볼 수 없는 질문이 좋아요."}</p>
         </div>
 
         <div className="stack" style={{ marginTop: 32, gap: 10 }} role="radiogroup" aria-label="확인 질문">

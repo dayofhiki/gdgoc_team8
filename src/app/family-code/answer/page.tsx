@@ -30,14 +30,14 @@ export default function FamilyCodeAnswer() {
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 22, gap: 8 }}>
           <span className="chip chip--lg">가족 암호 정하기</span>
-          <h2 className="title" style={{ lineHeight: "34px", letterSpacing: "-0.4px" }}>답을 정해 주세요</h2>
-          <p className="desc" style={{ letterSpacing: "-0.4px" }}>{"가족이 바로 떠올릴 수 있게\n짧게 정하면 좋아요."}</p>
+          <h2 className="title" style={{ lineHeight: "34px" }}>답을 정해 주세요</h2>
+          <p className="desc">{"가족이 바로 떠올릴 수 있게\n짧게 정하면 좋아요."}</p>
         </div>
 
         <div className="stack" style={{ marginTop: 24, gap: 24 }}>
           <div className="card card--blue" style={{ padding: "18px 20px", gap: 4 }}>
             <p style={{ fontSize: 13, fontWeight: 700, lineHeight: "18px", color: "var(--blue)" }}>선택한 질문</p>
-            <p style={{ fontSize: 16, fontWeight: 600, lineHeight: "22px", letterSpacing: "-0.4px" }}>{familyQuestion}</p>
+            <p style={{ fontSize: 16, fontWeight: 600, lineHeight: "22px" }}>{familyQuestion}</p>
           </div>
           <div className="field">
             <label className="field__label" htmlFor="answer">답</label>
