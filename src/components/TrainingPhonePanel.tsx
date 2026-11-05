@@ -125,7 +125,7 @@ export default function TrainingPhonePanel({ topic, initialScreen, initialTransf
   );
 
   const title = screen === "contacts" ? "연락처" : screen === "phone" ? "전화" :
-    screen === "apps" ? "앱" : screen === "transfer" ? "송금" : screen === "transfer_confirm" ? "모의 송금 확인" : screen === "outcome" ? "기능 사용 결과" : "내 휴대전화";
+    screen === "apps" ? "앱" : screen === "transfer" ? "송금" : screen === "transfer_confirm" ? "모의 송금 확인" : screen === "outcome" ? "기능 사용 결과" : "똑똑한 물고기의 휴대전화";
 
   return (
     <BottomSheet onClose={locked ? undefined : onClose}>
@@ -142,10 +142,10 @@ export default function TrainingPhonePanel({ topic, initialScreen, initialTransf
           <>
             <p className="rt-device-description">필요한 기능을 직접 골라 사용할 수 있어요.</p>
             <div className="rt-device-grid">
-              {tile("contacts", "연락처", "저장된 사람들", () => setScreen("contacts"))}
-              {tile("phone", "전화", "최근 통화와 번호", () => setScreen("phone"))}
-              {tile("apps", "앱", "설치된 앱", () => setScreen("apps"))}
-              {tile("transfer", "송금", "가상 송금 기능", () => setScreen("transfer"))}
+              {tile("contacts", "연락처 찾기", "저장된 사람들", () => setScreen("contacts"))}
+              {tile("phone", "전화하기", "최근 통화와 번호", () => setScreen("phone"))}
+              {tile("apps", "설치된 앱 열기", "설치된 앱", () => setScreen("apps"))}
+              {tile("transfer", "송금하기 (가상)", "가상 송금 기능", () => setScreen("transfer"))}
             </div>
           </>
         )}

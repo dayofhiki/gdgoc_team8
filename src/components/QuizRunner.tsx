@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_REMEMBER, loadQuizProgress, pickQuiz, saveQuizProgress, type OX, type QuizItem } from "@/lib/quiz";
-import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
+
 import { SHARED_FAMILY_CODE_PATH } from "@/lib/share";
 import { saveRecord } from "@/lib/records";
 import { BottomCTA, Dialog, Header, Progress, Screen } from "./ui";
@@ -17,8 +17,6 @@ type Answer = { id: string; picked: OX; correct: boolean };
 
 export default function QuizRunner({ ids, from }: Props) {
   const router = useRouter();
-  const { nickname } = useAppState();
-  const displayName = nickname || DEFAULT_NICKNAME;
   const [started, setStarted] = useState(false);
   const [items, setItems] = useState(() => pickQuiz(ids, 0));
   const [idx, setIdx] = useState(0);
@@ -115,24 +113,22 @@ export default function QuizRunner({ ids, from }: Props) {
     return (
       <Screen>
         <Header back={() => router.push(from ? "/" : "/home")} />
-        <section className="screen__body">
-          <div className="stack" style={{ marginTop: 20, gap: 8 }}>
-            <h2 className="title">{"OX 퀴즈를\n모두 풀었어요!"}</h2>
-            <p className="desc">{displayName}님의 점수: {right} / {total}점</p>
-            <p className="desc">{total}문제 중 {right}문제를 맞혔어요.</p>
+        <section className="screen__body figma-quiz-result">
+          <div className="figma-quiz-hero">
+            <h2>OX 퀴즈를<br />모두 풀었어요!</h2>
+            <p>{total}문제 중 <strong>{right}문제</strong>를 맞혔어요.</p>
           </div>
-          <div className="stack" style={{ marginTop: 64, gap: 20 }}>
-            <div className="card">
-              <p className="card__title">이번 퀴즈 결과</p>
-              <div className="kv"><span className="kv__k">맞힌 문제</span><span className="kv__v kv__v--blue">{right}문제</span></div>
-              <div className="kv"><span className="kv__k">틀린 문제</span><span className="kv__v kv__v--red">{wrong.length}문제</span></div>
-              <div className="kv"><span className="kv__k">힌트 사용</span><span className="kv__v">{hintUsed.size}번</span></div>
-            </div>
-            <div className="card card--blue">
-              <p className="card__title">꼭 기억할 한 가지</p>
-              <p className="card__text--blue">{remember}</p>
-            </div>
+          <div className="figma-quiz-result-card">
+            <h3>이번 퀴즈 결과</h3>
+            <div className="figma-quiz-stat"><span>맞힌 문제</span><strong>{right}문제</strong></div>
+            <div className="figma-quiz-stat figma-quiz-stat--wrong"><span>틀린 문제</span><strong>{wrong.length}문제</strong></div>
+            <div className="figma-quiz-stat figma-quiz-stat--neutral"><span>힌트 사용</span><strong>{hintUsed.size}번</strong></div>
           </div>
+          <div className="figma-quiz-remember">
+            <h3>꼭 기억할 한 가지</h3>
+            <p>{remember}</p>
+          </div>
+          {!from && <button type="button" className="figma-quiz-more" onClick={nextSet}>새 문제 10개 도전하기 ›</button>}
         </section>
         <BottomCTA row>
           {from ? (
@@ -142,10 +138,10 @@ export default function QuizRunner({ ids, from }: Props) {
             </>
           ) : (
             <>
-              <button className="btn btn--gray" onClick={wrong.length ? retry : () => router.push("/home")}>
-                {wrong.length ? "틀린 문제 복습" : "홈으로"}
+              <button className="btn btn--gray" onClick={() => router.push("/home")}>홈으로</button>
+              <button className="btn btn--primary" onClick={wrong.length ? retry : nextSet}>
+                {wrong.length ? "틀린 문제 다시 풀기" : "새 문제 10개"}
               </button>
-              <button className="btn btn--primary" onClick={nextSet}>새 문제 10개</button>
             </>
           )}
         </BottomCTA>

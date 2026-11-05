@@ -348,7 +348,7 @@ test("mock phone workspace replaces duplicate messages tile with transfer, requi
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   const panel = readFileSync(new URL("../src/components/TrainingPhonePanel.tsx", import.meta.url), "utf8");
-  assert.match(panel, /tile\("transfer", "송금"/);
+  assert.match(panel, /tile\("transfer", "송금하기 \(가상\)"/);
   assert.doesNotMatch(panel, /tile\("messages"/);
   assert.match(panel, /transferRequests\.length/);
   assert.match(panel, /선택할 송금 요청이 없어요/);
@@ -529,7 +529,7 @@ test("entry flow separates unannounced real-life practice from focused scenario 
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   assert.match(mode, /실전 훈련/);
-  assert.match(mode, /어떤 연락이 올지 모릅니다/);
+  assert.match(mode, /무작위로 상황이 선정돼요/);
   assert.match(mode, /상황별 연습/);
   assert.doesNotMatch(mode, /사례로 배우기/);
   assert.match(home, /사례로 배우기/);
@@ -581,7 +581,7 @@ test("action-first interface avoids identity-guessing quiz and prioritizes pract
   assert.match(home, /href="\/practice"/);
   assert.doesNotMatch(intro, /진짜 연락과 사칭 시도가 섞여/);
   assert.match(intro, /어떤 연락이 오더라도 안전하게 대응하는 연습/);
-  assert.match(mode, /안전하게 행동하는 연습/);
+  assert.match(mode, /실제 상황에서 어떻게 선택해야 할지 연습해 보세요/);
 });
 
 
