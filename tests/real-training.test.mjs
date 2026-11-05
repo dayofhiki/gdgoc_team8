@@ -315,7 +315,7 @@ test("phone onboarding is explicit at start, optional on later runs and does not
   assert.match(ui, /다음부터 이 안내 보지 않기/);
   assert.match(ui, /오른쪽 위 <strong>휴대전화 아이콘<\/strong>/);
   assert.match(ui, /대화 중간에도 직접 기능을 선택해 보세요/);
-  assert.match(ui, /기능을 사용해도 훈련이 바로 끝나지 않아요/);
+  assert.match(ui, /확인 후 문자로 돌아올 수 있어요/);
   assert.match(ui, /if \(introOpen\) return/);
   assert.doesNotMatch(ui, /휴대전화 아이콘.*사칭범/);
 });
@@ -333,8 +333,8 @@ test("feedback and truth screens put memorable keywords first, preserving option
   assert.match(ui, /feedback\.receipts\.map/);
   assert.match(ui, /feedback\.good\.map/);
   assert.match(ui, /feedback\.improve\.map/);
-  assert.match(ui, /fb-truth-word--fraud/);
-  assert.match(ui, /어떻게 확인했나요/);
+  assert.match(ui, /이번 가상 연락의 설정 살펴보기/);
+  assert.match(ui, /다음 연락에서도 기억할 행동/);
   assert.match(ui, /fb-promise-tile/);
   assert.match(ui, /가족 확인 질문/);
   assert.match(ui, /shareFamilyPromises/);
@@ -467,9 +467,9 @@ test("closed verified resolution keeps its explanation visible before the user o
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   assert.match(ui, /next\.endReason === "resolved"/);
-  assert.match(ui, /session\.endReason === "resolved" && session\.verified/);
+  assert.doesNotMatch(ui, /session\.endReason === "resolved" && session\.verified/);
   assert.match(ui, /void finish\(\)/);
-  assert.match(ui, /내 대응 피드백 보기/);
+  assert.match(ui, /내 행동 피드백 보기/);
   assert.match(ui, /"resolved" \| null/);
 });
 
@@ -516,13 +516,20 @@ test("personal scenarios use saved contacts; institutional scenarios use indepen
   }
 });
 
-test("entry flow supports both random recommendation and chosen-topic training", async () => {
+test("entry flow separates unannounced real-life practice from focused scenario drills", async () => {
   const { readFileSync } = await import("node:fs");
   const selector = readFileSync(new URL("../src/app/roleplay/select/page.tsx", import.meta.url), "utf8");
   const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
-  assert.match(selector, /추천 상황으로 바로 시작/);
+  assert.match(mode, /실전 훈련/);
+  assert.match(mode, /어떤 연락이 올지 모릅니다/);
+  assert.match(mode, /상황별 연습/);
+  assert.match(mode, /사례로 배우기/);
+  assert.match(mode, /path: "\/roleplay\/chat"/);
+  assert.match(mode, /path: "\/roleplay\/select"/);
+  assert.match(selector, /상황별 연습/);
+  assert.doesNotMatch(selector, /추천 상황으로 바로 시작|무작위|진짜인지는/);
   assert.match(selector, /TRAINING_TOPICS\.filter/);
   assert.match(selector, /\/roleplay\/chat\?topic=/);
   assert.match(mode, /\/roleplay\/select/);
@@ -542,4 +549,26 @@ test("training feedback uses concrete verb-first reminders instead of cryptic no
   assert.ok(summary.improve.some(p => p.keyword.includes("문자 속 링크를")));
   assert.ok(summary.promises.every(p => /기$/.test(p.title)));
   assert.ok(summary.receipts.some(r => r.label === "모의 정보 전송"));
+});
+
+
+test("action-first interface avoids identity-guessing quiz and prioritizes practical decisions", async () => {
+  const { readFileSync } = await import("node:fs");
+  const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const home = readFileSync(new URL("../src/app/home/page.tsx", import.meta.url), "utf8");
+  const intro = readFileSync(new URL("../src/app/roleplay/page.tsx", import.meta.url), "utf8");
+  const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(chat, /setPhase\("judge"\)|phase === "judge"|role="radiogroup" aria-label="상대방 정체 판단"/);
+  assert.match(chat, /guess: "uncertain"/);
+  assert.match(chat, /이번 대화에서 선택한 행동을 함께 돌아볼게요/);
+  assert.match(chat, /내 행동 피드백 보기/);
+  assert.match(chat, /안전 약속 확인하기/);
+  assert.match(chat, /이번 가상 연락의 설정 살펴보기/);
+  assert.ok(chat.indexOf("다음 연락에서도 기억할 행동") < chat.indexOf("이번 가상 연락의 설정 살펴보기"));
+  assert.doesNotMatch(chat, /정체와 안전 약속 확인하기|정체를 몰라도 괜찮아요/);
+  assert.doesNotMatch(home, /진짜 가족일까요/);
+  assert.match(home, /어떤 문자가 올지/);
+  assert.doesNotMatch(intro, /진짜 연락과 사칭 시도가 섞여/);
+  assert.match(intro, /어떤 연락이 오더라도 안전하게 대응하는 연습/);
+  assert.match(mode, /안전하게 행동하는 연습/);
 });

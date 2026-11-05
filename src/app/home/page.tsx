@@ -29,12 +29,12 @@ export default function Home() {
         <img src="/images/logo.svg" alt="미끼주의보" width={121} height={24} />
       </div>
 
-      <section className="hero" aria-label="오늘의 추천 훈련">
-        <span className="hero__chip">오늘의 추천 미션</span>
-        <h2 className="hero__title">{"엄마, 휴대폰이 고장 나서\n다른 번호로 연락해.."}</h2>
-        <p className="hero__sub">진짜 가족일까요? 직접 대화하고 안전하게 확인해요.</p>
+      <section className="hero" aria-label="오늘의 실전 훈련">
+        <span className="hero__chip">오늘의 실전 훈련</span>
+        <h2 className="hero__title">{"어떤 문자가 올지\n미리 알 수 없습니다."}</h2>
+        <p className="hero__sub">예고 없이 오는 연락에도 안전하게 대응하는 연습을 해보세요.</p>
         <img className="hero__bobber float" src="/images/bobber.png" alt="" />
-        <Link href="/roleplay" className="btn btn--primary hero__btn">시작하기</Link>
+        <Link href="/roleplay" className="btn btn--primary hero__btn">훈련 시작하기</Link>
       </section>
 
       <div className="home__sections">
@@ -48,7 +48,7 @@ export default function Home() {
               <img src="/images/icon-chat.png" alt="" width={40} height={40} />
               <div>
                 <p className="tile__title">실전 대응 훈련</p>
-                <p className="tile__desc">직접 대화하고 안전하게 판단해요</p>
+                <p className="tile__desc">다양한 연락에 안전하게 대응하는 연습</p>
               </div>
             </Link>
             <Link href="/quiz" className="tile">
