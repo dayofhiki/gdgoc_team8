@@ -18,6 +18,7 @@ export type ErrorCode =
   | "PII_BLOCKED"
   | "AI_TIMEOUT"
   | "TURN_CONFLICT"
+  | "FORBIDDEN"
   | "INTERNAL";
 
 export type Mission = {
@@ -110,3 +111,17 @@ export type ChatTurnRequest = { session_id: string; text?: string };
 export type ChatTurnResponse = { reply: Message; stage: Stage; ended: boolean; used_fallback: boolean };
 export type SessionEndRequest = { session_id: string };
 export type SessionEndResponse = { result: Result };
+
+// 가족 백엔드 (/api/backend)
+export type FamilyMemberSummary = {
+  user_id: string;
+  nickname: string;
+  is_me: boolean;
+  share_results: boolean;
+  joined_at: string;
+  /** 공유를 끈 구성원은 아래가 null */
+  record_count: number | null;
+  safe_count: number | null;
+  last_at: string | null;
+  recent: { kind: "quiz" | "challenge" | "training"; title: string; safe: boolean | null; score: number | null; total: number | null; created_at: string }[] | null;
+};

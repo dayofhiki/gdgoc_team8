@@ -11,3 +11,7 @@ node_modules/
 __pycache__/
 .pytest_cache/
 ai_lab/results/
+
+# Firebase emulator
+firebase-debug.log
+firestore-debug.log

@@ -8,10 +8,12 @@
     "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "tsc --noEmit",
     "test:training": "node --experimental-strip-types --no-warnings --test tests/real-training.test.mjs tests/training-actions.test.mjs tests/training-dialogue.test.mjs tests/training-feedback.test.mjs tests/training-reply-examples.test.mjs tests/learning-system.test.mjs",
-    "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test src/server/logic_test.ts src/server/llm_test.ts"
+    "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test src/server/logic_test.ts src/server/llm_test.ts",
+    "test:firebase": "npx -y firebase-tools@14 emulators:exec --only firestore --project demo-test \"node --experimental-strip-types --no-warnings --test src/server/family_test.ts\""
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
+    "firebase": "^13.2.0",
+    "firebase-admin": "^14.5.0",
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

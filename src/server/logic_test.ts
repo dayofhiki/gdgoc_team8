@@ -1,4 +1,4 @@
-// node:test 사용 → `deno test supabase/functions` 와 `node --experimental-strip-types --test` 양쪽에서 실행
+// node:test 사용 → `node --experimental-strip-types --test`로 실행
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { classify, generateReply } from "./ai.ts";
