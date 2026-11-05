@@ -219,7 +219,7 @@ test("neutral openings can use a reviewed fallback when the provider is unavaila
   assert.match(route, /text: opening/);
   assert.doesNotMatch(route, /text: scenario\.opening/);
   assert.match(route, /OPENING_SCHEMA/);
-  assert.match(route, /return scenario\.opening/);
+  assert.match(route, /return branch\.opening/);
 });
 
 test("neutral opening contract rejects actionable paths and fabricated identifiers", () => {
@@ -357,7 +357,7 @@ test("v3 uses second AI audit only for proposed actions, closing or near-duplica
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   assert.match(route, /const needsAudit = first\.value\.actions\.length > 0 \|\| first\.value\.dialogue\.conversationComplete/);
   assert.match(route, /if \(needsAudit\) \{/);
-  assert.match(route, /const caseVariant = randomInt\(CASE_VARIANT_COUNT\)/);
+  assert.match(route, /const caseVariant = nextCaseVariant\(req, scenario\.topic\)/);
   assert.match(route, /caseVariant, createdAt/);
 });
 
