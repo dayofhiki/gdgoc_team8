@@ -226,11 +226,8 @@ export default function RealTraining() {
       try { localStorage.setItem(INTRO_HIDE_KEY, "1"); } catch { /* 현재 훈련에서만 적용 */ }
     }
     setIntroOpen(false);
-    // 안내를 닫을 때 상단 아이콘을 한 차례만 은은하게 강조한다.
-    if (!phoneHintShown.current) {
-      phoneHintShown.current = true;
-      setPhoneHint(true);
-    }
+    // 첫 안내 직후 불필요한 두 번째 안내를 띄우지 않는다.
+    // 필요해지는 순간(사용자의 확인 의사 또는 2턴 진행)에만 기존 단발성 강조가 나온다.
   }
 
   function openActions() {
