@@ -241,7 +241,6 @@ export function recordChoice(
   if (method) {
     if (sourceIndex !== undefined || actionId !== undefined ||
         state.events.some(e => e.method === method)) throw new Error("이미 선택한 행동입니다.");
-    const family = scenario.id.startsWith("0-");
     const delivery = scenario.id.startsWith("1-");
     const bank = scenario.id.startsWith("2-");
     const valid = (choice === "family_contact" && method === "saved_family") ||
@@ -252,13 +251,11 @@ export function recordChoice(
         (method === "delivery_app" && delivery)
       ));
     if (!valid) throw new Error("이 상황에서 선택할 수 없는 휴대전화 기능입니다.");
-    // 저장된 가족 연락처는 가족 시나리오에서만 독립 검증으로 평가한다.
-    void family;
   } else if (choice === "verify" && sourceIndex === undefined && actionId === undefined) {
     throw new Error("휴대전화에서 확인에 사용할 경로를 선택해 주세요.");
   }
-  const sourceNeeded = ["verify_sender", "comply", "share", "open_link"].includes(choice) &&
-    !(choice === "verify_sender" && method === "recent_sender") ||
+  const sourceNeeded = (["verify_sender", "comply", "share", "open_link"].includes(choice) &&
+    !(choice === "verify_sender" && method === "recent_sender")) ||
     (choice === "verify" && !method);
   if (sourceNeeded) {
     if (!Number.isInteger(sourceIndex) || sourceIndex! < 0 || sourceIndex! >= state.messages.length) {
