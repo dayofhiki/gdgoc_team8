@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { QUIZ, quizCategory, pickQuiz } from "../src/lib/quiz.ts";
 import { CASE_STORIES } from "../src/lib/caseStories.ts";
+import { CASE_EXPERIENCES } from "../src/lib/caseExperience.ts";
 import { CASE_VARIANT_COUNT, caseBranch } from "../src/lib/trainingCaseFacts.ts";
 import { TRAINING_TOPICS } from "../src/lib/trainingCatalog.ts";
 import { SCENARIOS } from "../src/lib/realTraining.ts";
@@ -53,6 +54,23 @@ test("case records have verifiable sources and offer meaningful rewind actions",
   assert.match(page, /사건 되감기/);
   assert.match(page, /기관 원문 자료 확인하기/);
   assert.doesNotMatch(page, /setTimeout/); // seniors must advance at their own pace
+  assert.doesNotMatch(page, /실전에서 연습|실전 연습|\/roleplay\/chat\?topic=/);
+  assert.match(page, /case-play-device/);
+  assert.match(page, /case-play-action-option/);
+  assert.match(page, /다른 행동 해보기/);
+  assert.match(page, /<details className="case-play-sources">/);
+  assert.match(page, /setPhase\("outcome"\)/);
+  assert.match(page, /case-play-my-route/);
+  assert.deepEqual(Object.keys(CASE_EXPERIENCES).sort(), CASE_STORIES.map(story => story.id).sort());
+  for (const story of CASE_STORIES) {
+    const experience = CASE_EXPERIENCES[story.id];
+    assert.equal(experience.actions.length, story.actions.length, story.id);
+    assert.equal(experience.riskPath.length, 3, story.id);
+    for (const action of experience.actions) {
+      assert.ok(action.label.length > 4 && action.label.length < 26);
+      assert.ok(action.outcome.length > 15 && action.outcome.length < 105);
+    }
+  }
 });
 
 test("all eleven chat topics have three different anchored real-life risk branches", () => {
