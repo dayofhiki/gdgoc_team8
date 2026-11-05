@@ -316,6 +316,9 @@ export async function POST(req: NextRequest) {
       state.dialogue = response.next.memory;
       state.closed = response.next.closed;
       state.endReason = response.next.reason;
+      if (response.next.issues.includes("stalled_request_stopped")) {
+        state.messages.push({ actor: "system", text: "같은 요청이 반복되어 대화를 마무리했어요. 지금까지의 선택을 돌아보세요." });
+      }
       // 사용자가 사칭 여부를 조기에 직접 확인한 뒤에도 AI가 새 송금/정보 요구를
       // 꺼내면 그 즉시 훈련 목표가 끝난 것으로 보아 종료한다.
       if (!state.closed && shouldResolveAfterActorReply(state)) {
