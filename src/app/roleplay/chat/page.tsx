@@ -384,7 +384,9 @@ export default function RealTraining() {
       }
     }
     const copied = await copyText(message + "\n" + url);
-    setShareNotice(copied ? title + "을 복사했어요." : "공유하지 못했어요. 다시 시도해 주세요.");
+    setShareNotice(copied
+      ? includeResult ? "미끼주의보 연습 결과를 복사했어요." : "우리 가족 안전 약속을 복사했어요."
+      : "공유하지 못했어요. 다시 시도해 주세요.");
   }
 
   if (phase === "result" && result && reviewPage === "truth") {
@@ -473,6 +475,7 @@ export default function RealTraining() {
 
   if (phase === "result" && result) {
     const feedback = result.behavior;
+    const lastReceipt = feedback.hasConfirmedAction ? feedback.receipts.at(-1) : undefined;
     return (
       <Screen>
         <Header title="내 대응 돌아보기" back={() => router.replace("/home")} />
@@ -487,6 +490,13 @@ export default function RealTraining() {
                   ? <p className="fb-coverage-note">요청 전 대화 종료 · 위험 요청 대응은 아직 평가하지 않았어요.</p>
                   : <p className="fb-coverage-note">대화에서 실제로 선택한 행동을 기준으로 살펴봤어요.</p>}
             </section>
+
+            {lastReceipt && (
+              <section className="fb-subcard" aria-labelledby="fb-last-action">
+                <h3 id="fb-last-action" className="fb-item__title">마지막 행동 · {lastReceipt.label}</h3>
+                <p className="fb-item__text">{lastReceipt.detail}</p>
+              </section>
+            )}
 
             <section className="fb-compact-section" aria-labelledby="fb-good">
               <h3 id="fb-good" className="fb-compact-heading"><CheckIcon /> 잘한 행동</h3>

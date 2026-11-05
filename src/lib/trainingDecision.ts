@@ -6,6 +6,7 @@
 import type { Scenario, TrainingState } from "./realTraining.ts";
 import type { Proposed } from "./trainingActions.ts";
 import { BANK_CLAIMS } from "./trainingCaseFacts.ts";
+import { revealsSimulation } from "./trainingDialogue.ts";
 import { groundedProposals } from "./trainingActionGuard.ts";
 import { hasConcreteRequest, clearlyDisengaged } from "./trainingResolution.ts";
 
@@ -63,6 +64,7 @@ export function replyQualityIssue(
   reply: string,
   actions: Proposed[],
 ): string | undefined {
+  if (revealsSimulation(reply)) return "연습이나 가상의 상황을 대사에 설명하지 말고 실제 문자 상대처럼 말하세요.";
   if (scenario.topic === "bank" && bankQuestionNeedsSpecifics(userText) &&
       (!bankAnswerIsConcrete(reply) || (state.caseVariant !== undefined && !bankClaimMatches(reply, state.caseVariant)))) {
     return "상대가 '어떤 거래/얼마'인지 물었습니다. 세션에 고정된 가상 거래 유형과 금액을 자연스럽게 설명하세요. 그냥 '본인 확인 부탁드립니다'를 반복하지 마세요.";
