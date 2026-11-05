@@ -379,7 +379,7 @@ export default function RealTraining() {
             <section className="fb-priority" aria-labelledby="fb-next-goal">
               <span className="fb-eyebrow">다음 연락에서도 기억할 행동</span>
               <h2 id="fb-next-goal">{nextPromise?.title ?? "필요한 정보를 직접 확인하기"}</h2>
-              <p>누구에게서 연락이 오더라도, 행동하기 전에 스스로 확인하는 습관을 연습해요.</p>
+              <p>급한 부탁이나 낯선 요구를 받아도 먼저 멈추고, 필요할 때 사실을 직접 확인해요.</p>
             </section>
 
             <section className="fb-compact-section" aria-labelledby="fb-promise">
