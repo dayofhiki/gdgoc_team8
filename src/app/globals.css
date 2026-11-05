@@ -1169,3 +1169,13 @@ p, h1, h2, h3 { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .fb-detail-panel > summary::after, .fb-inline-disclosure > summary::after { transition: none; }
 }
+
+
+/* 모의 휴대전화 송금 화면: 행동을 먼저 찾고, 대상/요청을 확인한 다음 의도적으로 실행 */
+.rt-device-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 11px; padding: 17px; border: 1px solid #e6ebf2; border-radius: 14px; background: #f8fafc; }
+.rt-device-empty strong { color: #3b5269; font-size: 17px; }
+.rt-device-empty p { color: #718399; font-size: 14px; line-height: 1.55; }
+.rt-device-empty .btn { width: 100%; }
+.rt-device-transfer-summary { display: flex; flex-direction: column; gap: 9px; border: 1px solid #e0e8f1; background: #f6f9fd; border-radius: 15px; padding: 17px; }
+.rt-device-transfer-summary strong { font-size: 22px; line-height: 1.35; letter-spacing: -.5px; color: #294863; overflow-wrap: anywhere; }
+.rt-device-transfer-summary p { font-size: 15px; line-height: 1.5; color: #61748a; overflow-wrap: anywhere; }
