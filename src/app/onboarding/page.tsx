@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 import { BottomCTA, Progress, Screen } from "@/components/ui";
@@ -12,12 +12,6 @@ export default function Onboarding() {
   const [nickFocused, setNickFocused] = useState(false);
   const { setNickname } = useAppState();
   const router = useRouter();
-  // 가족 도전장 링크로 처음 온 경우: 끝나면 그 도전장으로 돌아감 (같은 사이트 경로만 허용)
-  const [next, setNext] = useState("");
-  useEffect(() => {
-    const n = new URLSearchParams(location.search).get("next") ?? "";
-    if (n.startsWith("/") && !n.startsWith("//") && !n.startsWith("/\\")) setNext(n);
-  }, []);
 
   // 별명은 필수: 공백만 입력한 경우도 시작할 수 없음
   const trimmed = nick.trim();
@@ -110,12 +104,6 @@ export default function Onboarding() {
         <BottomCTA>
           <button className="btn btn--primary btn--lg" style={{ fontWeight: 600 }} onClick={() => setStep(step + 1)}>
             다음으로
-          </button>
-        </BottomCTA>
-      ) : next ? (
-        <BottomCTA>
-          <button className="btn btn--primary btn--lg" style={{ fontWeight: 600 }} disabled={!trimmed} onClick={() => finish(next)}>
-            도전장 열기
           </button>
         </BottomCTA>
       ) : (

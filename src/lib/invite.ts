@@ -168,7 +168,15 @@ export async function familyOverview(): Promise<FamilyMemberSummary[] | null> {
     await ensureAnon();
     const { data, error } = await sb().rpc("family_overview", { p_family: fid });
     if (error) throw error;
-    return data as FamilyMemberSummary[];
+    const rows = data as FamilyMemberSummary[];
+    // 도전장으로 먼저 들어오면 이름이 비어 있음 → 온보딩에서 정한 별명으로 채움
+    const me = rows.find((m) => m.is_me);
+    const nick = storedNickname();
+    if (me && !me.nickname && nick) {
+      const { error: e2 } = await sb().from("family_members").update({ nickname: nick }).eq("family_id", fid).eq("user_id", me.user_id);
+      if (!e2) me.nickname = nick;
+    }
+    return rows;
   } catch (e) {
     console.warn("가족 요약 불러오기 실패", e);
     return null;
@@ -183,13 +191,7 @@ export async function joinInvite(token: string, nickname = storedNickname()): Pr
   try {
     await ensureAnon();
     const res = await callFn<InviteJoinResponse>("invite-join", { token, nickname });
-    const fid = res.invite.family_id;
-    if (fid) {
-      save(KEY_FAMILY, fid);
-      // 예전에 이름 없이 들어온 구성원이면 이번 별명으로 채움 (이미 이름이 있으면 그대로)
-      const { data: me } = await sb().auth.getUser();
-      if (nickname && me.user) await sb().from("family_members").update({ nickname }).eq("family_id", fid).eq("user_id", me.user.id).eq("nickname", "");
-    }
+    if (res.invite.family_id) save(KEY_FAMILY, res.invite.family_id);
     return "ok";
   } catch (e) {
     const code = e instanceof Error ? e.message : "";
