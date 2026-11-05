@@ -3,7 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } 
 import { evaluate, MAX_TURNS, normalizeKoreanReply, PHONE_METHODS, recordChoice, SCENARIOS } from "@/lib/realTraining";
 import { ACTION_RULES, buildActions } from "@/lib/trainingActions";
 import type { Proposed } from "@/lib/trainingActions";
-import { CASE_VARIANT_COUNT, caseDetail } from "@/lib/trainingCaseFacts";
+import { CASE_VARIANT_COUNT, caseBranch, caseDetail } from "@/lib/trainingCaseFacts";
 import { groundedProposals } from "@/lib/trainingActionGuard";
 import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, OPENING_SCHEMA, actorBrief, openingBrief, acceptableOpening, unsolicitedSolution, parseOpeningOutput, decideDialogueTurn, parseDialogueOutput, replySimilarity } from "@/lib/trainingDialogue";
 import type { DialogueSignal } from "@/lib/trainingDialogue";
@@ -22,6 +22,22 @@ const MAX_AGE_MS = 45 * 60 * 1000;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT = 40;
 const hits = new Map<string, { count: number; since: number }>();
+// Rotate branches for repeat plays without storing conversation text or personal details.
+const lastBranch = new Map<string, { index: number; time: number }>();
+function nextCaseVariant(req: NextRequest, topic: string): number {
+  const visitor = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous";
+  const key = visitor + ":" + topic;
+  const now = Date.now();
+  if (lastBranch.size > 1000) for (const [id, entry] of lastBranch) {
+    if (now - entry.time > RATE_WINDOW_MS) lastBranch.delete(id);
+  }
+  const previous = lastBranch.get(key);
+  const index = previous && now - previous.time < RATE_WINDOW_MS
+    ? (previous.index + 1 + randomInt(CASE_VARIANT_COUNT - 1)) % CASE_VARIANT_COUNT
+    : randomInt(CASE_VARIANT_COUNT);
+  lastBranch.set(key, { index, time: now });
+  return index;
+}
 const choices: Choice[] = ["verify", "family_contact", "verify_sender", "verify_chat", "comply", "share", "stop", "open_link", "install"];
 const guesses: Guess[] = ["legitimate", "fraud", "uncertain"];
 
@@ -100,22 +116,23 @@ function trainingProviders() {
     : process.env[key]);
 }
 async function generateOpening(scenario: (typeof SCENARIOS)[number], caseVariant: number): Promise<string> {
-  // 두 사례는 배송·부업 제안에서 출발해야 후속 행동의 맥락이 유지된다.
-  if (scenario.topic === "card" || scenario.topic === "team_mission") return scenario.opening;
+  const branch = caseBranch(scenario, caseVariant);
+  // Ensure that the opening matches the selected incident even without a provider.
+  if (scenario.topic === "card" || scenario.topic === "team_mission") return branch.opening;
   const available = trainingProviders();
-  if (!available.length) return scenario.opening;
+  if (!available.length) return branch.opening;
   try {
     const result = await complete([
-      { role: "system", content: openingBrief(scenario, randomInt(8), caseDetail(scenario, caseVariant)) },
+      { role: "system", content: openingBrief(scenario, randomInt(8), caseDetail(scenario, caseVariant)) + "\n이번 사건의 첫 접촉 정황을 이 대사에 맞춰 구성하라: " + branch.opening },
       { role: "user", content: "지금 처음 보낼 문자 한 건만 작성하세요." },
     ], {
       temperature: 0.95, maxTokens: 280, json: true, schema: OPENING_SCHEMA,
       parse: parseOpeningOutput, budgetMs: 4500,
     }, { list: available });
     const opening = normalizeKoreanReply(result.value.opening).trim();
-    return acceptableOpening(opening) && !detectPii(opening).length ? opening : scenario.opening;
+    return acceptableOpening(opening) && !detectPii(opening).length ? opening : branch.opening;
   } catch {
-    return scenario.opening;
+    return branch.opening;
   }
 }
 
@@ -148,6 +165,11 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
     ...(scenario.identity === "fraud" ? [
       "### 이번 훈련에서 사용자가 실제로 판단해야 할 위험한 요청",
       SCENARIO_DECISIONS[scenario.topic],
+      "이번 세션에 배정된 구체적 사건 경로가 앞의 일반적인 예시보다 우선한다. 다른 사건이나 다른 요구로 갈아타지 말 것.",
+      "이번 분기에서 실제로 제시할 잘못된 요청: " + caseBranch(scenario, state.caseVariant ?? 0).request,
+      "이 요청의 행동 종류: " + caseBranch(scenario, state.caseVariant ?? 0).kind +
+        ". 실제로 이 요청을 말할 때 actions에도 이 종류와 origin=sender를 지정한다.",
+      "이 사건의 정황: " + caseBranch(scenario, state.caseVariant ?? 0).context,
       "단순한 사실 확인이나 공식 앱으로 확인하라는 무해한 안내만 이어지면 훈련할 선택 자체가 없다. 대화 맥락이 형성되고 사용자가 관심을 보인다면 두 번째 답변 안에 구체적 요청을 한 번 제시해 사용자가 직접 선택할 기회를 준다.",
       "요청에 실제 번호·계좌·링크 주소·비밀번호·인증정보 값은 작성하지 않는다. 행동이 필요한 경우 대사에 요청을 분명하게 말하고 actions에도 해당 종류와 sender 출처를 기록한다.",
     ] : []),
@@ -237,7 +259,10 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
   // 검수 단독 제안은 절대로 버튼이 되지 않는다. 발화의 명시적 표현과 모델 간
   // 행동 종류·출처가 맞는 것만 통과한다. 검수 장애 시에도 표면적 요청 근거는 필수다.
   const grounded = groundedProposals(reply, first.value.actions, auditActions, scenario.identity);
-  if (riskDecisionDue(state, scenario, text) && !meaningfulRiskRequest(reply, grounded, scenario.topic)) {
+  if (riskDecisionDue(state, scenario, text) &&
+    (!meaningfulRiskRequest(reply, grounded, scenario.topic) ||
+     !grounded.some(action => action.kind === caseBranch(scenario, state.caseVariant ?? 0).kind &&
+       action.origin === "sender"))) {
     throw new Error("INCOMPLETE_TRAINING_DECISION");
   }
   if (grounded.length !== first.value.actions.length) {
@@ -293,7 +318,7 @@ export async function POST(req: NextRequest) {
         TRAINING_TOPICS.findIndex(t => t.id === body.topic);
       const index = topicIndex * 2 + 1;
       const scenario = SCENARIOS[index];
-      const caseVariant = randomInt(CASE_VARIANT_COUNT);
+      const caseVariant = nextCaseVariant(req, scenario.topic);
       const opening = await generateOpening(scenario, caseVariant);
       const state: TrainingState = {
         version: 1, scenario: index, caseVariant, createdAt: Date.now(), turns: 0,

@@ -51,7 +51,7 @@ export default function Home() {
               <span className="list-row__icon"><img src="/images/fish-clipboard.png" alt="" width={32} height={32} /></span>
               <span className="list-row__text">
                 <span className="list-row__title">사례로 배우기</span>
-                <span className="list-row__desc">대화 속에서 대처 방법을 살펴봐요</span>
+                <span className="list-row__desc">실제 사건을 되감아 안전한 대응을 배워요</span>
               </span>
               <ChevronRight />
             </Link>
@@ -59,7 +59,7 @@ export default function Home() {
               <span className="list-row__icon"><CheckIcon /></span>
               <span className="list-row__text">
                 <span className="list-row__title">OX 퀴즈</span>
-                <span className="list-row__desc">10문제로 대처 방법을 확인해요</span>
+                <span className="list-row__desc">매번 새로운 10문제와 틀린 개념 복습</span>
               </span>
               <ChevronRight />
             </Link>
