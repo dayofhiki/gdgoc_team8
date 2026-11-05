@@ -373,31 +373,17 @@ export default function RealTraining() {
     const nextPromise = feedback.promises.find(p => !p.practiced) ?? feedback.promises[0];
     return (
       <Screen>
-        <Header title="정체 확인" back={() => setReviewPage("feedback")} />
+        <Header title="안전 약속" back={() => setReviewPage("feedback")} />
         <section className="screen__body">
           <div className="fb-summary-flow">
-            <section className="fb-truth-summary" aria-labelledby="fb-truth">
-              <span className="fb-eyebrow">가상 연락의 정체</span>
-              <h2 id="fb-truth" className={result.identity === "fraud"
-                ? "fb-truth-word fb-truth-word--fraud" : "fb-truth-word fb-truth-word--real"}>
-                {result.identity === "fraud" ? "사칭 연락" : "실제 연락"}
-              </h2>
-              <p className="fb-truth-purpose">{result.purpose}</p>
-              <details className="fb-inline-disclosure">
-                <summary>어떻게 확인했나요?</summary>
-                <p>{result.verificationEvidence}</p>
-                <p>가상 훈련의 확인 결과입니다. 실제 상황에서는 별도의 경로로 직접 확인해야 해요.</p>
-              </details>
-            </section>
-
             <section className="fb-priority" aria-labelledby="fb-next-goal">
-              <span className="fb-eyebrow">다음에 기억할 한 가지</span>
-              <h3 id="fb-next-goal">{nextPromise?.title ?? "다른 경로로 직접 확인하기"}</h3>
-              <p>정체를 맞히는 것보다 직접 행동하는 것이 중요해요.</p>
+              <span className="fb-eyebrow">다음 연락에서도 기억할 행동</span>
+              <h2 id="fb-next-goal">{nextPromise?.title ?? "필요한 정보를 직접 확인하기"}</h2>
+              <p>누구에게서 연락이 오더라도, 행동하기 전에 스스로 확인하는 습관을 연습해요.</p>
             </section>
 
             <section className="fb-compact-section" aria-labelledby="fb-promise">
-              <h3 id="fb-promise" className="fb-compact-heading"><ShieldIcon /> 우리 가족의 안전 약속</h3>
+              <h3 id="fb-promise" className="fb-compact-heading"><ShieldIcon /> 기억할 안전 행동 세 가지</h3>
               <div className="fb-promise-grid">
                 {feedback.promises.map((promise, index) => (
                   <div className="fb-promise-tile" key={promise.id}>
@@ -410,7 +396,7 @@ export default function RealTraining() {
                 ))}
               </div>
               <details className="fb-inline-disclosure">
-                <summary>안전 약속 자세히 보기</summary>
+                <summary>이 행동이 중요한 이유</summary>
                 <ol className="fb-list">
                   {feedback.promises.map(promise => (
                     <li className="fb-item" key={promise.id}>
@@ -437,12 +423,24 @@ export default function RealTraining() {
               </button>
               <p className="fb-note">안전 약속만 공유돼요. 가족 확인 질문과 답은 제외됩니다.</p>
             </section>
+
+            <section className="fb-compact-section" aria-label="가상 연락의 설정">
+              <details className="fb-inline-disclosure">
+                <summary>이번 가상 연락의 설정 살펴보기</summary>
+                <div className="fb-scenario-detail">
+                  <strong>{result.identity === "fraud" ? "사칭 연락" : "실제 연락"}</strong>
+                  <p>{result.purpose}</p>
+                  <p>{result.verificationEvidence}</p>
+                  <p className="fb-note">이는 가상 시나리오의 설정이에요. 이번 훈련에서 실제로 선택한 행동은 앞쪽 피드백에서 확인할 수 있어요.</p>
+                </div>
+              </details>
+            </section>
           </div>
         </section>
         {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
         <BottomCTA row>
           <button className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
-          <button className="btn btn--primary" onClick={() => router.replace("/roleplay/select")}>다시 연습하기</button>
+          <button className="btn btn--primary" onClick={() => router.replace("/roleplay/mode")}>다른 훈련하기</button>
         </BottomCTA>
       </Screen>
     );
