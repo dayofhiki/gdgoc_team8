@@ -29,7 +29,7 @@ export type DialogueMemory = {
   lastSummary: string;
   repeatCount: number;
 };
-export type EndReason = "natural" | "turn_limit" | "action";
+export type EndReason = "natural" | "turn_limit" | "action" | "resolved";
 
 const STAGES: Stage[] = ["contact", "context", "request", "closing"];
 const LEARNER: LearnerMove[] = ["question", "acknowledge", "decline", "verify_intent", "verified_claimed", "claimed_action", "suspect", "engage", "exit"];
