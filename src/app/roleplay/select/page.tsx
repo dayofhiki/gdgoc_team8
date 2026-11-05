@@ -15,19 +15,13 @@ export default function SelectTrainingTopic() {
   const categories = ["가족·지인", "생활 문자", "금융", "공공기관"];
   return (
     <Screen>
-      <Header title="대화 상황 선택" back={() => router.replace("/roleplay/mode")} />
+      <Header title="상황별 연습" back={() => router.replace("/roleplay/mode")} />
       <section className="screen__body rt-select-page">
         <div className="rt-select-heading">
-          <span className="chip">실전 대화 · {TRAINING_TOPICS.length}가지 주제</span>
-          <h2>어떤 상황부터 연습할까요?</h2>
-          <p>직접 고르거나, 추천 상황을 받아보세요. 상대가 진짜인지는 대화와 행동으로 확인해야 해요.</p>
+          <span className="chip">상황별 연습 · {TRAINING_TOPICS.length}가지 상황</span>
+          <h2>연습하고 싶은 상황을 골라보세요</h2>
+          <p>가족 연락부터 택배·금융 안내까지, 다양한 상황에서 안전하게 대응하는 방법을 연습할 수 있어요.</p>
         </div>
-        <button type="button" className="rt-select-random" onClick={() => router.push("/roleplay/chat")}>
-          <span className="rt-select-random-mark" aria-hidden="true">↻</span>
-          <span><strong>추천 상황으로 바로 시작</strong><small>9가지 중 하나를 무작위로 골라줘요.</small></span>
-          <span className="rt-select-chevron" aria-hidden="true">›</span>
-        </button>
-        <p className="rt-select-separator">또는 직접 선택</p>
         <div className="rt-select-categories" role="group" aria-label="훈련 상황 목록">
           {categories.map(category => (
             <section className="rt-select-category" key={category} aria-label={category}>
@@ -57,7 +51,7 @@ export default function SelectTrainingTopic() {
       <BottomCTA>
         <button type="button" className="btn btn--primary" disabled={!selected}
           onClick={() => selected && router.push("/roleplay/chat?topic=" + encodeURIComponent(selected))}>
-          {selected ? TRAINING_TOPICS.find(t => t.id === selected)?.title + " 연습하기" : "연습할 상황을 선택해 주세요"}
+          {selected ? TRAINING_TOPICS.find(t => t.id === selected)?.title + " 연습 시작" : "연습할 상황을 선택해 주세요"}
         </button>
       </BottomCTA>
     </Screen>
