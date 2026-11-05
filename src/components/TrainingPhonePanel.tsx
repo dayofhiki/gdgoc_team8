@@ -3,20 +3,24 @@
 import { useState } from "react";
 import { BottomSheet } from "./ui";
 import type { PhoneMethod } from "@/lib/realTraining";
+import type { Action } from "@/lib/trainingActions";
 
-type Screen = "home" | "contacts" | "phone" | "apps" | "outcome";
+type Screen = "home" | "contacts" | "phone" | "apps" | "transfer" | "transfer_confirm" | "outcome";
 type Topic = "family" | "delivery" | "bank";
 type ActionChoice = "verify" | "verify_sender" | "family_contact";
+export type PhoneTransferRequest = { sourceIndex: number; action: Action };
 
 type Props = {
   topic: Topic;
   onClose: () => void;
   onAction: (choice: ActionChoice, method: PhoneMethod) => Promise<string | undefined>;
+  transferRequests: PhoneTransferRequest[];
+  onTransfer: (request: PhoneTransferRequest) => Promise<string | undefined>;
   onStop: () => void;
   busy: boolean;
 };
 
-function Glyph({ kind, size = 24 }: { kind: "device" | "contacts" | "phone" | "apps" | "messages"; size?: number }) {
+function Glyph({ kind, size = 24 }: { kind: "device" | "contacts" | "phone" | "apps" | "transfer"; size?: number }) {
   const shared = { stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...shared}>
@@ -24,7 +28,7 @@ function Glyph({ kind, size = 24 }: { kind: "device" | "contacts" | "phone" | "a
       {kind === "contacts" && <><rect x="4" y="3" width="16" height="18" rx="2.8"/><circle cx="12" cy="9" r="2.3"/><path d="M7.7 16.2c.7-2.7 7.9-2.7 8.6 0M2 7h2M2 12h2M2 17h2"/></>}
       {kind === "phone" && <path d="M7.1 3.4 4.8 5.7c-1.1 1.1-.4 4.6 3.7 8.7s7.6 4.8 8.7 3.7l2.3-2.3a1.5 1.5 0 0 0-.3-2.3l-3.2-1.7a1.5 1.5 0 0 0-1.8.3l-1.1 1.1a13.9 13.9 0 0 1-5.2-5.2l1.1-1.1a1.5 1.5 0 0 0 .3-1.8L9.4 3.7a1.5 1.5 0 0 0-2.3-.3Z"/>}
       {kind === "apps" && <><rect x="3" y="3" width="7" height="7" rx="1.7"/><rect x="14" y="3" width="7" height="7" rx="1.7"/><rect x="3" y="14" width="7" height="7" rx="1.7"/><rect x="14" y="14" width="7" height="7" rx="1.7"/></>}
-      {kind === "messages" && <path d="M5 4h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 3v-3a2 2 0 0 1-2-2V7a3 3 0 0 1 3-3Z"/>}
+      {kind === "transfer" && <><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 9h18M7 15h4"/></>}
     </svg>
   );
 }
@@ -37,9 +41,10 @@ export function TrainingPhoneIcon() {
  * 모의 휴대전화. 첫 화면에서 정답이나 신원 확인 동작을 직접 노출하지 않는다.
  * 기능을 연 뒤 실제 연락처/번호/앱을 고른 행동만 서버에 기록한다.
  */
-export default function TrainingPhonePanel({ topic, onClose, onAction, onStop, busy }: Props) {
+export default function TrainingPhonePanel({ topic, onClose, onAction, transferRequests, onTransfer, onStop, busy }: Props) {
   const [screen, setScreen] = useState<Screen>("home");
   const [notice, setNotice] = useState("");
+  const [chosenTransfer, setChosenTransfer] = useState<PhoneTransferRequest | null>(null);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const locked = busy || working;
@@ -60,6 +65,20 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, onStop, b
     }
   }
 
+  async function submitTransfer() {
+    if (locked || !chosenTransfer) return;
+    setWorking(true);
+    setError("");
+    try {
+      // 실제 발신자 메시지의 봉인된 actionId만 사용한다.
+      await onTransfer(chosenTransfer);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "모의 송금을 처리하지 못했어요.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   function openInstalledApp(app: "bank_app" | "delivery_app") {
     if ((app === "bank_app" && topic !== "bank") || (app === "delivery_app" && topic !== "delivery")) {
       setNotice("이 앱에서는 현재 메시지에 해당하는 내용을 찾을 수 없어요.");
@@ -69,7 +88,7 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, onStop, b
     void act("verify", app);
   }
 
-  const tile = (kind: "contacts" | "phone" | "apps" | "messages", title: string, caption: string, action: () => void) => (
+  const tile = (kind: "contacts" | "phone" | "apps" | "transfer", title: string, caption: string, action: () => void) => (
     <button type="button" className="rt-device-tile" key={kind} onClick={action} disabled={locked}>
       <span className="rt-device-tile-icon"><Glyph kind={kind} /></span>
       <strong>{title}</strong>
@@ -83,7 +102,7 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, onStop, b
   );
 
   const title = screen === "contacts" ? "연락처" : screen === "phone" ? "전화" :
-    screen === "apps" ? "앱" : screen === "outcome" ? "기능 사용 결과" : "내 휴대전화";
+    screen === "apps" ? "앱" : screen === "transfer" ? "송금" : screen === "transfer_confirm" ? "모의 송금 확인" : screen === "outcome" ? "기능 사용 결과" : "내 휴대전화";
 
   return (
     <BottomSheet onClose={locked ? undefined : onClose}>
@@ -103,7 +122,7 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, onStop, b
               {tile("contacts", "연락처", "저장된 사람들", () => setScreen("contacts"))}
               {tile("phone", "전화", "최근 통화와 번호", () => setScreen("phone"))}
               {tile("apps", "앱", "설치된 앱", () => setScreen("apps"))}
-              {tile("messages", "메시지", "현재 대화", onClose)}
+              {tile("transfer", "송금", "가상 송금 기능", () => setScreen("transfer"))}
             </div>
             <div className="rt-device-divider" />
             <button type="button" className="rt-device-stop" onClick={onStop} disabled={locked}>이 문자 대화 끝내기</button>
@@ -127,7 +146,43 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, onStop, b
           <div className="rt-device-options">
             {option("bank", "은행 앱", "설치되어 있던 금융 앱", () => openInstalledApp("bank_app"))}
             {option("delivery", "택배 앱", "설치되어 있던 배송 앱", () => openInstalledApp("delivery_app"))}
-            {option("message", "메시지", "지금 문자 대화로 이동", onClose)}
+          </div>
+        )}
+        {screen === "transfer" && (
+          <div className="rt-device-options" aria-label="송금 요청 선택">
+            {transferRequests.length ? (
+              <>
+                <p className="rt-device-description">대화에서 받은 요청을 선택해 모의 송금할 수 있어요.</p>
+                {transferRequests.map(request => option(
+                  request.action.id + ":" + request.sourceIndex,
+                  request.action.target || "상대가 요청한 송금",
+                  request.action.task || "송금 요청",
+                  () => { setChosenTransfer(request); setScreen("transfer_confirm"); },
+                ))}
+              </>
+            ) : (
+              <div className="rt-device-empty">
+                <strong>선택할 송금 요청이 없어요</strong>
+                <p>현재 대화에 송금 요청이 없어요. 문자로 돌아가 대화를 이어갈 수 있어요.</p>
+                <button type="button" className="btn btn--gray" onClick={onClose}>문자로 돌아가기</button>
+              </div>
+            )}
+          </div>
+        )}
+        {screen === "transfer_confirm" && chosenTransfer && (
+          <div className="rt-device-outcome">
+            <div className="rt-device-transfer-summary">
+              <span className="rt-device-eyebrow">가상 송금 대상</span>
+              <strong>{chosenTransfer.action.target || "문자 발신자의 요청"}</strong>
+              <p>{chosenTransfer.action.task || "상대가 요청한 송금"}</p>
+            </div>
+            <p className="rt-device-description">확인하면 모의 송금 행동이 기록되고 훈련 대화가 종료돼요. 실제 돈은 이동하지 않습니다.</p>
+            <div className="rt-device-outcome-actions">
+              <button type="button" className="btn btn--primary" disabled={locked} onClick={() => void submitTransfer()}>
+                {locked ? "모의 송금 중…" : "모의 송금하기"}
+              </button>
+              <button type="button" className="btn btn--gray" disabled={locked} onClick={() => setScreen("transfer")}>돌아가기</button>
+            </div>
           </div>
         )}
         {screen === "outcome" && (
