@@ -42,7 +42,7 @@ export default function Home() {
             <Link href="/roleplay" className="list-row">
               <span className="list-row__icon"><img src="/images/icon-chat.png" alt="" width={32} height={32} /></span>
               <span className="list-row__text">
-                <span className="list-row__title">실전 대응 훈련</span>
+                <span className="list-row__title">문자·채팅 대응 훈련</span>
                 <span className="list-row__desc">실전 훈련 · 상황별 연습</span>
               </span>
               <ChevronRight />
