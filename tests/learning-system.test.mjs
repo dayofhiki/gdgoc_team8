@@ -121,3 +121,61 @@ test("the chat API fixes a branch in the sealed state and prevents action drift"
   assert.match(api, /caseBranch\(scenario, state\.caseVariant \?\? 0\)/);
   assert.match(decision, /expected\.kind/);
 });
+
+test("quiz and family code shares target distinct pages, with a public link from local preview", async () => {
+  const { familyCodeUrl, quizInviteUrl } = await import("../src/lib/share.ts");
+  const quiz = new URL(quizInviteUrl("http://192.168.0.3:3000", "테스트 가족", "invite-token"));
+  assert.equal(quiz.origin, "https://team8.gdgoc-devfest.org");
+  assert.equal(quiz.pathname, "/challenge");
+  assert.equal(quiz.searchParams.get("from"), "테스트 가족");
+  assert.equal(quiz.searchParams.get("invite"), "invite-token");
+
+  const code = new URL(familyCodeUrl("https://team8.gdgoc-devfest.org", "encrypted-token"));
+  assert.equal(code.pathname, "/family-code/shared");
+  assert.equal(code.search, "");
+  assert.equal(new URLSearchParams(code.hash.slice(1)).get("code"), "encrypted-token");
+});
+
+test("device sharing distinguishes cancelling from an unavailable share sheet and never copies", async () => {
+  const { shareWithDevice } = await import("../src/lib/share.ts");
+  const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  let payload;
+  const set = share => Object.defineProperty(globalThis, "navigator", { configurable: true, value: { share } });
+  try {
+    const data = { title: "미끼주의보", text: "초대 문구", url: "https://example.com/challenge" };
+    set(value => { payload = value; });
+    assert.equal(await shareWithDevice(data), "shared");
+    assert.deepEqual(payload, data);
+    set(() => { throw new DOMException("cancelled", "AbortError"); });
+    assert.equal(await shareWithDevice(data), "cancelled");
+    set(() => { throw new DOMException("blocked", "NotAllowedError"); });
+    assert.equal(await shareWithDevice(data), "unavailable");
+    set(undefined);
+    assert.equal(await shareWithDevice(data), "unavailable");
+  } finally {
+    if (original) Object.defineProperty(globalThis, "navigator", original);
+    else delete globalThis.navigator;
+  }
+});
+
+test("family codes are encrypted, reject tampering and expire before saving, then stay bound to the saving account", async () => {
+  const { normalizeFamilyCode, openFamilyCode, sealFamilyCode } = await import("../src/server/familyCodeSeal.ts");
+  const secret = "test-family-code-secret";
+  const code = { question: "우리 집 별명은?", answer: "테스트 답" };
+  assert.deepEqual(normalizeFamilyCode({ question: " 우리 집 별명은? ", answer: "테스트 답" }), code);
+  assert.equal(normalizeFamilyCode({ question: "질문", answer: "" }), null);
+  assert.equal(normalizeFamilyCode({ question: "질문", answer: "a".repeat(21) }), null);
+  const payload = { type: "share", code, invite: "a".repeat(64), expiresAt: 2000 };
+  const token = sealFamilyCode(payload, secret);
+  assert.doesNotMatch(Buffer.from(token, "base64url").toString(), /테스트 답|우리 집 별명/);
+  assert.notEqual(sealFamilyCode(payload, secret), token);
+  assert.deepEqual(openFamilyCode(token, secret, "recipient", 1999), payload);
+  assert.equal(openFamilyCode(token, secret, "recipient", 2000), null);
+  const raw = Buffer.from(token, "base64url");
+  raw[raw.length - 1] ^= 1;
+  assert.equal(openFamilyCode(raw.toString("base64url"), secret, "recipient", 1999), null);
+
+  const saved = sealFamilyCode({ type: "saved", code, owner: "recipient" }, secret);
+  assert.deepEqual(openFamilyCode(saved, secret, "recipient", 999999)?.code, code);
+  assert.equal(openFamilyCode(saved, secret, "other-account", 999999), null);
+});

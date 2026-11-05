@@ -105,7 +105,7 @@ test("family question reminder does not assert it was answered or shared", () =>
   const result = feedback(s);
   assert.equal(result.promises[0].practiced,true);
   assert.equal(result.promises[2].practiced,false);
-  assert.match(result.promises[2].detail,/답은 메시지에 적지 않고/);
+  assert.match(result.promises[2].detail,/의심되는 연락에는 답을 알려주지 않고/);
 });
 
 test("recorded official-app action remains the authority for credit, not an AI sentence", () => {

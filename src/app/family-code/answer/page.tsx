@@ -5,7 +5,7 @@ import { useAppState } from "@/components/AppState";
 import { LockIcon } from "@/components/Icons";
 import { BottomCTA, Header, Progress, Screen } from "@/components/ui";
 
-/** 가족 암호 · 답 정하기 (답은 저장하지 않음: 메모리에만 보관) */
+/** 가족 암호 · 답 정하기 */
 export default function FamilyCodeAnswer() {
   const { ready, familyQuestion, familyAnswer, setFamilyAnswer } = useAppState();
   const router = useRouter();
@@ -56,7 +56,7 @@ export default function FamilyCodeAnswer() {
           </div>
           <div className="notice">
             <LockIcon size={18} color="#8B95A1" filled />
-            <span>{"답은 저장하지 않고,\n가족에게도 보내지 않아요."}</span>
+            <span>{"공유하기를 누르면 질문과 답이 함께 들어가요. 믿을 수 있는 가족에게만 보내 주세요."}</span>
           </div>
         </div>
       </section>

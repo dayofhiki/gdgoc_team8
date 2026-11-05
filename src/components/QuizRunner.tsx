@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_REMEMBER, loadQuizProgress, pickQuiz, saveQuizProgress, type OX } from "@/lib/quiz";
+import { DEFAULT_REMEMBER, loadQuizProgress, pickQuiz, saveQuizProgress, type OX, type QuizItem } from "@/lib/quiz";
 import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
+import { SHARED_FAMILY_CODE_PATH } from "@/lib/share";
 import { saveRecord } from "@/lib/records";
 import { BottomCTA, Dialog, Header, Progress, Screen } from "./ui";
 
@@ -68,6 +69,18 @@ export default function QuizRunner({ ids, from }: Props) {
     setHintUsed((s) => new Set(s).add(q.id));
   };
 
+  const resetQuiz = (nextItems: QuizItem[], startImmediately: boolean) => {
+    saved.current = false;
+    setItems(nextItems);
+    setStarted(startImmediately);
+    setIdx(0);
+    setPicked(null);
+    setAnswers([]);
+    setHintOpen(false);
+    setHintUsed(new Set());
+    setDone(false);
+  };
+
   if (!started) {
     return (
       <Screen>
@@ -94,21 +107,10 @@ export default function QuizRunner({ ids, from }: Props) {
     const wrong = answers.filter((a) => !a.correct);
     const firstWrong = items.find((it) => it.id === wrong[0]?.id);
     const remember = firstWrong?.explanation ?? DEFAULT_REMEMBER;
-    const retry = () => {
-      const q = wrong.map((w) => w.id).join(",");
-      router.push(`/quiz?ids=${q}`);
-    };
+    const retry = () => resetQuiz(pickQuiz(wrong.map(answer => answer.id)), true);
     const nextSet = () => {
       const progress = loadQuizProgress();
-      setItems(pickQuiz(undefined, undefined, progress.wrongIds, progress.recentIds));
-      setStarted(false);
-      setIdx(0);
-      setPicked(null);
-      setAnswers([]);
-      setHintOpen(false);
-      setHintUsed(new Set());
-      setDone(false);
-      saved.current = false;
+      resetQuiz(pickQuiz(undefined, undefined, progress.wrongIds, progress.recentIds), false);
     };
     return (
       <Screen>
@@ -135,7 +137,7 @@ export default function QuizRunner({ ids, from }: Props) {
         <BottomCTA row>
           {from ? (
             <>
-              <button className="btn btn--gray" onClick={() => router.push("/quiz/recommend?guest=1")}>가족 암호 보기</button>
+              <button className="btn btn--gray" onClick={() => router.push(SHARED_FAMILY_CODE_PATH)}>가족 암호 보기</button>
               <button className="btn btn--primary" onClick={() => router.push("/")}>끝내기</button>
             </>
           ) : (

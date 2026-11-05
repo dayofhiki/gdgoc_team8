@@ -5,7 +5,7 @@ import { syncFamilyNickname } from "@/lib/invite";
 /**
  * 앱 전역 상태.
  * - 별명, 가족 암호 "질문"은 이 브라우저(localStorage)에 저장합니다.
- * - 가족 암호 "답"은 기획상 저장하지 않으므로 메모리에만 두고, 새로고침하면 사라집니다.
+ * - 새로 작성 중인 가족 암호 답은 메모리에만 둡니다. 공유 링크로 받은 암호의 저장은 별도로 처리합니다.
  */
 type State = {
   ready: boolean;

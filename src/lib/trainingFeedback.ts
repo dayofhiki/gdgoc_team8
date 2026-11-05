@@ -228,7 +228,7 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     {
       id: "family",
       title: scenario.topic === "family" ? "가족과 정해 둔 확인 질문을 직접 확인하기" : "혼자 판단하기 어렵다면 믿을 수 있는 사람에게 물어보기",
-      detail: scenario.topic === "family" ? "답은 메시지에 적지 않고 직접 통화하거나 만나서 확인해요." :
+      detail: scenario.topic === "family" ? "의심되는 연락에는 답을 알려주지 않고, 저장된 번호로 직접 확인해요." :
         "가족의 조언과 기관의 공식 신원 확인은 별개예요.",
       practiced: !isFamily && consulted,
     },
