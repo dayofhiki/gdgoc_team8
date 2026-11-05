@@ -1,6 +1,8 @@
 import { actionChoice } from "./trainingActions.ts";
 import { hasConcreteRequest, shouldResolveAfterIndependentCheck } from "./trainingResolution.ts";
 import { buildBehaviorFeedback } from "./trainingFeedback.ts";
+import { isPersonalTopic, type TrainingTopicId } from "./trainingCatalog.ts";
+import { EXTENDED_PAIRS } from "./trainingScenarioExtras.ts";
 import type { Action } from "./trainingActions";
 import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
 
@@ -22,6 +24,7 @@ export type Message = { actor: Actor; text: string; offer?: OfferKind; offers?: 
 export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string; method?: PhoneMethod };
 export type Scenario = {
   id: string;
+  topic: TrainingTopicId;
   identity: Identity;
   title: string;
   opening: string;
@@ -36,13 +39,14 @@ export type Scenario = {
   purpose: string;
   safePractice: string;
 };
-type Pair = Omit<Scenario, "id" | "identity" | "privateFacts" | "verification" | "purpose" | "objective"> & {
+export type Pair = Omit<Scenario, "id" | "identity" | "privateFacts" | "verification" | "purpose" | "objective"> & {
   legit: Pick<Scenario, "privateFacts" | "verification" | "purpose" | "objective">;
   fraud: Pick<Scenario, "privateFacts" | "verification" | "purpose" | "objective">;
 };
 
 const PAIRS: Pair[] = [
   {
+    topic: "family",
     title: "가족의 급한 연락",
     opening: "엄마 나 폰 화면이 갑자기 나가서 다른 번호로 문자해. 지금 연락돼?",
     persona: "독립해서 생활하는 성인 자녀. 평소 엄마에게 짧고 편하게 문자한다. 현재는 다른 기기로 연락 중이다.",
@@ -65,6 +69,7 @@ const PAIRS: Pair[] = [
     },
   },
   {
+    topic: "delivery",
     title: "택배 주소 확인 연락",
     opening: "안녕하세요, 택배 배송 관련해서 연락드렸습니다. 주소 확인이 필요한 건이 있어요.",
     persona: "배송 일정과 수취 주소 확인을 안내하는 택배 고객 응대 담당자 역할. 실제 회사·운송장 정보는 특정되지 않았다.",
@@ -87,6 +92,7 @@ const PAIRS: Pair[] = [
     },
   },
   {
+    topic: "bank",
     title: "은행 거래 확인 연락",
     opening: "고객님, 평소와 다른 거래가 감지되어 안내 연락드렸습니다. 거래 내역 확인을 부탁드립니다.",
     persona: "거래 이상 여부 확인 문자를 보낸 금융회사 상담 담당자 역할. 특정 은행이나 담당자 이름은 설정되지 않았다.",
@@ -108,12 +114,13 @@ const PAIRS: Pair[] = [
       purpose: "은행을 사칭한 송금·개인정보 요구",
     },
   },
+  ...EXTENDED_PAIRS,
 ];
 
 export const MAX_TURNS = 8;
 
 export const SCENARIOS: Scenario[] = PAIRS.flatMap((pair, index) => {
-  const base = { title: pair.title, opening: pair.opening, persona: pair.persona, voice: pair.voice,
+  const base = { topic: pair.topic, title: pair.title, opening: pair.opening, persona: pair.persona, voice: pair.voice,
     situation: pair.situation, progression: pair.progression, responseRules: pair.responseRules, safePractice: pair.safePractice };
   return [
     { ...base, id: String(index) + "-normal", identity: "legitimate" as const, ...pair.legit },
@@ -242,12 +249,13 @@ export function recordChoice(
   if (method) {
     if (sourceIndex !== undefined || actionId !== undefined ||
         state.events.some(e => e.method === method)) throw new Error("이미 선택한 행동입니다.");
-    const delivery = scenario.id.startsWith("1-");
-    const bank = scenario.id.startsWith("2-");
+    const delivery = scenario.topic === "delivery";
+    const bank = scenario.topic === "bank" || scenario.topic === "loan";
+    const institutional = !isPersonalTopic(scenario.topic);
     const valid = (choice === "family_contact" && method === "saved_family") ||
       (choice === "verify_sender" && method === "recent_sender") ||
       (choice === "verify" && (
-        (method === "official_directory" && (delivery || bank)) ||
+        (method === "official_directory" && institutional) ||
         (method === "bank_app" && bank) ||
         (method === "delivery_app" && delivery)
       ));
@@ -301,7 +309,7 @@ export function recordChoice(
     ...(actionId ? { actionId } : {}),
     ...(method ? { method } : {}),
   };
-  const familyScenario = scenario.id.startsWith("0-");
+  const familyScenario = isPersonalTopic(scenario.topic);
   const verification = choice === "verify" || (choice === "family_contact" && familyScenario)
     ? scenario.identity === "legitimate" ? "confirmed" : "failed"
     : state.verification;
@@ -338,7 +346,7 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
   // 실제 행동은 언제나 기록하되, 요구가 등장하지 않았다면 요구 대응 역량을 단정하지 않는다.
   const coverage = requestReached ? "request_reached" : state.turns < 2 ? "early" : "conversation_only";
   const checked = state.events.some((event) => event.choice === "verify" ||
-    (event.choice === "family_contact" && scenario.id.startsWith("0-")));
+    (event.choice === "family_contact" && isPersonalTopic(scenario.topic)));
   const consultedFamily = state.events.some((event) => event.choice === "family_contact");
   const complied = state.events.some((event) => event.choice === "comply");
   const shared = state.events.some((event) => event.choice === "share");
