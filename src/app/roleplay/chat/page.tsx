@@ -12,7 +12,7 @@ import { familyShareUrl } from "@/lib/invite";
 import { saveRecord } from "@/lib/records";
 import type { BehaviorFeedback } from "@/lib/trainingFeedback";
 import type { PhoneMethod } from "@/lib/realTraining";
-import TrainingPhonePanel, { TrainingPhoneIcon } from "@/components/TrainingPhonePanel";
+import TrainingPhonePanel, { TrainingPhoneIcon, type PhoneTransferRequest } from "@/components/TrainingPhonePanel";
 
 type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
 type LinkPreview = { url: string; domain: string; title: string; description: string };
@@ -275,7 +275,7 @@ export default function RealTraining() {
     }
   }
 
-  async function perform(choice: Choice, sourceIndex?: number, actionId?: string, method?: PhoneMethod): Promise<string | undefined> {
+  async function perform(choice: Choice, sourceIndex?: number, actionId?: string, method?: PhoneMethod, fromPhonePanel = false): Promise<string | undefined> {
     if (!session || busy || ending) return;
     setBusy(true);
     setError("");
@@ -287,7 +287,7 @@ export default function RealTraining() {
         ...(method ? { method } : {}),
       });
       setSession({ ...next, title: session.title });
-      if (!method) setActionsOpen(false);
+      if (!method && !fromPhonePanel || next.closed) setActionsOpen(false);
       if (choice === "open_link" && sourceIndex !== undefined && actionId) {
         setOpenedLinks((prev) => prev.includes(actionId) ? prev : [...prev, actionId]);
         setPreviewIndex(sourceIndex);
@@ -301,13 +301,13 @@ export default function RealTraining() {
           setPhase("judge");
         }
       }
-      if (method) {
+      if (method || fromPhonePanel) {
         return [...next.messages].reverse().find(m => m.actor === "system")?.text ??
           "선택한 행동이 기록되었습니다.";
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "행동을 기록하지 못했습니다.");
-      if (method) throw err;
+      if (method || fromPhonePanel) throw err;
     } finally {
       setBusy(false);
     }
@@ -554,6 +554,15 @@ export default function RealTraining() {
   const contact = contactTitle(session?.title);
   const phoneTopic = session?.title?.includes("가족") ? "family" :
     session?.title?.includes("택배") ? "delivery" : "bank";
+  // 메시지의 서버 봉인 actionId를 그대로 사용한다. 패널에서 임의의 송금/번호를 만들지 않는다.
+  const panelActions = (session?.messages ?? []).flatMap((message, sourceIndex) =>
+    message.actor === "them"
+      ? (message.actions ?? []).map(action => ({ sourceIndex, action }))
+      : [],
+  );
+  const transferRequests: PhoneTransferRequest[] = panelActions.filter(({ action }) => action.kind === "transfer");
+  const senderPhoneRequests: PhoneTransferRequest[] = panelActions.filter(({ action }) =>
+    action.kind === "phone" && action.origin === "sender");
   const activeLink = previewIndex !== null ? session?.messages[previewIndex]?.actions?.find(a => a.id === previewActionId)?.linkPreview : undefined;
 
   return (
@@ -594,7 +603,9 @@ export default function RealTraining() {
               <div className="rt-msg-body">
                 <div className="rt-bubble">
                   <p>{m.text}</p>
-                  {m.actor === "them" && (m.actions ?? []).map((action) =>
+                  {m.actor === "them" && (m.actions ?? []).filter(action =>
+                    !["transfer", "phone", "app"].includes(action.kind)
+                  ).map((action) =>
                     action.kind === "link" && action.linkPreview ? (
                       <div className="rt-link-attachment" key={action.id}>
                         <button type="button" className="rt-link-url" onClick={() => activateAction(action, i)} disabled={busy}
@@ -665,7 +676,7 @@ export default function RealTraining() {
             <h2 id="rt-intro-title">문자 외의 기능도 사용해 보세요</h2>
             <p className="rt-intro-lead">
               오른쪽 위 <strong>휴대전화 아이콘</strong>을 누르면
-              연락처·전화·앱을 사용할 수 있어요.
+              연락처·전화·앱·송금을 사용할 수 있어요.
             </p>
             <div className="rt-intro-steps">
               <div><strong>① 대화하기</strong><span>상대방의 말에 자유롭게 답해요.</span></div>
@@ -690,6 +701,10 @@ export default function RealTraining() {
           busy={busy}
           onClose={() => setActionsOpen(false)}
           onAction={(choice, method) => perform(choice, undefined, undefined, method)}
+          transferRequests={transferRequests}
+          onTransfer={({ sourceIndex, action }) => perform("comply", sourceIndex, action.id, undefined, true)}
+          senderPhoneRequests={senderPhoneRequests}
+          onSenderCall={({ sourceIndex, action }) => perform("verify_sender", sourceIndex, action.id, undefined, true)}
           onStop={() => void perform("stop")}
         />
       )}
