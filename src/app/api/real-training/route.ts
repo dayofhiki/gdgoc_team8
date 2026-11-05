@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "node:crypto";
 import { evaluate, MAX_TURNS, normalizeKoreanReply, recordChoice, SCENARIOS } from "@/lib/realTraining";
 import { ACTION_RULES, buildActions } from "@/lib/trainingActions";
-import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, OPENING_SCHEMA, actorBrief, openingBrief, acceptableOpening, unsolicitedSolution, parseOpeningOutput, decideDialogueTurn, parseDialogueOutput } from "@/lib/trainingDialogue";
+import type { Proposed } from "@/lib/trainingActions";
+import { CASE_VARIANT_COUNT, caseDetail } from "@/lib/trainingCaseFacts";
+import { groundedProposals } from "@/lib/trainingActionGuard";
+import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, OPENING_SCHEMA, actorBrief, openingBrief, acceptableOpening, unsolicitedSolution, parseOpeningOutput, decideDialogueTurn, parseDialogueOutput, replySimilarity } from "@/lib/trainingDialogue";
 import type { DialogueSignal } from "@/lib/trainingDialogue";
 import { complete, providers, type Msg } from "../../../../supabase/functions/_shared/llm";
 import { detectPii } from "../../../../supabase/functions/_shared/pii";
@@ -52,6 +55,8 @@ function unseal(token: unknown): TrainingState {
     !Number.isInteger(state.turns) || state.turns < 0 || state.turns > MAX_TURNS ||
     !Array.isArray(state.messages) || state.messages.length > 40 ||
     !Array.isArray(state.events) || state.events.length > 10 ||
+    (state.caseVariant !== undefined && (!Number.isInteger(state.caseVariant) ||
+      state.caseVariant < 0 || state.caseVariant >= CASE_VARIANT_COUNT)) ||
     !["none", "confirmed", "failed"].includes(state.verification) || typeof state.closed !== "boolean" ||
     (state.endReason !== undefined && !["natural", "turn_limit", "action"].includes(state.endReason)) ||
     (state.dialogue !== undefined && (!state.dialogue || typeof state.dialogue !== "object" ||
@@ -90,11 +95,11 @@ function trainingProviders() {
     ? (process.env.TRAINING_GEMINI_API_KEY || process.env.GEMINI_API_KEY)
     : process.env[key]);
 }
-async function generateOpening(scenario: (typeof SCENARIOS)[number]): Promise<string> {
+async function generateOpening(scenario: (typeof SCENARIOS)[number], caseVariant: number): Promise<string> {
   // 첫 문자는 정상/사칭 여부를 전달하지 않고, 매번 실제 LLM이 만든다.
   // 실패했을 때 예전 고정 opening으로 조용히 되돌아가지 않는다.
   const result = await complete([
-    { role: "system", content: openingBrief(scenario, randomInt(8)) },
+    { role: "system", content: openingBrief(scenario, randomInt(8), caseDetail(scenario, caseVariant)) },
     { role: "user", content: "지금 처음 보낼 문자 한 건만 작성하세요." },
   ], {
     temperature: 0.95, maxTokens: 280, json: true, schema: OPENING_SCHEMA,
@@ -115,7 +120,7 @@ async function generateResponse(state: TrainingState, text: string) {
     "당신은 사용자가 참여한 금융사기 예방 문자 훈련에서 실제 문자 대화 상대를 연기하는 배우다. 대사에 훈련·AI·시나리오라는 말을 꺼내지 않는다.",
     "당신은 훈련의 상대 인물을 연기하는 '배우'이며, 대화 종료·안전 평가·보안 정책은 서버가 결정한다.",
     "아래 역할 정보와 이미 오간 대화에서 확정된 사실을 일관되게 유지한다. 아직 정해지지 않은 세부사항을 새로운 사실로 만들어내지 않는다.",
-    actorBrief(scenario, dialogue, state.turns),
+    actorBrief(scenario, dialogue, state.turns, caseDetail(scenario, state.caseVariant ?? 0)),
     "### 학습자의 이번 발화와 반복 패턴(해석은 추정, 채점 근거 아님)",
     learnerTurnGuidance(currentContext, scenario.identity, state.events.length),
     "앞 턴까지의 대화 상태: " + JSON.stringify({
@@ -165,9 +170,14 @@ async function generateResponse(state: TrainingState, text: string) {
     reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
     if (givesAwaySolution()) throw new Error("UNSOLICITED_SOLUTION");
   }
-  let extracted = first.value.actions;
+  // 일상 답변에는 2차 LLM 호출을 하지 않아 비용/대기 시간을 줄인다.
+  // 행동 버튼이 있거나 실제 대화 종료를 제안할 때만 두 번째 검수를 요청한다.
+  const needsAudit = first.value.actions.length > 0 || first.value.dialogue.conversationComplete ||
+    replySimilarity(dialogue.lastReply, reply) >= 0.78 && !!reply;
+  let auditActions: Proposed[] | undefined;
   let auditSignal: DialogueSignal | undefined;
   try {
+    if (needsAudit) {
     const audit = await complete([
       {
         role: "system",
@@ -194,16 +204,18 @@ async function generateResponse(state: TrainingState, text: string) {
       parse: parseDialogueOutput, budgetMs: 4500,
     }, { list: available });
     auditSignal = audit.value.dialogue;
-    // 모델의 다른 해석을 모아 행동 누락을 줄이되, 실제 허용 여부는 서버에서 검증한다.
-    // 정상인 대사의 안전 경로는 감사 모델의 재해석만으로 생성하지 않는다.
-    // 실제 답변을 작성한 1차 모델의 명시적 송금 부탁만 행동으로 허용한다.
-    extracted = scenario.identity === "legitimate"
-      ? first.value.actions.filter(a => a.kind === "transfer")
-      : [...extracted, ...audit.value.actions];
+    auditActions = audit.value.actions;
+    }
   } catch (error) {
     console.warn("training: independent conversation audit unavailable", error instanceof Error ? error.name : "unknown");
   }
-  const actions = buildActions(extracted, state.turns);
+  // 검수 단독 제안은 절대로 버튼이 되지 않는다. 발화의 명시적 표현과 모델 간
+  // 행동 종류·출처가 맞는 것만 통과한다. 검수 장애 시에도 표면적 요청 근거는 필수다.
+  const grounded = groundedProposals(reply, first.value.actions, auditActions, scenario.identity);
+  if (grounded.length !== first.value.actions.length) {
+    console.info("training: dropped unsupported model-proposed actions");
+  }
+  const actions = buildActions(grounded, state.turns);
   const decision = decideDialogueTurn({
     memory: dialogue, primary: first.value.dialogue, audit: auditSignal,
     reply, userText: text, actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
@@ -241,9 +253,10 @@ export async function POST(req: NextRequest) {
     if (body.action === "start") {
       const index = randomInt(SCENARIOS.length);
       const scenario = SCENARIOS[index];
-      const opening = await generateOpening(scenario);
+      const caseVariant = randomInt(CASE_VARIANT_COUNT);
+      const opening = await generateOpening(scenario, caseVariant);
       const state: TrainingState = {
-        version: 1, scenario: index, createdAt: Date.now(), turns: 0,
+        version: 1, scenario: index, caseVariant, createdAt: Date.now(), turns: 0,
         messages: [{ actor: "them", text: opening }],
         events: [], verification: "none", closed: false, dialogue: INITIAL_DIALOGUE,
       };
