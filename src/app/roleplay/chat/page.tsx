@@ -464,7 +464,7 @@ export default function RealTraining() {
         </section>
         {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
         <BottomCTA row>
-          <button className="btn btn--gray" onClick={() => void start(result.topic)}>다시 연습</button>
+          <button className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
           <button className="btn btn--primary" onClick={() => {
             if (liveEntry) void start(randomTrainingTopic(result.topic).id);
             else router.replace("/roleplay/select");
