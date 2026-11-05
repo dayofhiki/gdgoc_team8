@@ -15,3 +15,5 @@ ai_lab/results/
 # Firebase emulator
 firebase-debug.log
 firestore-debug.log
+functions/lib/
+functions/node_modules/

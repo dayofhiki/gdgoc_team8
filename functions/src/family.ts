@@ -1,5 +1,5 @@
 /**
- * 가족 · 초대 · 연습 기록 백엔드 (Firestore). /api/backend 라우트가 로그인 확인 후 runAction을 부름.
+ * 가족 · 초대 · 연습 기록 백엔드 (Firestore). Cloud Function `backend`(index.ts)가 로그인 확인 후 runAction을 부름.
  * Firestore Rules는 전부 거부 → 권한 검사는 전부 여기서 함 (예전 Supabase RLS + SQL 함수 자리).
  *
  * families/{fid}                  { createdBy, createdAt }
@@ -11,7 +11,24 @@
  */
 import { randomUUID } from "node:crypto";
 import { FieldValue, Timestamp, type DocumentReference, type Firestore } from "firebase-admin/firestore";
-import type { ErrorCode, FamilyMemberSummary, InviteJoinResponse } from "./types.ts";
+
+// 응답 형식. functions/는 따로 배포돼서 src/server/types.ts를 import할 수 없음 → 바꾸면 그쪽도 같이 맞출 것
+type ErrorCode = "BAD_REQUEST" | "FORBIDDEN" | "INVITE_INVALID" | "INVITE_EXPIRED" | "INVITE_FULL";
+type InviteJoinResponse = {
+  participant_id: string;
+  invite: { senior_name: string; difficulty: string; family_id: string | null; inviter_name: string };
+};
+type FamilyMemberSummary = {
+  user_id: string;
+  nickname: string;
+  is_me: boolean;
+  share_results: boolean;
+  joined_at: string;
+  record_count: number | null;
+  safe_count: number | null;
+  last_at: string | null;
+  recent: { kind: string; title: string; safe: boolean | null; score: number | null; total: number | null; created_at: string }[] | null;
+};
 
 export class ApiFail extends Error {
   status: number;

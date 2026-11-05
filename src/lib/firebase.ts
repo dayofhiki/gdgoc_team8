@@ -22,11 +22,14 @@ export async function ensureAnon(): Promise<void> {
   if (!a.currentUser) await signInAnonymously(a);
 }
 
-// /api/backend 호출. 실패 시 Error.message = 서버의 error.code (예: "INVITE_EXPIRED")
+// Cloud Function `backend` (functions/src/index.ts와 같은 리전)
+const BACKEND_URL = `https://asia-northeast3-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.cloudfunctions.net/backend`;
+
+// 백엔드 호출. 실패 시 Error.message = 서버의 error.code (예: "INVITE_EXPIRED")
 export async function callFn<Res>(action: string, body: object = {}): Promise<Res> {
   await ensureAnon();
   const token = await auth().currentUser!.getIdToken();
-  const res = await fetch("/api/backend", {
+  const res = await fetch(BACKEND_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ ...body, action }),

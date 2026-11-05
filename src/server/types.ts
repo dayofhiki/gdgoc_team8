@@ -112,7 +112,7 @@ export type ChatTurnResponse = { reply: Message; stage: Stage; ended: boolean; u
 export type SessionEndRequest = { session_id: string };
 export type SessionEndResponse = { result: Result };
 
-// 가족 백엔드 (/api/backend)
+// 가족 백엔드 (Cloud Function backend). functions/src/family.ts의 타입과 맞출 것
 export type FamilyMemberSummary = {
   user_id: string;
   nickname: string;

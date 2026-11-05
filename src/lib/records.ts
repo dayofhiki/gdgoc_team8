@@ -1,5 +1,5 @@
 /**
- * 연습 결과 기록 → 서버(/api/backend, Firestore users/{uid}/records). 요약만 저장 (대화 원문 저장 안 함).
+ * 연습 결과 기록 → Firebase(Cloud Function backend, Firestore users/{uid}/records). 요약만 저장 (대화 원문 저장 안 함).
  * 가족에게는 본인이 공유를 켰을 때만 보임 (setShareResults). 실패해도 화면 흐름은 계속.
  * shortcut: 퀴즈 결과는 브라우저가 직접 기록해 조작 가능 (속는 건 자기 가족뿐), 위변조가 문제 되면 서버 라우트에서 기록할 것.
  */

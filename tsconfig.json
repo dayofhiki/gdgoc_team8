@@ -36,6 +36,7 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
+    "functions",
     "node_modules",
     "supabase/functions"
   ]
