@@ -2,7 +2,7 @@ import Link from "next/link";
 import { isTrainingTopicId, topicDescriptor } from "@/lib/trainingCatalog";
 import { BottomCTA, Header, Screen } from "@/components/ui";
 
-/** 실전 대응 훈련 · 시작 전 안내 */
+/** 문자·채팅 대응 훈련 · 시작 전 안내 */
 export default async function RoleplayIntro({ searchParams }: { searchParams: Promise<{ topic?: string | string[]; entry?: string | string[]; mode?: string | string[] }> }) {
   const { topic: requestedTopic, entry, mode } = await searchParams;
   const topic = isTrainingTopicId(requestedTopic) ? requestedTopic : undefined;
@@ -11,7 +11,7 @@ export default async function RoleplayIntro({ searchParams }: { searchParams: Pr
     : mode === "live" ? "/roleplay/chat" : "/roleplay/mode";
   return (
     <Screen>
-      <Header title="실전 대응 훈련" back="/home" />
+      <Header title="문자·채팅 대응 훈련" back="/home" />
       <section className="screen__body">
         <img className="rp-intro__img" src="/images/fish-clipboard.png" alt="안내문을 든 뻐끄미" />
         <h2 className="rp-intro__title">시작 전에 확인해주세요</h2>
