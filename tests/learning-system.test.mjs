@@ -179,3 +179,31 @@ test("family codes are encrypted, reject tampering and expire before saving, the
   assert.deepEqual(openFamilyCode(saved, secret, "recipient", 999999)?.code, code);
   assert.equal(openFamilyCode(saved, secret, "other-account", 999999), null);
 });
+
+test("exported Figma refresh keeps chat actions live while adding large-print and memory card", () => {
+  const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  const quiz = readFileSync(new URL("../src/components/QuizRunner.tsx", import.meta.url), "utf8");
+  const phone = readFileSync(new URL("../src/components/TrainingPhonePanel.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(mode, /role="radiogroup"/);
+  assert.match(mode, /"\/roleplay\/chat"/);
+  assert.match(mode, /"\/roleplay\/select"/);
+  assert.match(mode, /채팅으로 시작하기/);
+  assert.match(chat, /figma-chat-reply-heading/);
+  assert.match(chat, /글자 크게 보기/);
+  assert.match(chat, /figma-font-dialog/);
+  assert.match(chat, /figma-flashcard/);
+  assert.match(chat, /caseVariant/);
+  assert.match(chat, /<TrainingPhonePanel/);
+  assert.match(chat, /void send\(text\)/);
+  assert.match(chat, /void perform\("stop"\)/);
+  assert.match(chat, /void shareFamilyPractice\(false\)/);
+  assert.match(phone, /onTransfer/);
+  assert.match(phone, /onSenderCall/);
+  assert.match(quiz, /figma-quiz-result/);
+  assert.match(quiz, /틀린 문제 다시 풀기/);
+  assert.match(quiz, /wrong\.length \? retry : nextSet/);
+  for (const selector of [".figma-mode", ".figma-chat", ".figma-font-dialog",
+    ".figma-flashcard", ".figma-quiz-result", ".rt-device-grid"]) assert.ok(css.includes(selector));
+});
