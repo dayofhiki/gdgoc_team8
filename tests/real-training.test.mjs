@@ -671,7 +671,7 @@ test("AI cannot silently replace an actionable fraud choice with an official app
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   assert.match(route, /replyQualityIssue\(scenario, state, text, reply, first\.value\.actions\)/);
   assert.match(route, /INCOMPLETE_TRAINING_DECISION/);
-  assert.match(route, /SCENARIO_DECISIONS\[scenario\.topic\]/);
+  assert.match(route, /caseBranch\(scenario, state\.caseVariant \?\? 0\)\.incident/);
 });
 
 test("a bank app lookup is inconclusive but the independent callback can resolve the same request", () => {

@@ -159,12 +159,19 @@ test("card callback branches only from the attached number and requires opening 
   assert.equal(evaluate(stopped, scenario, "uncertain").behavior.promises.find(p => p.id === "hold").practiced, true);
 });
 
-test("every authored fallback gives the learner an actionable request by their second reply", async () => {
+test("every authored fallback offers a grounded action by its scheduled third reply at latest", async () => {
   const { fallbackTrainingTurn } = await import("../src/lib/trainingFallback.ts");
   const { meaningfulRiskRequest } = await import("../src/lib/trainingDecision.ts");
+  const { caseBranch, CASE_VARIANT_COUNT } = await import("../src/lib/trainingCaseFacts.ts");
   for (const scenario of SCENARIOS.filter(item => item.identity === "fraud")) {
-    const s = session(SCENARIOS.indexOf(scenario));
-    const turn = fallbackTrainingTurn(s, scenario, "무슨 내용인가요?");
-    assert.ok(meaningfulRiskRequest(turn.reply, turn.actions, scenario.topic), scenario.topic);
+    for (let variant = 0; variant < CASE_VARIANT_COUNT; variant++) {
+      const branch = caseBranch(scenario, variant);
+      const s = session(SCENARIOS.indexOf(scenario));
+      s.caseVariant = variant;
+      s.turns = branch.requestAfterTurns;
+      const turn = fallbackTrainingTurn(s, scenario, "무슨 내용인가요?");
+      assert.ok(meaningfulRiskRequest(turn.reply, turn.actions, scenario.topic),
+        scenario.topic + "/" + variant);
+    }
   }
 });

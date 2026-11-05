@@ -5,7 +5,7 @@ import { ACTION_RULES, buildActions } from "@/lib/trainingActions";
 import type { Proposed } from "@/lib/trainingActions";
 import { CASE_VARIANT_COUNT, caseBranch, caseDetail } from "@/lib/trainingCaseFacts";
 import { groundedProposals } from "@/lib/trainingActionGuard";
-import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, OPENING_SCHEMA, actorBrief, openingBrief, acceptableOpening, unsolicitedSolution, parseOpeningOutput, decideDialogueTurn, parseDialogueOutput, replySimilarity } from "@/lib/trainingDialogue";
+import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, actorBrief, acceptableOpening, unsolicitedSolution, decideDialogueTurn, parseDialogueOutput, replySimilarity } from "@/lib/trainingDialogue";
 import type { DialogueSignal } from "@/lib/trainingDialogue";
 import { complete, providers, type Msg } from "@/server/llm";
 import { detectPii } from "@/server/pii";
@@ -14,7 +14,7 @@ import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/l
 import { shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";
 import { TRAINING_TOPICS, isTrainingTopicId } from "@/lib/trainingCatalog";
 import { fallbackTrainingTurn } from "@/lib/trainingFallback";
-import { SCENARIO_DECISIONS, replyQualityIssue, riskDecisionDue, meaningfulRiskRequest } from "@/lib/trainingDecision";
+import { replyQualityIssue, riskDecisionDue, meaningfulRiskRequest } from "@/lib/trainingDecision";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ const RATE_LIMIT = 40;
 const hits = new Map<string, { count: number; since: number }>();
 // Rotate branches for repeat plays without storing conversation text or personal details.
 const lastBranch = new Map<string, { index: number; time: number }>();
-function nextCaseVariant(req: NextRequest, topic: string): number {
+function nextCaseVariant(req: NextRequest, topic: string, recent?: unknown): number {
   const visitor = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous";
   const key = visitor + ":" + topic;
   const now = Date.now();
@@ -32,9 +32,15 @@ function nextCaseVariant(req: NextRequest, topic: string): number {
     if (now - entry.time > RATE_WINDOW_MS) lastBranch.delete(id);
   }
   const previous = lastBranch.get(key);
-  const index = previous && now - previous.time < RATE_WINDOW_MS
-    ? (previous.index + 1 + randomInt(CASE_VARIANT_COUNT - 1)) % CASE_VARIANT_COUNT
-    : randomInt(CASE_VARIANT_COUNT);
+  // 서버리스 인스턴스가 변경되어도 사용자의 최근 사건 2개를 되풀이하지 않는다.
+  // 입력값은 출제 취향만 결정하며 비밀 상태·정답·행동 평가에는 관여하지 않는다.
+  const seen = Array.isArray(recent) ? recent.filter((v): v is number =>
+    Number.isInteger(v) && v >= 0 && v < CASE_VARIANT_COUNT).slice(-2) : [];
+  if (!seen.length && previous && now - previous.time < RATE_WINDOW_MS) seen.push(previous.index);
+  const candidates = Array.from({ length: CASE_VARIANT_COUNT }, (_, i) => i)
+    .filter(i => !seen.includes(i));
+  const pool = candidates.length ? candidates : Array.from({ length: CASE_VARIANT_COUNT }, (_, i) => i);
+  const index = pool[randomInt(pool.length)];
   lastBranch.set(key, { index, time: now });
   return index;
 }
@@ -117,23 +123,10 @@ function trainingProviders() {
 }
 async function generateOpening(scenario: (typeof SCENARIOS)[number], caseVariant: number): Promise<string> {
   const branch = caseBranch(scenario, caseVariant);
-  // Ensure that the opening matches the selected incident even without a provider.
-  if (scenario.topic === "card" || scenario.topic === "team_mission") return branch.opening;
-  const available = trainingProviders();
-  if (!available.length) return branch.opening;
-  try {
-    const result = await complete([
-      { role: "system", content: openingBrief(scenario, randomInt(8), caseDetail(scenario, caseVariant)) + "\n이번 사건의 첫 접촉 정황을 이 대사에 맞춰 구성하라: " + branch.opening },
-      { role: "user", content: "지금 처음 보낼 문자 한 건만 작성하세요." },
-    ], {
-      temperature: 0.95, maxTokens: 280, json: true, schema: OPENING_SCHEMA,
-      parse: parseOpeningOutput, budgetMs: 4500,
-    }, { list: available });
-    const opening = normalizeKoreanReply(result.value.opening).trim();
-    return acceptableOpening(opening) && !detectPii(opening).length ? opening : branch.opening;
-  } catch {
-    return branch.opening;
-  }
+  // 시작부터 사건이 다르게 느껴져야 한다. 일반적인 AI 오프닝 생성은 사건을
+  // 다시 같은 주제 인사말로 수렴시키므로, 검수된 표현 두 가지 중 하나를 사용한다.
+  const candidate = randomInt(2) === 0 ? branch.opening : branch.alternateOpening;
+  return acceptableOpening(candidate) ? candidate : branch.opening;
 }
 
 async function generateResponse(state: TrainingState, text: string) {
@@ -164,13 +157,17 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
     actorBrief(scenario, dialogue, state.turns, caseDetail(scenario, state.caseVariant ?? 0)),
     ...(scenario.identity === "fraud" ? [
       "### 이번 훈련에서 사용자가 실제로 판단해야 할 위험한 요청",
-      SCENARIO_DECISIONS[scenario.topic],
-      "이번 세션에 배정된 구체적 사건 경로가 앞의 일반적인 예시보다 우선한다. 다른 사건이나 다른 요구로 갈아타지 말 것.",
+      "공통 주제 설명은 학습 범위일 뿐 사건의 줄거리가 아닙니다. 이번에 배정된 에피소드의 사실만 유지하세요.",
+      "이번 사건의 접촉 상황: " + caseBranch(scenario, state.caseVariant ?? 0).incident,
+      "발신자가 알고 있을 수 없는 사실: " + caseBranch(scenario, state.caseVariant ?? 0).factConstraint,
       "이번 분기에서 실제로 제시할 잘못된 요청: " + caseBranch(scenario, state.caseVariant ?? 0).request,
       "이 요청의 행동 종류: " + caseBranch(scenario, state.caseVariant ?? 0).kind +
         ". 실제로 이 요청을 말할 때 actions에도 이 종류와 origin=sender를 지정한다.",
       "이 사건의 정황: " + caseBranch(scenario, state.caseVariant ?? 0).context,
-      "단순한 사실 확인이나 공식 앱으로 확인하라는 무해한 안내만 이어지면 훈련할 선택 자체가 없다. 대화 맥락이 형성되고 사용자가 관심을 보인다면 두 번째 답변 안에 구체적 요청을 한 번 제시해 사용자가 직접 선택할 기회를 준다.",
+      "사건마다 속도가 다릅니다. 이번 에피소드는 대화 답장 " +
+        (caseBranch(scenario, state.caseVariant ?? 0).requestAfterTurns + 1) +
+        "번째 무렵에 대응을 요구합니다. 사용자의 직전 질문에 먼저 답하면서 진행하세요. 세 번째 답장 뒤까지 배경 설명만 늘어놓지 마세요.",
+      "사용자가 이미 거절하거나 독립적으로 확인했다면 설득을 되풀이하지 말고 마무리합니다.",
       "요청에 실제 번호·계좌·링크 주소·비밀번호·인증정보 값은 작성하지 않는다. 행동이 필요한 경우 대사에 요청을 분명하게 말하고 actions에도 해당 종류와 sender 출처를 기록한다.",
     ] : []),
     "### 학습자의 이번 발화와 반복 패턴(해석은 추정, 채점 근거 아님)",
@@ -212,8 +209,9 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
       first.value.actions.some(a => ["app", "phone", "link", "provide_data"].includes(a.kind)))) {
     throw new Error("UNSOLICITED_SOLUTION");
   }
-  if ((scenario.topic === "card" && first.value.actions.some(action => action.kind !== "phone" || action.origin !== "sender")) ||
-      (scenario.topic === "team_mission" && first.value.actions.some(action => action.kind !== "transfer")) ||
+  if ((scenario.topic === "team_mission" && first.value.actions.some(action => action.kind !== "transfer")) ||
+      first.value.actions.some(action => action.origin === "sender" &&
+        action.kind !== caseBranch(scenario, state.caseVariant ?? 0).kind) ||
       replyQualityIssue(scenario, state, text, reply, first.value.actions)) {
     throw new Error("INCOMPLETE_TRAINING_DECISION");
   }
@@ -318,7 +316,9 @@ export async function POST(req: NextRequest) {
         TRAINING_TOPICS.findIndex(t => t.id === body.topic);
       const index = topicIndex * 2 + 1;
       const scenario = SCENARIOS[index];
-      const caseVariant = nextCaseVariant(req, scenario.topic);
+      const recentByTopic = body.recentBranches && typeof body.recentBranches === "object" &&
+        !Array.isArray(body.recentBranches) ? body.recentBranches as Record<string, unknown> : {};
+      const caseVariant = nextCaseVariant(req, scenario.topic, recentByTopic[scenario.topic]);
       const opening = await generateOpening(scenario, caseVariant);
       const state: TrainingState = {
         version: 1, scenario: index, caseVariant, createdAt: Date.now(), turns: 0,
@@ -326,7 +326,8 @@ export async function POST(req: NextRequest) {
         events: [], verification: "none", closed: false, dialogue: INITIAL_DIALOGUE,
       };
       return apiOk({
-        token: seal(state), title: scenario.title, topic: scenario.topic, messages: state.messages,
+        token: seal(state), title: scenario.title, topic: scenario.topic,
+        caseVariant, messages: state.messages,
         turns: 0, maxTurns: MAX_TURNS, verified: false, closed: false, endReason: null,
       });
     }
