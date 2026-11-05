@@ -145,10 +145,12 @@ test("links carry reserved non-resolving addresses and message-preview metadata"
   assert.equal(evaluate(opened, SCENARIOS[3], "uncertain").linkOpened, true);
 });
 
-test("global menu offers family contact and ignore, not an unrelated official-app shortcut", () => {
+test("global menu offers learner-initiated verification separately from sender proposals", () => {
   const request = withOffer(state(4), "transfer", "송금해 주세요.");
   assert.throws(() => recordChoice(request.state, SCENARIOS[4], "verify", request.source));
-  assert.throws(() => recordChoice(request.state, SCENARIOS[4], "verify"));
+  const independent = recordChoice(request.state, SCENARIOS[4], "verify").state;
+  assert.equal(independent.verification, "confirmed");
+  assert.equal(independent.closed, true);
   const familyBank = recordChoice(state(4), SCENARIOS[4], "family_contact").state;
   assert.equal(familyBank.closed, true);
   assert.equal(familyBank.verification, "none");
@@ -176,4 +178,31 @@ test("mentioning official apps in a warning or unrelated sentence does not creat
   assert.deepEqual(classifyOffers("택배사 공식 앱을 열지 마세요. 링크로 확인하세요.", []), []);
   assert.deepEqual(classifyOffers("공식 앱이 아닌 문자 속 링크를 눌러 주소를 변경해 주세요.", ["official_app", "link"]), ["link"]);
   assert.deepEqual(classifyOffers("택배사 공식 앱에 대한 문의입니다.", []), []);
+});
+
+
+test("v3 learner can initiate trusted verification without any sender-proposed action", () => {
+  for (const scenario of SCENARIOS) {
+    const s = state(SCENARIOS.indexOf(scenario));
+    const checked = recordChoice(s, scenario, "verify").state;
+    assert.equal(checked.closed, true);
+    assert.equal(checked.events.length, 1);
+    assert.equal(checked.events[0].choice, "verify");
+    assert.equal(checked.verification, scenario.identity === "legitimate" ? "confirmed" : "failed");
+    assert.equal(evaluate(checked, scenario, "uncertain").checked, true);
+  }
+});
+
+test("v3 learner-initiated verification does not accept a forged partial inline source", () => {
+  const s = state(1);
+  assert.throws(() => recordChoice(s, SCENARIOS[1], "verify", 0));
+  assert.throws(() => recordChoice(s, SCENARIOS[1], "verify", undefined, "forged"));
+});
+
+test("v3 chat UI exposes verification without the sender giving away the answer", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  assert.match(ui, /onClick=\{\(\) => void perform\("verify"\)\}/);
+  assert.match(ui, /다른 경로로 직접 확인하기/);
+  assert.match(ui, /기존 연락처나 공식 앱으로 확인/);
 });

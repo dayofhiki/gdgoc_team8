@@ -128,6 +128,7 @@ export type TrainingState = {
   verification: "none" | "confirmed" | "failed";
   closed: boolean;
   dialogue?: DialogueMemory;
+  caseVariant?: number; // 최초 시작할 때 선택; 봉인 토큰에 저장되어 전 턴에서 동일하게 유지
   endReason?: EndReason;
 };
 
@@ -233,7 +234,10 @@ export function recordChoice(
   if (state.closed || state.turns >= MAX_TURNS) throw new Error("이미 종료된 훈련입니다.");
   if (state.events.length >= 6) throw new Error("행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.");
 
-  const sourceNeeded = ["verify", "verify_sender", "comply", "share", "open_link"].includes(choice);
+  // 사용자가 '···' 메뉴에서 직접 독립 확인한 경우는 발신자 대사/버튼에 의존하지 않는다.
+  // 반면 메시지 안에서 제안된 확인 버튼을 선택했다면 기존처럼 봉인된 action ID를 검증한다.
+  const sourceNeeded = ["verify_sender", "comply", "share", "open_link"].includes(choice) ||
+    (choice === "verify" && (sourceIndex !== undefined || actionId !== undefined));
   if (sourceNeeded) {
     if (!Number.isInteger(sourceIndex) || sourceIndex! < 0 || sourceIndex! >= state.messages.length) {
       throw new Error("해당 메시지에서 행동을 선택해 주세요.");
