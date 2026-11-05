@@ -12,6 +12,7 @@ import { familyShareUrl } from "@/lib/invite";
 import { saveRecord } from "@/lib/records";
 import type { BehaviorFeedback } from "@/lib/trainingFeedback";
 import type { PhoneMethod } from "@/lib/realTraining";
+import { shouldCuePhonePanel } from "@/lib/trainingPhoneCue";
 import TrainingPhonePanel, { TrainingPhoneIcon, type PhoneTransferRequest } from "@/components/TrainingPhonePanel";
 
 type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
@@ -227,7 +228,7 @@ export default function RealTraining() {
     }
     setIntroOpen(false);
     // 첫 안내 직후 불필요한 두 번째 안내를 띄우지 않는다.
-    // 필요해지는 순간(사용자의 확인 의사 또는 2턴 진행)에만 기존 단발성 강조가 나온다.
+    // 필요해지는 순간(행동 요청 등장 또는 사용자의 확인 의사)에만 기존 단발성 강조가 나온다.
   }
 
   function openActions() {
@@ -254,10 +255,11 @@ export default function RealTraining() {
       if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       setSession({ ...next, title: session.title });
       setPendingMessage(null);
-      // 정체·위험도와 무관하게 학습자의 외부 기능 의사 또는 두 번째 대화 이후
-      // 단 한 번만 조용히 버튼을 강조한다. 사기 메시지의 등장을 알려주는 신호가 아니다.
-      if (!phoneHintShown.current && !next.closed &&
-          (next.turns >= 2 || /(?:전화|통화|연락처|저장된|번호|앱|확인)/.test(text))) {
+      // 정체/위험도를 추측하지 않고, 방금 등장한 구체적 행동 요청이나 사용자의
+      // 외부 확인 의사만 참고한다. 단순히 두 턴 지났다는 이유로 정답 힌트를 주지 않는다.
+      const latestActorReply = [...next.messages].reverse().find(m => m.actor === "them");
+      if (!phoneHintShown.current && !next.closed && !introOpen && !actionsOpen &&
+          shouldCuePhonePanel(text, latestActorReply)) {
         phoneHintShown.current = true;
         setPhoneHint(true);
       }
