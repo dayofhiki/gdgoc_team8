@@ -6,8 +6,8 @@ import { TRAINING_TOPICS } from "@/lib/trainingCatalog";
 const shortcuts = [
   { title: "실전 훈련", description: "어떤 연락이 올지 모르는 상태에서 대응해요", href: "/roleplay?mode=live" },
   { title: "상황별 연습", description: `가족·택배·금융 등 ${TRAINING_TOPICS.length}가지 상황 중 골라 연습해요`, href: "/roleplay/select" },
-  { title: "사례로 배우기", description: "사례 속 대화에서 대처 방법을 살펴봐요", href: "/roleplay/case" },
-  { title: "OX 퀴즈", description: "10문제로 대처 방법을 확인해요", href: "/quiz" },
+  { title: "사례로 배우기", description: "실제 사건을 되감으며 배워요", href: "/roleplay/case" },
+  { title: "OX 퀴즈", description: "50문제은행에서 10문제씩 풀어요", href: "/quiz" },
 ];
 
 export default function PracticeCatalog() {
