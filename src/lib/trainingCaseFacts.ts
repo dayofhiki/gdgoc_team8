@@ -291,7 +291,7 @@ const BRANCHES: readonly (readonly CaseBranch[])[] = [
     {
       "opening": "안녕하세요. 재택 단기 업무를 소개하고 싶어 연락드렸어요.",
       "context": "집에서 문서를 정리하는 단기 업무를 소개합니다.",
-      "request": "가상 채용 페이지 링크에서 지원서를 작성해 주세요.",
+      "request": "아래 채용 지원 링크를 열어 지원서를 작성해 주세요.",
       "kind": "link",
       "target": "채용 지원서",
       "task": "지원 링크 열기",
