@@ -207,7 +207,7 @@ test("explicit question punctuation blocks completion even if both models misrea
 test("first message is genuinely AI-generated, not returned from a static scenario opening", async () => {
   const { readFileSync } = await import("node:fs");
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
-  assert.match(route, /const opening = await generateOpening\(scenario\)/);
+  assert.match(route, /const opening = await generateOpening\(scenario, caseVariant\)/);
   assert.match(route, /text: opening/);
   assert.doesNotMatch(route, /text: scenario\.opening/);
   assert.match(route, /OPENING_SCHEMA/);
@@ -305,5 +305,49 @@ test("real training route handles explicit training stop and rejects invented ge
   assert.match(route, /if \(isExplicitTrainingStop\(text\)\)/);
   assert.match(route, /recordChoice\(withMessage, scenario, "stop"\)/);
   assert.match(route, /scenario\.identity === "legitimate"/);
-  assert.match(route, /first\.value\.actions\.filter\(a => a\.kind === "transfer"\)/);
+  assert.match(route, /groundedProposals\(reply, first\.value\.actions, auditActions, scenario\.identity\)/);
+});
+
+
+test("v3 case variants are bounded, consistent across the six legitimate/fraud pairs and not identifiers", async () => {
+  const { caseDetail, CASE_VARIANT_COUNT } = await import("../src/lib/trainingCaseFacts.ts");
+  assert.equal(CASE_VARIANT_COUNT, 3);
+  for (let index = 0; index < SCENARIOS.length; index += 2) {
+    const normal = SCENARIOS[index], fraud = SCENARIOS[index + 1];
+    for (let variant = 0; variant < CASE_VARIANT_COUNT; variant++) {
+      const facts = caseDetail(normal, variant);
+      assert.equal(facts, caseDetail(fraud, variant));
+      assert.ok(facts.length > 45);
+      assert.ok(actorBrief(normal, INITIAL_DIALOGUE, 2, facts).includes(facts));
+      assert.ok(openingBrief(normal, 0, facts).includes(facts));
+      assert.equal(openingBrief(normal, 0, facts), openingBrief(fraud, 0, facts));
+      assert.notEqual(actorBrief(normal, INITIAL_DIALOGUE, 2, facts), actorBrief(fraud, INITIAL_DIALOGUE, 2, facts));
+      assert.doesNotMatch(facts, /https?:\/\/|010[- ]\d{4}|\d{9,}/);
+    }
+    assert.notEqual(caseDetail(normal, 0), caseDetail(normal, 1));
+  }
+  assert.throws(() => caseDetail(SCENARIOS[0], 3), /INVALID_CASE_VARIANT/);
+});
+
+test("v3 ends conservatively after audit outages but never overrides an explicit negative audit", () => {
+  const outage = decide({ audit: undefined, nextTurn: 4 });
+  assert.equal(outage.closed, true);
+  assert.equal(outage.reason, "natural");
+  const pending = decide({ audit: undefined, nextTurn: 5, primary: signal({ hasPendingRequest: true }) });
+  assert.equal(pending.closed, false);
+  const disagreement = decide({ audit: signal({ conversationComplete: false }), nextTurn: 5 });
+  assert.equal(disagreement.closed, false);
+  const question = decide({ audit: undefined, nextTurn: 5, userText: "정말이에요?" });
+  assert.equal(question.closed, false);
+  const closingMemory = decide({ audit: undefined, nextTurn: 3, memory: { ...INITIAL_DIALOGUE, stage: "closing" } });
+  assert.equal(closingMemory.closed, true);
+});
+
+test("v3 uses second AI audit only for proposed actions, closing or near-duplicate responses", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  assert.match(route, /const needsAudit = first\.value\.actions\.length > 0 \|\| first\.value\.dialogue\.conversationComplete/);
+  assert.match(route, /if \(needsAudit\) \{/);
+  assert.match(route, /const caseVariant = randomInt\(CASE_VARIANT_COUNT\)/);
+  assert.match(route, /caseVariant, createdAt/);
 });
