@@ -634,6 +634,8 @@ test("bank transaction facts are fictional and specific enough to answer 'what t
   assert.equal(replyQualityIssue(bank, s, "제가 한 거래가 아닌데요.", request, proposals), undefined);
   assert.equal(meaningfulRiskRequest(request, []), false);
   assert.equal(meaningfulRiskRequest("본인 확인 부탁드립니다.", proposals), false);
+  assert.match(replyQualityIssue(bank, s, "제가 한 거래가 아닌데요.",
+    "모의 훈련에서 계좌 잔액을 알려주세요.", proposals), /실제 문자 상대/);
   assert.equal(riskDecisionDue({ ...s, messages: [...s.messages, { actor: "them", text: request }] },
     bank, "네"), false);
 });

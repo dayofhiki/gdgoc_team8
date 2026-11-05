@@ -46,6 +46,8 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   const moneyWithoutVerification = events.some(e => e.choice === "comply" && !e.verifiedBefore);
   const risk = sentData || installed || moneyWithoutVerification;
   const offeredRisk = hasConcreteRequest(state.messages);
+  const askedToInstall = state.messages.some(message => message.actor === "them" &&
+    message.actions?.some(action => action.linkPreview?.interaction === "install"));
   const deliberatePause = offeredRisk && !sentMoney && !sentData && !installed && (stopped || verified || consulted);
 
   const good: FeedbackPoint[] = [];
@@ -211,9 +213,11 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     },
     {
       id: "hold",
-      title: "확인 전에는 돈과 개인정보를 보내지 않기",
-      detail: "급하다는 말보다 확인 절차가 먼저예요.",
-      practiced: deliberatePause,
+      title: scenario.topic === "card" ? "문자나 전화에서 요구한 원격 지원 앱을 설치하지 않기" :
+        "확인 전에는 돈과 개인정보를 보내지 않기",
+      detail: scenario.topic === "card" ? "반송이나 취소를 이유로 설치를 요청하면 통화를 끝내고 카드사 공식 연락처로 문의해요." :
+        "급하다는 말보다 확인 절차가 먼저예요.",
+      practiced: scenario.topic === "card" ? askedToInstall && !installed && (stopped || verified) : deliberatePause,
     },
     {
       id: "family",
@@ -228,7 +232,7 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     tone, headline, explanation, focus,
     good: distinct(good).slice(0, 3),
     improve: distinct(improve).slice(0, 3),
-    receipts, promises, familyScenario: isFamily,
+    receipts, promises: installed && scenario.topic === "card" ? [promises[1], promises[0], promises[2]] : promises, familyScenario: isFamily,
     hasConfirmedAction: events.length > 0,
   };
 }
