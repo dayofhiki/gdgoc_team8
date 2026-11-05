@@ -33,6 +33,7 @@ type Session = {
 };
 type Result = {
   identity: "legitimate" | "fraud";
+  coverage?: "early" | "conversation_only" | "request_reached";
   behavior: BehaviorFeedback;
   truthLabel: string;
   purpose: string;
@@ -316,7 +317,7 @@ export default function RealTraining() {
         kind: "training",
         title: (session.title ?? "").slice(0, 60),
         safe: !r.dangerousAction,
-        detail: { identity: r.identity, guess, checked: r.checked, linkOpened: r.linkOpened, followedSenderNumber: r.followedSenderNumber },
+        detail: { identity: r.identity, guess, checked: r.checked, linkOpened: r.linkOpened, followedSenderNumber: r.followedSenderNumber, coverage: r.coverage },
       });
       void familyShareUrl(location.origin).then(setShareUrl);
     } catch (err) {
@@ -436,6 +437,12 @@ export default function RealTraining() {
             <h2 className="title">{feedback.headline}</h2>
             <p className="desc"><strong className="fb-nick">{nickname || DEFAULT_NICKNAME}</strong>님의 대응 피드백</p>
             <p className="desc">{feedback.explanation}</p>
+            {result.coverage === "early" && (
+              <p className="fb-note">대화 초반에 마무리해 이번에는 이후에 나올 요청에 대한 대응까지 살펴보지 못했어요. 확인이나 중단 행동은 그대로 기록했습니다.</p>
+            )}
+            {result.coverage === "conversation_only" && (
+              <p className="fb-note">이번 대화에서는 송금·정보 제공 등 구체적인 요구까지 이어지지 않았어요. 그런 요청에 대한 대응은 별도로 연습할 수 있어요.</p>
+            )}
             <p className="fb-note">정답이 아닌, 실제로 선택한 행동을 기준으로 살펴봤어요.</p>
           </div>
 
