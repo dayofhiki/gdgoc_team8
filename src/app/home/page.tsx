@@ -3,9 +3,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
-import { ChevronRight, LockIcon, SendIcon } from "@/components/Icons";
+import { CheckIcon, ChevronRight, LockIcon, SendIcon } from "@/components/Icons";
 import { Screen } from "@/components/ui";
-import { familyOverview, setShareResults, type FamilyMemberSummary } from "@/lib/invite";
 
 export default function Home() {
   const { ready, nickname } = useAppState();
@@ -13,31 +12,18 @@ export default function Home() {
   useEffect(() => {
     if (ready && !nickname) router.replace("/onboarding");
   }, [ready, nickname, router]);
-  // 가족에 연결된 경우에만: 연결된 가족 목록 + 결과 공유 동의 (기본 꺼짐)
-  const [family, setFamily] = useState<FamilyMemberSummary[] | null>(null);
-  useEffect(() => {
-    familyOverview().then(setFamily);
-  }, []);
-  const others = family?.filter((m) => !m.is_me) ?? [];
-  const share = family?.find((m) => m.is_me)?.share_results ?? null;
-  const setMyShare = (on: boolean) => setFamily((f) => f?.map((m) => (m.is_me ? { ...m, share_results: on } : m)) ?? f);
-  const toggleShare = async (on: boolean) => {
-    setMyShare(on);
-    if (!(await setShareResults(on))) setMyShare(!on);
-  };
-
   return (
     <Screen>
       <div className="home__logo">
         <img src="/images/logo.svg" alt="미끼주의보" width={121} height={24} />
       </div>
 
-      <section className="hero" aria-label="오늘의 추천 훈련">
-        <span className="hero__chip">오늘의 추천 미션</span>
-        <h2 className="hero__title">{"엄마, 휴대폰이 고장 나서\n다른 번호로 연락해.."}</h2>
-        <p className="hero__sub">진짜 가족일까요? 직접 대화하고 안전하게 확인해요.</p>
+      <section className="hero" aria-label="오늘의 실전 훈련">
+        <span className="hero__chip">오늘의 실전 훈련</span>
+        <h2 className="hero__title">{"어떤 문자가 올지\n미리 알 수 없습니다."}</h2>
+        <p className="hero__sub">예고 없이 오는 연락에도 안전하게 대응하는 연습을 해보세요.</p>
         <img className="hero__bobber float" src="/images/bobber.png" alt="" />
-        <Link href="/roleplay" className="btn btn--primary hero__btn">시작하기</Link>
+        <Link href="/roleplay" className="btn btn--primary hero__btn">훈련 시작하기</Link>
       </section>
 
       <div className="home__sections">
@@ -51,7 +37,7 @@ export default function Home() {
               <img src="/images/icon-chat.png" alt="" width={40} height={40} />
               <div>
                 <p className="tile__title">실전 대응 훈련</p>
-                <p className="tile__desc">직접 대화하고 안전하게 판단해요</p>
+                <p className="tile__desc">다양한 연락에 안전하게 대응하는 연습</p>
               </div>
             </Link>
             <Link href="/quiz" className="tile">
@@ -88,25 +74,14 @@ export default function Home() {
               </span>
               <ChevronRight />
             </Link>
-            {family && (
-              <div className="list-row">
-                <span className="list-row__text">
-                  <span className="list-row__title">연결된 가족 {others.length}명</span>
-                  <span className="list-row__desc">
-                    {others.length ? others.map((m) => m.nickname || "이름 없음").join(", ") : "가족에게 퀴즈나 암호를 보내면 여기에 보여요"}
-                  </span>
-                </span>
-              </div>
-            )}
-            {share !== null && (
-              <label className="list-row">
-                <span className="list-row__text">
-                  <span className="list-row__title">가족에게 내 연습 결과 보여주기</span>
-                  <span className="list-row__desc">횟수·결과 요약만 보여요. 대화 내용은 보이지 않아요</span>
-                </span>
-                <input type="checkbox" checked={share} onChange={(e) => void toggleShare(e.target.checked)} style={{ width: 24, height: 24 }} />
-              </label>
-            )}
+            <Link href="/family-practice" className="list-row">
+              <span className="list-row__icon"><CheckIcon /></span>
+              <span className="list-row__text">
+                <span className="list-row__title">가족 연습 기록 보기</span>
+                <span className="list-row__desc">공유한 연습 요약과 내 공개 설정</span>
+              </span>
+              <ChevronRight />
+            </Link>
           </div>
         </section>
       </div>

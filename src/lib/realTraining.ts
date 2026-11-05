@@ -1,6 +1,9 @@
-import { actionChoice } from "./trainingActions.ts";
+import { actionChoice, buildActions } from "./trainingActions.ts";
 import { hasConcreteRequest, shouldResolveAfterIndependentCheck } from "./trainingResolution.ts";
 import { buildBehaviorFeedback } from "./trainingFeedback.ts";
+import { appSupportsTopic, isPersonalTopic, TRAINING_APPS, type TrainingApp, type TrainingTopicId } from "./trainingCatalog.ts";
+import { isIndependentCheck, verificationOutcome } from "./trainingVerification.ts";
+import { EXTENDED_PAIRS } from "./trainingScenarioExtras.ts";
 import type { Action } from "./trainingActions";
 import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
 
@@ -12,16 +15,17 @@ import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
  */
 export type Identity = "legitimate" | "fraud";
 export type Guess = "legitimate" | "fraud" | "uncertain";
-export type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
-export type PhoneMethod = "saved_family" | "recent_sender" | "official_directory" | "bank_app" | "delivery_app";
-export const PHONE_METHODS: PhoneMethod[] = ["saved_family", "recent_sender", "official_directory", "bank_app", "delivery_app"];
+export type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link" | "install";
+export type PhoneMethod = "saved_family" | "recent_sender" | "official_directory" | TrainingApp;
+export const PHONE_METHODS: PhoneMethod[] = ["saved_family", "recent_sender", "official_directory", ...TRAINING_APPS.map(app => app.id)];
 export type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
 export type Actor = "them" | "me" | "system";
 export type LinkPreview = { url: string; domain: string; title: string; description: string };
 export type Message = { actor: Actor; text: string; offer?: OfferKind; offers?: OfferKind[]; linkPreview?: LinkPreview; actions?: Action[] };
-export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string; method?: PhoneMethod };
+export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string; method?: PhoneMethod; evidence?: "confirmed" | "failed" | "inconclusive"; notice?: string };
 export type Scenario = {
   id: string;
+  topic: TrainingTopicId;
   identity: Identity;
   title: string;
   opening: string;
@@ -36,13 +40,14 @@ export type Scenario = {
   purpose: string;
   safePractice: string;
 };
-type Pair = Omit<Scenario, "id" | "identity" | "privateFacts" | "verification" | "purpose" | "objective"> & {
+export type Pair = Omit<Scenario, "id" | "identity" | "privateFacts" | "verification" | "purpose" | "objective"> & {
   legit: Pick<Scenario, "privateFacts" | "verification" | "purpose" | "objective">;
   fraud: Pick<Scenario, "privateFacts" | "verification" | "purpose" | "objective">;
 };
 
 const PAIRS: Pair[] = [
   {
+    topic: "family",
     title: "가족의 급한 연락",
     opening: "엄마 나 폰 화면이 갑자기 나가서 다른 번호로 문자해. 지금 연락돼?",
     persona: "독립해서 생활하는 성인 자녀. 평소 엄마에게 짧고 편하게 문자한다. 현재는 다른 기기로 연락 중이다.",
@@ -65,6 +70,7 @@ const PAIRS: Pair[] = [
     },
   },
   {
+    topic: "delivery",
     title: "택배 주소 확인 연락",
     opening: "안녕하세요, 택배 배송 관련해서 연락드렸습니다. 주소 확인이 필요한 건이 있어요.",
     persona: "배송 일정과 수취 주소 확인을 안내하는 택배 고객 응대 담당자 역할. 실제 회사·운송장 정보는 특정되지 않았다.",
@@ -87,33 +93,35 @@ const PAIRS: Pair[] = [
     },
   },
   {
-    title: "은행 거래 확인 연락",
-    opening: "고객님, 평소와 다른 거래가 감지되어 안내 연락드렸습니다. 거래 내역 확인을 부탁드립니다.",
-    persona: "거래 이상 여부 확인 문자를 보낸 금융회사 상담 담당자 역할. 특정 은행이나 담당자 이름은 설정되지 않았다.",
-    voice: "단정하고 차분한 금융 고객지원 존댓말. 거래 확인 절차를 짧게 안내하되 한 메시지에 여러 경고를 몰아넣지 않는다. '고객님' 호칭을 매 문장 반복하지 않는다. 사기범이라고 해서 노골적으로 불친절하거나 극적인 협박을 하지 않는다.",
-    situation: "평소와 다른 거래 활동이 감지되었다는 연락이다. 거래 날짜, 금액, 가맹점, 계좌번호는 설정되지 않았다. 실제 거래를 조회했다거나 사용자가 승인했다고 함부로 단정하지 않는다.",
-    progression: "거래 확인 안내 → 사용자가 거래 성격이나 확인 방법을 묻는지 관찰 → 정체에 맞게 공식 확인 절차 또는 모의 보안 조치를 설명 → 독립 확인·거절·종료에 반응한다. 상대가 이미 질문한 내용은 다시 원점에서 반복하지 않는다.",
-    responseRules: "구체적인 금액·은행·거래상대가 미리 정해지지 않았으므로 새 숫자나 실명은 만들지 않는다. 확인이 되었다는 사실은 시스템의 명시적 행동이 있기 전까지 말하지 않는다. 정체별 반응 차이는 필요하지만 말투만으로 진위를 즉시 드러내지 않는다.",
-    safePractice: "은행을 사칭한 연락인지 알 수 없을 때는 통화를 마치고 공식 앱이나 카드 뒷면의 대표번호로 확인하세요. 문자 속 링크나 상대가 알려준 번호는 사용하지 않아요.",
+    topic: "bank",
+    title: "금융 보안 관련 연락",
+    opening: "안녕하세요. 계좌 이용 관련 확인이 필요한 안내 건으로 연락드렸습니다.",
+    persona: "금융회사 고객 상담을 담당하는 사람처럼 문자하는 화자. 은행·담당자 실명과 고객의 실제 계좌정보는 모른다.",
+    voice: "자연스럽고 차분한 금융 상담 존댓말. 똑같은 '고객님', '본인 확인 부탁드립니다'를 반복하지 않는다. 상대의 구체적 질문에는 상황에 정해진 가상 거래 내용부터 답한다.",
+    situation: "금융 보안과 거래 관련 문의를 빌미로 접근하는 문자다. 이번 세션에 설정된 상품·금액·상황은 모두 가상 주장이지 독립 확인된 거래가 아니다. 실제 금융회사 이름, 계좌·카드번호, 사용자 개인 거래기록은 없다.",
+    progression: "연락 용건 → 사용자가 거래 내용이나 사유를 묻는다면 고정된 가상 상품 종류·금액을 구체적으로 답변 → 관심을 보이면 상대에게 실제로 위험한 선택이 필요한 정보 제공·보안 이체 요구가 나올 수 있다 → 사용자의 보류·확인·거절에 반응. 은행 앱에서 본인이 한 거래인지 확인하는 평범한 절차 안내만 반복하지 않는다.",
+    responseRules: "사용자가 '무슨 거래요?'라고 묻는다면 이번 세션 앵커의 결제 종류와 금액을 말한다. 제공된 정보와 달리 새로운 거래, 가맹점, 계좌·카드번호를 지어내지 않는다. 이 훈련의 갈림길은 '거래 확인'이라는 일반적인 안내가 아니라 문자에서 금전·정보를 건네라는 위험한 요청이다. 단순 '본인 확인 부탁드립니다'로 2턴 이상 시간을 끌지 않는다.",
+    safePractice: "금융기관을 사칭한 연락에서 계좌 잔액·인증번호·보안 이체를 요청받아도 보내지 말고, 기존에 설치한 앱이나 직접 찾은 대표번호에서 따로 확인해요.",
     legit: {
-      privateFacts: "실제 금융회사의 거래 확인 안내다. 이상 활동 알림이 있었으나 금액과 상호는 미정이다. 추가 이체나 민감정보 전송은 필요하지 않다.",
-      objective: "고객에게 거래 확인이 필요하다는 용건을 자연스럽게 설명한다. 먼저 공식 앱, 대표번호, 카드 뒷면 번호 등 검증 정답이나 세부 행동 경로를 알려주지 않는다. 고객이 직접 확인하겠다고 하면 수긍한다. 이체, 비밀번호·인증번호 제출은 절대 제안하지 않는다.",
-      verification: "은행 공식 앱에 동일한 거래 알림이 표시됩니다. 카드에 적힌 대표번호로 직접 연락해 실제 안내였음을 확인했습니다.",
-      purpose: "은행의 실제 이상 거래 안내",
+      privateFacts: "정상적인 금융회사의 상담 담당자다. 세션에서 설정된 가상 거래에 관한 안내가 있었으나 실제 사용자 신원과 금융정보는 확인하지 않았다. 문자로 인증번호나 계좌 정보, 선입금을 요구하지 않는다.",
+      objective: "가상 금융 안내에 대한 문의를 짧게 응대하고, 사용자가 묻는 거래 종류와 금액을 일관되게 설명한다. 정답 공식 앱·대표번호·결제 경로를 선제적으로 알려주지 않는다. 실제 금융정보를 요구하지 않는다.",
+      verification: "기존에 설치한 공식 은행 앱과 카드에 적힌 대표번호로 확인했습니다. 실제 금융 안내가 있는 것으로 확인됐습니다.",
+      purpose: "금융회사의 실제 거래 관련 안내",
     },
     fraud: {
-      privateFacts: "실제 은행 직원이 아닌 사칭자다. 고객 계좌·거래내역을 알지 못하며 이상 거래 통보를 구실로 가상의 보안 조치나 정보 입력을 유도하려 한다. 실제 은행·계좌번호·전화번호·외부 URL을 만들어서는 안 된다.",
-      objective: "처음엔 거래 확인을 돕는 직원처럼 답하다가 대화가 진전될 때 안전 조치 명목의 모의 이체나 정보 입력을 제안할 수 있다. 공식 앱으로 확인하겠다는 상대에게 절차가 다르다고 한 번 주장할 수는 있지만 새로운 규정·기관·법률을 지어내지는 않는다. 거절하거나 의심이 확고하면 현실적으로 대화를 끝낸다.",
-      verification: "은행 공식 앱에 해당 거래 알림이 없습니다. 카드에 적힌 대표번호로 직접 확인한 결과 은행은 그런 연락을 하지 않았습니다.",
-      purpose: "은행을 사칭한 송금·개인정보 요구",
+      privateFacts: "실제 금융회사 직원이 아닌 사칭자다. 가상 결제 시도나 계좌 보호를 핑계 삼아 문자로 계좌 잔액·계좌번호 일부·인증정보를 보내거나 보안 이체를 하게 하려 한다. 실제 고객 거래를 조회할 권한이나 계좌번호는 전혀 없다.",
+      objective: "처음에는 평범한 상담처럼 질문에 답한다. 사용자가 거래 종류를 묻는다면 이번 세션에 정해진 가상 결제 금액·유형을 설명한다. 늦어도 사용자의 두 번째 답장 이후에는 '피해 방지/조회' 같은 구실로 문자에 계좌 잔액·계좌번호 일부·인증정보를 보내 달라는 구체적인 요청 또는 가상의 보안 이체를 부탁한다. '본인 거래인지 확인 부탁드립니다'나 '은행 앱에서 확인하세요'로 훈련을 끝내지 않는다. 사용자가 거절하면 같은 요구를 반복하지 않는다.",
+      verification: "기존에 설치된 은행 앱에는 그 가상 거래가 없었습니다. 직접 찾은 은행 대표번호에서도 해당 금융정보·보안 이체 요청을 한 적이 없다고 확인했습니다.",
+      purpose: "은행을 사칭한 개인정보·보안 이체 요구",
     },
   },
+  ...EXTENDED_PAIRS,
 ];
 
 export const MAX_TURNS = 8;
 
 export const SCENARIOS: Scenario[] = PAIRS.flatMap((pair, index) => {
-  const base = { title: pair.title, opening: pair.opening, persona: pair.persona, voice: pair.voice,
+  const base = { topic: pair.topic, title: pair.title, opening: pair.opening, persona: pair.persona, voice: pair.voice,
     situation: pair.situation, progression: pair.progression, responseRules: pair.responseRules, safePractice: pair.safePractice };
   return [
     { ...base, id: String(index) + "-normal", identity: "legitimate" as const, ...pair.legit },
@@ -210,24 +218,23 @@ export function classifyOffers(reply: string, proposed: unknown): OfferKind[] {
 
 /** 실제 외부 사이트로 연결할 수 없는 예약 도메인을 사용한 문자 링크 미리보기 */
 export function simulatedLink(scenario: Scenario): LinkPreview {
-  if (scenario.title.includes("택배")) return {
-    url: "https://m.delivery-notice.example/track",
-    domain: "m.delivery-notice.example",
-    title: "배송 정보 확인",
-    description: "배송 상태 및 주소 확인 안내",
+  // 실제 접속될 수 없는 example 예약 도메인. 교육용 미리보기만 제공한다.
+  const variants: Record<TrainingTopicId, { domain: string; title: string; description: string }> = {
+    family: { domain: "m.message-notice.example", title: "메시지 안내 확인", description: "전달받은 내용 확인" },
+    delivery: { domain: "m.delivery-notice.example", title: "배송 정보 확인", description: "배송 상태 및 주소 확인 안내" },
+    bank: { domain: "m.account-notice.example", title: "거래 내역 확인", description: "거래 내역 확인 안내" },
+    invitation: { domain: "m.invitation-notice.example", title: "모바일 초대장", description: "결혼식 안내 확인" },
+    obituary: { domain: "m.memorial-notice.example", title: "부고 안내", description: "장례 안내 내용 확인" },
+    traffic: { domain: "m.traffic-notice.example", title: "교통 고지 조회", description: "교통 관련 안내 확인" },
+    loan: { domain: "m.loan-notice.example", title: "대출 상담 안내", description: "금융 상품 안내 확인" },
+    job: { domain: "m.job-notice.example", title: "채용 지원 안내", description: "단기 업무 관련 안내" },
+    card: { domain: "m.card-notice.example", title: "카드 배송 안내", description: "배송 내용 확인" },
+    team_mission: { domain: "m.review-notice.example", title: "후기 정산 안내", description: "정산 내용 확인" },
+    health: { domain: "m.health-notice.example", title: "건강검진 안내", description: "검진 관련 안내 확인" },
   };
-  if (scenario.title.includes("은행")) return {
-    url: "https://m.account-notice.example/check",
-    domain: "m.account-notice.example",
-    title: "거래 내역 확인",
-    description: "요청하신 거래 정보를 조회하세요",
-  };
-  return {
-    url: "https://m.message-notice.example/view",
-    domain: "m.message-notice.example",
-    title: "메시지 안내 확인",
-    description: "전달받은 안내 내용 확인",
-  };
+  const preview = variants[scenario.topic];
+  return { url: "https://" + preview.domain + "/view", domain: preview.domain,
+    title: preview.title, description: preview.description };
 }
 
 /** 메신저 말풍선의 행동만 송금/정보제공/링크 열기로 인정한다. */
@@ -242,20 +249,18 @@ export function recordChoice(
   if (method) {
     if (sourceIndex !== undefined || actionId !== undefined ||
         state.events.some(e => e.method === method)) throw new Error("이미 선택한 행동입니다.");
-    const delivery = scenario.id.startsWith("1-");
-    const bank = scenario.id.startsWith("2-");
+    const institutional = !isPersonalTopic(scenario.topic);
     const valid = (choice === "family_contact" && method === "saved_family") ||
       (choice === "verify_sender" && method === "recent_sender") ||
       (choice === "verify" && (
-        (method === "official_directory" && (delivery || bank)) ||
-        (method === "bank_app" && bank) ||
-        (method === "delivery_app" && delivery)
+        (method === "official_directory" && institutional) ||
+        appSupportsTopic(method as TrainingApp, scenario.topic)
       ));
     if (!valid) throw new Error("이 상황에서 선택할 수 없는 휴대전화 기능입니다.");
   } else if (choice === "verify" && sourceIndex === undefined && actionId === undefined) {
     throw new Error("휴대전화에서 확인에 사용할 경로를 선택해 주세요.");
   }
-  const sourceNeeded = (["verify_sender", "comply", "share", "open_link"].includes(choice) &&
+  const sourceNeeded = (["verify_sender", "comply", "share", "open_link", "install"].includes(choice) &&
     !(choice === "verify_sender" && method === "recent_sender")) ||
     (choice === "verify" && !method);
   if (sourceNeeded) {
@@ -268,7 +273,8 @@ export function recordChoice(
     if (message.actions) {
       const selected = message.actions.find(a => a.id === actionId);
       const expected = selected ? actionChoice(selected) : undefined;
-      const viaLink = selected?.kind === "link" && choice === "share" &&
+      const viaLink = selected?.kind === "link" &&
+        (selected.linkPreview?.interaction === "install" ? choice === "install" : choice === "share") &&
         state.events.some(e => e.choice === "open_link" && e.sourceIndex === sourceIndex && e.actionId === actionId);
       if (message.actor !== "them" || !selected || (expected !== choice && !viaLink)) {
         throw new Error("이 메시지에서는 해당 행동을 할 수 없습니다.");
@@ -295,26 +301,37 @@ export function recordChoice(
     }
   }
 
+  const check = verificationOutcome(scenario, choice, method);
   const event: Event = {
     choice, turn: state.turns, verifiedBefore: state.verification === "confirmed",
     ...(sourceNeeded ? { sourceIndex } : {}),
     ...(actionId ? { actionId } : {}),
     ...(method ? { method } : {}),
+    ...(check ?? {}),
   };
-  const familyScenario = scenario.id.startsWith("0-");
-  const verification = choice === "verify" || (choice === "family_contact" && familyScenario)
-    ? scenario.identity === "legitimate" ? "confirmed" : "failed"
-    : state.verification;
-  const resolved = shouldResolveAfterIndependentCheck(state, scenario, choice, verification);
-  const notice = choice === "verify" ? scenario.verification
-    : choice === "family_contact" ? (familyScenario ? scenario.verification :
-        "저장된 번호로 가족에게 연락해 상황을 공유했습니다. 실제 기관의 신원은 아직 별도로 확인하지 않았습니다.")
-    : choice === "verify_sender" ? "안내받은 번호로 전화하니 상대는 자신이 맞다고 말했습니다."
+  const verification = check && check.evidence !== "inconclusive" ? check.evidence : state.verification;
+  const resolved = check?.evidence === "failed" && shouldResolveAfterIndependentCheck(state, scenario, choice, verification);
+  // 카드 사례에서 문자에 첨부한 번호를 골랐을 때만 후속 요청을 재현한다.
+  const cardCallback = scenario.topic === "card" && scenario.identity === "fraud" && choice === "verify_sender" &&
+    sourceNeeded && state.messages[sourceIndex!]?.actions?.some(action => action.id === actionId && action.kind === "phone") &&
+    !state.events.some(e => e.choice === "verify_sender" && e.actionId);
+  const notice = check?.notice ?? (choice === "family_contact"
+    ? "저장된 번호로 가족에게 상황을 말했어요. 가족은 지금 바로 결정하지 말고 따로 확인해 보자고 했어요."
+    : choice === "verify_sender" ? cardCallback
+      ? "문자에서 받은 번호로 전화했어요. 상담원은 반송 확인에 원격 지원이 필요하다며 새 문자를 보냈어요."
+      : "선택한 번호로 전화했어요. 받은 사람은 자신이 담당자라고 답했어요."
     : choice === "verify_chat" ? "대화 상대는 자신이 맞다고 주장했습니다."
     : choice === "open_link" ? "메시지의 주소를 눌렀습니다. 가상의 페이지가 열렸습니다."
     : choice === "comply" ? "요청한 금액을 보낸 것으로 기록했습니다. 실제 돈은 이동하지 않았습니다."
     : choice === "share" ? "요청한 정보를 전송한 것으로 기록했습니다. 실제 정보는 전송하지 않았습니다."
-    : "이 대화를 종료했습니다.";
+    : choice === "install" ? "원격 지원 앱 설치를 선택했어요. 실제 앱은 설치되지 않았어요."
+    : "이 대화를 종료했습니다.");
+  const terminal = ["comply", "share", "install", "stop"].includes(choice);
+  const callback = cardCallback ? buildActions([{
+    kind: "link", origin: "sender", target: "반송 확인 지원", task: "원격 지원 안내 보기",
+    previewTitle: "반송 확인 지원", previewDescription: "원격 지원 앱 설치",
+  }], state.turns + MAX_TURNS) : [];
+  if (callback[0]?.linkPreview) callback[0].linkPreview.interaction = "install";
 
   return {
     state: {
@@ -322,10 +339,14 @@ export function recordChoice(
       verification,
       // 초반의 확인은 진행을 막지 않는다. 그러나 이미 위험 요청이 나왔고
       // 독립 확인으로 사칭이 판명됐다면 남은 대화의 학습 목표가 해소됐다.
-      closed: resolved || ["comply", "share", "stop"].includes(choice),
-      endReason: resolved ? "resolved" : ["comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
+      closed: resolved || terminal,
+      endReason: resolved ? "resolved" : terminal ? "action" : state.endReason,
       events: [...state.events, event],
       messages: [...state.messages, { actor: "system", text: notice },
+        ...(cardCallback ? [{
+          actor: "them" as const, text: "반송 접수 담당입니다. 카드 신청 여부를 확인하려면 아래 링크를 열어서 원격 지원 앱을 설치해 주세요.",
+          actions: callback,
+        }] : []),
         ...(resolved ? [{ actor: "system" as const, text: "확인한 내용과 상대의 요청이 일치하지 않아 문자 대화를 마무리했어요. 지금까지의 대응을 살펴보세요." }] : [])],
     },
     notice,
@@ -337,18 +358,18 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
   // 독립 확인을 일찍 선택한 것과 충분한 대화에서 요청에 대응한 경험을 구분한다.
   // 실제 행동은 언제나 기록하되, 요구가 등장하지 않았다면 요구 대응 역량을 단정하지 않는다.
   const coverage = requestReached ? "request_reached" : state.turns < 2 ? "early" : "conversation_only";
-  const checked = state.events.some((event) => event.choice === "verify" ||
-    (event.choice === "family_contact" && scenario.id.startsWith("0-")));
+  const checked = state.events.some(event => isIndependentCheck(event, scenario));
   const consultedFamily = state.events.some((event) => event.choice === "family_contact");
   const complied = state.events.some((event) => event.choice === "comply");
   const shared = state.events.some((event) => event.choice === "share");
+  const installed = state.events.some(event => event.choice === "install");
   const linkOpened = state.events.some((event) => event.choice === "open_link");
   const followedSenderNumber = state.events.some((event) => event.choice === "verify_sender");
   const stopped = state.events.some((event) => event.choice === "stop");
   const riskyComply = state.events.some((event) =>
     event.choice === "comply" && (!event.verifiedBefore || scenario.identity === "fraud"),
   );
-  const risk = shared || riskyComply;
+  const risk = shared || installed || riskyComply;
   const guessCorrect = guess === scenario.identity;
   const judgment = guess === "uncertain" ? "판단 보류" : guessCorrect ? "실제 정체와 일치" : "실제 정체와 다름";
   const safety = risk ? "신원 확인 전 위험한 요청에 응했어요" :
@@ -399,6 +420,8 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
 
   return {
     coverage,
+    topic: scenario.topic,
+    installed,
     behavior: buildBehaviorFeedback(state, scenario),
     highlights: {
       status,
@@ -406,7 +429,7 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
       good: goodPoints.slice(0, 2),
       improve: improvePoints.slice(0, 3),
       judgment: guess === "uncertain" ? "판단 보류" : guessCorrect ? "판단 일치" : "판단 불일치",
-      tip: scenario.title.includes("가족") ? "저장된 가족 번호로 직접 연락" : scenario.title.includes("택배") ? "택배사 공식 앱에서 배송 조회" : "은행 공식 앱·대표번호로 확인",
+      tip: scenario.safePractice,
     },
     identity: scenario.identity,
     truthLabel: scenario.identity === "legitimate" ? "실제 연락" : "사칭 시도",

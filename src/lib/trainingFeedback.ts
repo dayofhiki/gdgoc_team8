@@ -5,6 +5,8 @@
  */
 import type { Scenario, TrainingState, Choice } from "./realTraining.ts";
 import { hasConcreteRequest } from "./trainingResolution.ts";
+import { isIndependentCheck } from "./trainingVerification.ts";
+import { isPersonalTopic, TRAINING_APPS } from "./trainingCatalog.ts";
 
 export type BehaviorTone = "good" | "caution" | "neutral";
 export type FeedbackPoint = { keyword: string; text: string };
@@ -28,71 +30,86 @@ const distinct = (points: FeedbackPoint[]) =>
 
 export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario): BehaviorFeedback {
   const events = state.events;
-  const isFamily = scenario.id.startsWith("0-");
+  const isFamily = isPersonalTopic(scenario.topic);
+  const person = scenario.topic === "family" ? "가족" : "지인";
   const used = (choice: Choice) => events.some(e => e.choice === choice);
-  const verified = used("verify") || (isFamily && used("family_contact"));
+  const verified = events.some(event => isIndependentCheck(event, scenario));
+  const triedCheck = events.some(event => event.evidence === "inconclusive");
   const consulted = used("family_contact");
   const stopped = used("stop");
   const sentMoney = used("comply");
   const sentData = used("share");
+  const installed = used("install");
   const openedLink = used("open_link");
   const followedSender = used("verify_sender");
   const reliedOnChat = used("verify_chat");
   const moneyWithoutVerification = events.some(e => e.choice === "comply" && !e.verifiedBefore);
-  const risk = sentData || moneyWithoutVerification;
+  const risk = sentData || installed || moneyWithoutVerification;
   const offeredRisk = hasConcreteRequest(state.messages);
-  const deliberatePause = offeredRisk && !sentMoney && !sentData && (stopped || verified || consulted);
+  const deliberatePause = offeredRisk && !sentMoney && !sentData && !installed && (stopped || verified || consulted);
 
   const good: FeedbackPoint[] = [];
   const improve: FeedbackPoint[] = [];
 
   if (verified) good.push({
-    keyword: "독립 확인",
+    keyword: isFamily ? "저장된 연락처로 직접 확인했어요" : "공식 경로로 직접 확인했어요",
     text: isFamily
-      ? "새로운 연락만 믿지 않고 원래 저장된 가족 번호로 확인했어요."
+      ? `새로운 연락만 믿지 않고 원래 저장된 ${person} 연락처로 확인했어요.`
       : "상대가 제시한 연락처가 아닌 공식 경로로 직접 확인했어요.",
   });
+  if (triedCheck && !verified) good.push({
+    keyword: "문자와 별도로 확인해 봤어요",
+    text: "다른 경로에서 확인을 시작했어요. 조회 결과만으로는 연락의 출처가 확인되지 않았어요.",
+  });
   if (consulted && !isFamily) good.push({
-    keyword: "도움 요청",
+    keyword: "가족에게 먼저 물어봤어요",
     text: "혼자서 판단하지 않고 가족에게 상황을 공유했어요.",
   });
   if (stopped) good.push({
-    keyword: "멈추기",
+    keyword: "요청에 바로 응하지 않고 멈췄어요",
     text: "상대의 요구에 바로 응하지 않고 대화를 중단했어요.",
   });
   if (deliberatePause) good.push({
-    keyword: "요청 보류",
+    keyword: "확인 전에는 돈과 정보를 보내지 않았어요",
     text: "확인 없이 돈이나 정보를 보내지 않고 다른 행동을 선택했어요.",
   });
 
+  if (installed) improve.push({
+    keyword: "안내받은 원격 지원 앱을 설치하지 마세요",
+    text: "원격 지원 앱은 휴대전화 화면이나 조작 권한을 넘기는 데 악용될 수 있어요. 통화를 끝내고 카드사 공식 연락처에서 따로 확인해 주세요.",
+  });
   if (sentData) improve.push({
-    keyword: "정보 보호",
+    keyword: "개인정보를 보내기 전에 확인하세요",
     text: "요청받은 정보를 전송했어요. 실제 상황에서는 신원을 먼저 확인해 주세요.",
   });
   if (moneyWithoutVerification) improve.push({
-    keyword: "송금 전 확인",
+    keyword: "돈을 보내기 전에 먼저 확인하세요",
     text: "확인하기 전에 송금했어요. 원래 연락처로 먼저 확인해 주세요.",
   });
   if (openedLink) improve.push({
-    keyword: "문자 링크",
+    keyword: "문자 속 링크를 바로 누르지 마세요",
     text: "문자 속 링크를 열었어요. 다음에는 설치된 공식 앱에서 직접 조회해 보세요.",
   });
   if (followedSender) improve.push({
-    keyword: "연락처 확인",
+    keyword: "상대가 알려준 번호만 믿지 마세요",
     text: "상대가 알려준 번호는 독립적인 확인 경로가 아니에요.",
   });
   if (reliedOnChat) improve.push({
-    keyword: "대화만으로는 부족",
+    keyword: "상대의 말만으로 신원을 믿지 마세요",
     text: "상대가 스스로 진짜라고 말해도 신원이 확인되지는 않아요.",
   });
-  if (!verified) improve.push({
-    keyword: "독립 확인",
+  const noKnownCompany = scenario.topic === "job" || scenario.topic === "team_mission";
+  if (!verified && !(noKnownCompany && stopped)) improve.push({
+    keyword: isFamily ? "원래 저장된 번호로 직접 전화하세요" :
+      noKnownCompany ? "확인할 수 없는 모집에는 돈을 보내지 마세요" :
+      triedCheck ? "조회로 확인되지 않으면 공식 번호로 따로 문의하세요" : "공식 앱이나 대표번호로 직접 확인하세요",
     text: isFamily
-      ? "원래 저장된 가족 번호로 직접 연락해 사실을 확인해 보세요."
+      ? `원래 저장된 ${person} 번호로 직접 연락해 사실을 확인해 보세요.`
+      : noKnownCompany ? "모집처를 확인할 수 없으면 답장을 멈추고 선입금이나 정보 제공을 보류해요."
       : "문자에 적힌 번호가 아니라 공식 앱이나 직접 찾은 대표번호로 확인해 보세요.",
   });
-  if (stopped && !verified) improve.push({
-    keyword: "중단 후 확인",
+  if (stopped && !verified && !noKnownCompany && !triedCheck) improve.push({
+    keyword: "대화를 끊은 뒤에도 확인하세요",
     text: "대화를 멈춘 뒤에도 필요한 연락이었는지 따로 확인할 수 있어요.",
   });
 
@@ -100,11 +117,14 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   for (const e of events) {
     const receipt: ActionReceipt =
       e.choice === "verify" ? {
-        label: "공식 경로로 직접 확인",
-        detail: "메시지와 독립된 경로를 선택했어요.", tone: "good",
+        label: e.evidence === "inconclusive" ? "확인 시도 · 결론 보류" :
+          e.method === "official_directory" ? "공식 연락처에 직접 문의" :
+          TRAINING_APPS.find(app => app.id === e.method)?.label ?? "공식 경로로 직접 확인",
+        detail: e.notice ?? "메시지와 독립된 경로를 선택했어요.",
+        tone: e.evidence === "inconclusive" ? "neutral" : "good",
       } : e.choice === "family_contact" ? {
         label: "저장된 번호로 가족에게 연락",
-        detail: isFamily ? "기존 가족 연락처를 이용해 확인했어요." : "가족과 상의했어요. 기관 확인은 별도로 필요해요.",
+        detail: e.notice ?? (isFamily ? "기존 가족 연락처를 이용해 확인했어요." : "가족과 상의했어요. 기관 확인은 별도로 필요해요."),
         tone: "good",
       } : e.choice === "stop" ? {
         label: "대화 중단",
@@ -116,6 +136,9 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
       } : e.choice === "share" ? {
         label: "모의 정보 전송",
         detail: "정보 제공을 선택했어요. 실제 정보는 전달되지 않았습니다.", tone: "caution",
+      } : e.choice === "install" ? {
+        label: "모의 원격 지원 앱 설치",
+        detail: "문자 링크에서 원격 지원 앱 설치를 선택했어요. 실제 앱은 설치되지 않았어요.", tone: "caution",
       } : e.choice === "open_link" ? {
         label: "문자 링크 열람",
         detail: "실제 외부 사이트가 아닌 가상 페이지를 열어 봤어요.", tone: "caution",
@@ -139,7 +162,11 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   let tone: BehaviorTone = "neutral";
   let headline: string;
   let explanation: string;
-  if (sentData) {
+  if (installed) {
+    tone = "caution";
+    headline = "원격 지원 앱 설치 요구에서 멈춰요";
+    explanation = "배송 안내 번호에 전화한 뒤 도착한 링크에서 설치를 선택했어요. 배송과 관계없는 설치 요구가 나오면 더 진행하지 말고 직접 찾은 카드사 번호로 확인해요.";
+  } else if (sentData) {
     tone = "caution";
     headline = "정보를 보내기 전에 확인이 필요해요";
     explanation = "이번에는 모의 정보 전송을 선택했어요. 실제 연락에서는 요청한 사람의 신원을 다른 경로로 확인해야 해요.";
@@ -148,13 +175,13 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     headline = "송금 전에 한 번 더 확인해요";
     explanation = "이번에는 모의 송금을 먼저 선택했어요. 실제 가족이나 기관이어도 확인 절차를 생략하지 않는 연습이 중요해요.";
   } else if (verified) {
-    tone = "good";
+    tone = followedSender || openedLink ? "caution" : "good";
     headline = "상대의 말보다 직접 확인을 선택하셨어요";
-    explanation = "이번 훈련의 중요한 성과는 상대가 누구였는지를 맞힌 것이 아니라, 별도의 경로로 확인한 행동이에요.";
+    explanation = "문자와 별개의 경로에서 확인한 내용은 다음 대응을 결정하는 근거가 돼요.";
   } else if (stopped) {
     tone = "good";
     headline = "급한 요청 앞에서 멈추셨어요";
-    explanation = "바로 응하지 않고 대화를 중단한 것은 도움이 되는 선택이에요. 필요한 연락인지 공식 경로로 확인하면 더 좋아요.";
+    explanation = noKnownCompany ? "모집처를 확인하기 어렵더라도 선입금을 거절하고 대화를 끝낼 수 있어요." : "바로 응하지 않고 대화를 중단했어요. 확인이 필요하면 별도의 공식 경로에서 이어갈 수 있어요.";
   } else if (consulted) {
     tone = "good";
     headline = "혼자 판단하지 않고 도움을 요청하셨어요";
@@ -170,17 +197,17 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
 
   const focus = verified
     ? "다음에도 낯선 연락이 오면 먼저 기존 번호·공식 앱으로 확인하세요."
-    : isFamily
-      ? "다음에는 송금 여부를 결정하기 전에 저장된 가족 번호로 먼저 전화해 보세요."
-      : "다음에는 문자 속 링크 대신 공식 앱이나 대표번호로 직접 확인해 보세요.";
+    : scenario.safePractice;
 
   const promises: FamilyPromise[] = [
     {
       id: "verify",
-      title: isFamily ? "원래 저장된 가족 번호로 다시 전화하기" : "내가 직접 찾은 공식 경로로 확인하기",
-      detail: isFamily ? "새 번호에서 가족이라고 해도 원래 연락처를 먼저 사용해요." :
+      title: isFamily ? `원래 저장된 ${person} 번호로 직접 전화하기` :
+        noKnownCompany ? "돈부터 요구하는 부업은 보류하기" : "내가 직접 찾은 공식 경로로 확인하기",
+      detail: isFamily ? `새 번호에서 ${person}이라고 해도 원래 연락처를 먼저 사용해요.` :
+        noKnownCompany ? "소액 정산을 받았다는 말이나 다른 팀원들의 재촉만으로 돈을 보내지 않아요." :
         "문자 속 번호나 링크 대신 공식 앱·대표번호를 사용해요.",
-      practiced: verified,
+      practiced: noKnownCompany ? stopped : verified,
     },
     {
       id: "hold",
@@ -190,8 +217,8 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     },
     {
       id: "family",
-      title: isFamily ? "가족과 정해 둔 확인 질문을 직접 확인하기" : "혼자 판단하기 어렵다면 가족과 상의하기",
-      detail: isFamily ? "답은 메시지에 적지 않고 직접 통화하거나 만나서 확인해요." :
+      title: scenario.topic === "family" ? "가족과 정해 둔 확인 질문을 직접 확인하기" : "혼자 판단하기 어렵다면 믿을 수 있는 사람에게 물어보기",
+      detail: scenario.topic === "family" ? "답은 메시지에 적지 않고 직접 통화하거나 만나서 확인해요." :
         "가족의 조언과 기관의 공식 신원 확인은 별개예요.",
       practiced: !isFamily && consulted,
     },

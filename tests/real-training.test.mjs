@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SCENARIOS, classifyOffer, classifyOffers, evaluate, normalizeKoreanReply, recordChoice, simulatedLink } from "../src/lib/realTraining.ts";
+import { TRAINING_APPS, TRAINING_TOPICS, isPersonalTopic, isTrainingTopicId } from "../src/lib/trainingCatalog.ts";
 
 function state(index) {
   return {
@@ -15,7 +16,7 @@ function withOffer(state, kind, text = "송금해 주세요") {
 }
 
 test("normal/fraud pair starts with an identical message", () => {
-  assert.equal(SCENARIOS.length, 6);
+  assert.equal(SCENARIOS.length, TRAINING_TOPICS.length * 2);
   for (let i = 0; i < SCENARIOS.length; i += 2) {
     assert.equal(SCENARIOS[i].identity, "legitimate");
     assert.equal(SCENARIOS[i+1].identity, "fraud");
@@ -185,19 +186,20 @@ test("mentioning official apps in a warning or unrelated sentence does not creat
 });
 
 
-test("phone choices allow verification for every scenario without automatically ending the training", () => {
+test("phone outcomes distinguish conclusive evidence, attempted checks and decisive resolution", () => {
   for (const scenario of SCENARIOS) {
     const s = state(SCENARIOS.indexOf(scenario));
-    const family = scenario.id.startsWith("0-");
+    const family = isPersonalTopic(scenario.topic);
     const choice = family ? "family_contact" : "verify";
     const method = family ? "saved_family" : "official_directory";
     const checked = recordChoice(s, scenario, choice, undefined, undefined, method).state;
-    assert.equal(checked.closed, false);
+    assert.equal(checked.closed, scenario.topic === "card" && scenario.identity === "fraud");
     assert.equal(checked.events.length, 1);
     assert.equal(checked.events[0].choice, choice);
     assert.equal(checked.events[0].method, method);
-    assert.equal(checked.verification, scenario.identity === "legitimate" ? "confirmed" : "failed");
-    assert.equal(evaluate(checked, scenario, "uncertain").checked, true);
+    const missingRecruiter = scenario.identity === "fraud" && ["job", "team_mission"].includes(scenario.topic);
+    assert.equal(checked.verification, missingRecruiter ? "none" : scenario.identity === "legitimate" ? "confirmed" : "failed");
+    assert.equal(evaluate(checked, scenario, "uncertain").checked, !missingRecruiter);
   }
 });
 
@@ -216,8 +218,9 @@ test("phone workspace presents neutral functions, not a ready-made verification 
   assert.doesNotMatch(ui, /onClick=\{\(\) => void perform\("verify"\)\}/);
   assert.match(panel, /저장된 가족 연락처/);
   assert.match(panel, /최근 문자 발신 번호/);
-  assert.match(panel, /은행 앱/);
-  assert.match(panel, /택배 앱/);
+  assert.match(panel, /TRAINING_APPS\.map/);
+  assert.ok(TRAINING_APPS.some(app => app.label === "은행 앱"));
+  assert.ok(TRAINING_APPS.some(app => app.label === "택배 앱"));
   assert.match(panel, /문자로 돌아가기/);
   assert.doesNotMatch(panel, /다른 경로로 직접 확인하기/);
 });
@@ -256,7 +259,7 @@ test("phone actions require actual source choices but never an AI-provided sugge
   const installed = recordChoice(s, SCENARIOS[3], "verify", undefined, undefined, "delivery_app").state;
   assert.equal(installed.verification, "failed");
   assert.equal(installed.closed, false);
-  assert.ok(installed.messages.at(-1).text.includes("공식 앱"));
+  assert.ok(installed.messages.at(-1).text.includes("택배 앱"));
 });
 
 
@@ -314,7 +317,7 @@ test("phone onboarding is explicit at start, optional on later runs and does not
   assert.match(ui, /다음부터 이 안내 보지 않기/);
   assert.match(ui, /오른쪽 위 <strong>휴대전화 아이콘<\/strong>/);
   assert.match(ui, /대화 중간에도 직접 기능을 선택해 보세요/);
-  assert.match(ui, /기능을 사용해도 훈련이 바로 끝나지 않아요/);
+  assert.match(ui, /확인 후 문자로 돌아올 수 있어요/);
   assert.match(ui, /if \(introOpen\) return/);
   assert.doesNotMatch(ui, /휴대전화 아이콘.*사칭범/);
 });
@@ -332,11 +335,11 @@ test("feedback and truth screens put memorable keywords first, preserving option
   assert.match(ui, /feedback\.receipts\.map/);
   assert.match(ui, /feedback\.good\.map/);
   assert.match(ui, /feedback\.improve\.map/);
-  assert.match(ui, /fb-truth-word--fraud/);
-  assert.match(ui, /어떻게 확인했나요/);
+  assert.match(ui, /이번 가상 연락의 설정 살펴보기/);
+  assert.match(ui, /다음 연락에서도 기억할 행동/);
   assert.match(ui, /fb-promise-tile/);
   assert.match(ui, /가족 확인 질문/);
-  assert.match(ui, /shareFamilyPromises/);
+  assert.match(ui, /shareFamilyPractice/);
   assert.match(ui, /result\.coverage === "early"/);
   assert.match(css, /@media \(max-width: 365px\)/);
 });
@@ -466,8 +469,210 @@ test("closed verified resolution keeps its explanation visible before the user o
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   assert.match(ui, /next\.endReason === "resolved"/);
-  assert.match(ui, /session\.endReason === "resolved" && session\.verified/);
+  assert.doesNotMatch(ui, /session\.endReason === "resolved" && session\.verified/);
   assert.match(ui, /void finish\(\)/);
-  assert.match(ui, /내 대응 피드백 보기/);
+  assert.match(ui, /내 행동 피드백 보기/);
   assert.match(ui, /"resolved" \| null/);
+});
+
+
+test("all 11 public topics map to private normal/fraud pairs without exposing identity", () => {
+  assert.equal(TRAINING_TOPICS.length, 11);
+  assert.equal(SCENARIOS.length, TRAINING_TOPICS.length * 2);
+  assert.equal(new Set(TRAINING_TOPICS.map(t => t.id)).size, 11);
+  for (const [i, topic] of TRAINING_TOPICS.entries()) {
+    assert.equal(SCENARIOS[i*2].topic, topic.id);
+    assert.equal(SCENARIOS[i*2+1].topic, topic.id);
+    assert.equal(SCENARIOS[i*2].identity, "legitimate");
+    assert.equal(SCENARIOS[i*2+1].identity, "fraud");
+    assert.equal(SCENARIOS[i*2].opening, SCENARIOS[i*2+1].opening);
+    assert.ok(topic.description.length > 10);
+    assert.ok(isTrainingTopicId(topic.id));
+    assert.ok(!("identity" in topic));
+  }
+  assert.equal(isTrainingTopicId("invalid"), false);
+  assert.equal(isTrainingTopicId(0), false);
+});
+
+test("personal scenarios use saved contacts; institutional scenarios use independently found official numbers", () => {
+  for (const [index, scenario] of SCENARIOS.entries()) {
+    const s = state(index);
+    const personal = isPersonalTopic(scenario.topic);
+    if (personal) {
+      assert.throws(() => recordChoice(s, scenario, "verify", undefined, undefined, "official_directory"));
+      const result = recordChoice(s, scenario, "family_contact", undefined, undefined, "saved_family").state;
+      assert.equal(result.verification, scenario.identity === "fraud" ? "failed" : "confirmed");
+      assert.equal(result.closed, false);
+    } else {
+      const result = recordChoice(s, scenario, "verify", undefined, undefined, "official_directory").state;
+      const missingRecruiter = scenario.identity === "fraud" && ["job", "team_mission"].includes(scenario.topic);
+      assert.equal(result.verification, missingRecruiter ? "none" : scenario.identity === "fraud" ? "failed" : "confirmed");
+      assert.equal(result.closed, scenario.topic === "card" && scenario.identity === "fraud");
+      const familyAdvice = recordChoice(s, scenario, "family_contact", undefined, undefined, "saved_family").state;
+      assert.equal(familyAdvice.verification, "none");
+    }
+    if (scenario.topic === "loan" || scenario.topic === "bank") {
+      assert.equal(recordChoice(s, scenario, "verify", undefined, undefined, "bank_app").state.closed, false);
+    } else {
+      assert.throws(() => recordChoice(s, scenario, "verify", undefined, undefined, "bank_app"));
+    }
+  }
+});
+
+test("entry flow separates unannounced real-life practice from focused scenario drills", async () => {
+  const { readFileSync } = await import("node:fs");
+  const selector = readFileSync(new URL("../src/app/roleplay/select/page.tsx", import.meta.url), "utf8");
+  const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  assert.match(mode, /실전 훈련/);
+  assert.match(mode, /어떤 연락이 올지 모릅니다/);
+  assert.match(mode, /상황별 연습/);
+  assert.match(mode, /사례로 배우기/);
+  assert.match(mode, /path: "\/roleplay\/chat"/);
+  assert.match(mode, /path: "\/roleplay\/select"/);
+  assert.match(selector, /상황별 연습/);
+  assert.doesNotMatch(selector, /추천 상황으로 바로 시작|무작위|진짜인지는/);
+  assert.match(selector, /TRAINING_TOPICS\.filter/);
+  assert.match(selector, /\/roleplay\/chat\?topic=/);
+  assert.match(mode, /\/roleplay\/select/);
+  assert.match(chat, /new URLSearchParams\(window\.location\.search\)\.get\("topic"\)/);
+  assert.match(route, /if \(body\.topic !== undefined && !isTrainingTopicId\(body\.topic\)\)/);
+  assert.match(route, /topicIndex \* 2 \+ 1/);
+  assert.match(route, /topic: scenario\.topic/);
+});
+
+test("training feedback uses concrete verb-first reminders instead of cryptic nouns", () => {
+  const example = state(3);
+  example.events.push({ choice: "share", verifiedBefore: false, turn: 1 });
+  example.events.push({ choice: "open_link", verifiedBefore: false, turn: 1 });
+  const summary = evaluate(example, SCENARIOS[3], "uncertain").behavior;
+  assert.ok(summary.improve.every(p => /세요$/.test(p.keyword)), summary.improve.map(x=>x.keyword).join(", "));
+  assert.ok(summary.improve.some(p => p.keyword.includes("개인정보를 보내기 전에")));
+  assert.ok(summary.improve.some(p => p.keyword.includes("문자 속 링크를")));
+  assert.ok(summary.promises.every(p => /기$/.test(p.title)));
+  assert.ok(summary.receipts.some(r => r.label === "모의 정보 전송"));
+});
+
+
+test("action-first interface avoids identity-guessing quiz and prioritizes practical decisions", async () => {
+  const { readFileSync } = await import("node:fs");
+  const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const home = readFileSync(new URL("../src/app/home/page.tsx", import.meta.url), "utf8");
+  const intro = readFileSync(new URL("../src/app/roleplay/page.tsx", import.meta.url), "utf8");
+  const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(chat, /setPhase\("judge"\)|phase === "judge"|role="radiogroup" aria-label="상대방 정체 판단"/);
+  assert.match(chat, /guess: "uncertain"/);
+  assert.match(chat, /이번 대화에서 선택한 행동을 함께 돌아볼게요/);
+  assert.match(chat, /내 행동 피드백 보기/);
+  assert.match(chat, /안전 약속 확인하기/);
+  assert.match(chat, /이번 가상 연락의 설정 살펴보기/);
+  assert.ok(chat.indexOf("다음 연락에서도 기억할 행동") < chat.indexOf("이번 가상 연락의 설정 살펴보기"));
+  assert.doesNotMatch(chat, /정체와 안전 약속 확인하기|정체를 몰라도 괜찮아요/);
+  assert.doesNotMatch(home, /진짜 가족일까요/);
+  assert.match(home, /어떤 문자가 올지/);
+  assert.doesNotMatch(intro, /진짜 연락과 사칭 시도가 섞여/);
+  assert.match(intro, /어떤 연락이 오더라도 안전하게 대응하는 연습/);
+  assert.match(mode, /안전하게 행동하는 연습/);
+});
+
+
+test("back navigation respects the selected mode while preserving the no-identity-quiz flow", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  assert.match(ui, /new URLSearchParams\(window\.location\.search\)\.has\("topic"\) \? "\/roleplay\/select" : "\/roleplay\/mode"/);
+  assert.match(ui, /onClick=\{\(\) => void finish\(\)\}/);
+  assert.doesNotMatch(ui, /setPhase\("judge"\)/);
+});
+
+
+test("risk-focused training avoids routine safe notices and samples one wrong-action scenario for each topic", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  const { SCENARIO_DECISIONS } = await import("../src/lib/trainingDecision.ts");
+  assert.deepEqual(Object.keys(SCENARIO_DECISIONS).sort(), TRAINING_TOPICS.map(t => t.id).sort());
+  assert.match(route, /const index = topicIndex \* 2 \+ 1/);
+  assert.doesNotMatch(route, /const index = topicIndex \* 2 \+ randomInt\(2\)/);
+  for (const [i, topic] of TRAINING_TOPICS.entries()) {
+    assert.equal(SCENARIOS[i*2+1].topic, topic.id);
+    assert.equal(SCENARIOS[i*2+1].identity, "fraud");
+    assert.ok(SCENARIO_DECISIONS[topic.id].length > 45);
+  }
+});
+
+test("bank transaction facts are fictional and specific enough to answer 'what transaction?'", async () => {
+  const { CASE_VARIANTS, caseDetail } = await import("../src/lib/trainingCaseFacts.ts");
+  const { bankAnswerIsConcrete, bankQuestionNeedsSpecifics, replyQualityIssue,
+    meaningfulRiskRequest, riskDecisionDue } = await import("../src/lib/trainingDecision.ts");
+  const bank = SCENARIOS[5];
+  assert.equal(bank.topic, "bank");
+  assert.equal(bank.identity, "fraud");
+  for (let i = 0; i < CASE_VARIANTS[2].length; i++) {
+    assert.match(caseDetail(bank, i), /(?:모바일 상품권|정기결제|간편결제)/);
+    assert.match(caseDetail(bank, i), /\d+만 원/);
+    assert.doesNotMatch(caseDetail(bank, i), /(?:010[- ]\d{4}|https?:\/\/)/);
+  }
+  assert.equal(bankQuestionNeedsSpecifics("무슨 거래인데요?"), true);
+  assert.equal(bankQuestionNeedsSpecifics("어떤 결제예요?"), true);
+  assert.equal(bankQuestionNeedsSpecifics("그게 왜 그런가요?"), false);
+  assert.equal(bankAnswerIsConcrete("본인이 진행하신 거래가 맞는지 확인 부탁드립니다."), false);
+  assert.equal(bankAnswerIsConcrete("모바일 상품권 48만 원 결제 시도 관련입니다."), true);
+  const s = state(5);
+  const introIssue = replyQualityIssue(bank, s, "무슨 거래인데요?",
+    "이상 거래 건입니다. 직접 확인 부탁드립니다.", []);
+  assert.match(introIssue, /거래 유형과 금액/);
+  assert.equal(replyQualityIssue(bank, s, "무슨 거래인데요?",
+    "모바일 상품권 48만 원 결제 시도가 있었다는 연락입니다.", []), undefined);
+  s.turns = 1;
+  assert.equal(riskDecisionDue(s, bank, "제가 한 거래가 아닌데요."), true);
+  assert.match(replyQualityIssue(bank, s, "제가 한 거래가 아닌데요.",
+    "본인 거래가 맞는지 확인 부탁드립니다.", []), /잘못된 요청/);
+  const request = "피해 확인을 위해 계좌 잔액과 계좌번호 끝 4자리를 알려주실 수 있을까요?";
+  const proposals = [{ kind: "provide_data", origin: "sender", target: "계좌 정보", task: "정보 제출",
+    previewTitle: "", previewDescription: "" }];
+  assert.equal(meaningfulRiskRequest(request, proposals), true);
+  assert.equal(replyQualityIssue(bank, s, "제가 한 거래가 아닌데요.", request, proposals), undefined);
+  assert.equal(meaningfulRiskRequest(request, []), false);
+  assert.equal(meaningfulRiskRequest("본인 확인 부탁드립니다.", proposals), false);
+  assert.equal(riskDecisionDue({ ...s, messages: [...s.messages, { actor: "them", text: request }] },
+    bank, "네"), false);
+});
+
+test("phone affordance is gently highlighted when actor requests confirmation without a structured action", async () => {
+  const { shouldCuePhonePanel } = await import("../src/lib/trainingPhoneCue.ts");
+  const samples = [
+    "본인이 직접 진행하신 거래가 맞는지 확인 부탁드립니다.",
+    "계좌 이용 여부를 확인해 주세요.",
+    "거래 내용을 확인 부탁드립니다.",
+    "사용 중인 계좌 잔액과 끝 4자리를 알려주실 수 있을까요?",
+  ];
+  for (const reply of samples) {
+    assert.equal(shouldCuePhonePanel("무슨 거래인가요?", { text: reply, actions: [] }), true, reply);
+  }
+  assert.equal(shouldCuePhonePanel("안녕하세요", { text: "고객님께 연락드렸습니다.", actions: [] }), false);
+  assert.equal(shouldCuePhonePanel("네", { text: "잠시만 기다려 주세요.", actions: [] }), false);
+});
+
+test("AI cannot silently replace an actionable fraud choice with an official app reminder", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  assert.match(route, /replyQualityIssue\(scenario, state, text, reply, first\.value\.actions\)/);
+  assert.match(route, /INCOMPLETE_TRAINING_DECISION/);
+  assert.match(route, /SCENARIO_DECISIONS\[scenario\.topic\]/);
+});
+
+test("a bank app lookup is inconclusive but the independent callback can resolve the same request", () => {
+  const scenario = SCENARIOS[5];
+  const { state: s } = withOffer(state(5), "share", "잔액을 알려주세요.");
+  const app = recordChoice(s, scenario, "verify", undefined, undefined, "bank_app");
+  assert.equal(app.state.verification, "none");
+  assert.equal(app.state.closed, false);
+  assert.equal(app.state.events[0].evidence, "inconclusive");
+  assert.match(app.notice, /은행 앱/);
+  assert.doesNotMatch(app.notice, /대표번호/);
+  assert.equal(evaluate(app.state, scenario, "uncertain").checked, false);
+  const official = recordChoice(app.state, scenario, "verify", undefined, undefined, "official_directory");
+  assert.equal(official.state.closed, true);
+  assert.match(official.notice, /대표번호/);
+  assert.equal(evaluate(official.state, scenario, "uncertain").checked, true);
 });

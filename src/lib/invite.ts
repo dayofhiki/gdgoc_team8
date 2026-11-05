@@ -138,9 +138,11 @@ export async function setShareResults(share: boolean): Promise<boolean> {
   try {
     await ensureAnon();
     const { data: me } = await sb().auth.getUser();
-    const { error } = await sb().from("family_members").update({ share_results: share }).eq("family_id", fid).eq("user_id", me.user!.id);
+    const { data, error } = await sb().from("family_members")
+      .update({ share_results: share }).eq("family_id", fid).eq("user_id", me.user!.id)
+      .select("share_results").maybeSingle();
     if (error) throw error;
-    return true;
+    return data?.share_results === share;
   } catch (e) {
     console.warn("공유 설정 실패", e);
     return false;
@@ -168,18 +170,23 @@ export async function familyOverview(): Promise<FamilyMemberSummary[] | null> {
     await ensureAnon();
     const { data, error } = await sb().rpc("family_overview", { p_family: fid });
     if (error) throw error;
-    const rows = data as FamilyMemberSummary[];
-    // 도전장으로 먼저 들어오면 이름이 비어 있음 → 온보딩에서 정한 별명으로 채움
-    const me = rows.find((m) => m.is_me);
-    const nick = storedNickname();
-    if (me && !me.nickname && nick) {
-      const { error: e2 } = await sb().from("family_members").update({ nickname: nick }).eq("family_id", fid).eq("user_id", me.user_id);
-      if (!e2) me.nickname = nick;
-    }
-    return rows;
+    return data as FamilyMemberSummary[];
   } catch (e) {
     console.warn("가족 요약 불러오기 실패", e);
     return null;
+  }
+}
+
+/** 별명을 정하거나 바꾸면 가족 목록 이름도 맞춤 (초대 링크로 먼저 들어와 이름이 비어 있던 경우 포함). 실패해도 무시 */
+export async function syncFamilyNickname(nickname: string): Promise<void> {
+  const fid = configured() ? load(KEY_FAMILY) : null;
+  if (!fid || !nickname) return;
+  try {
+    await ensureAnon();
+    const { data: me } = await sb().auth.getUser();
+    await sb().from("family_members").update({ nickname: nickname.slice(0, 20) }).eq("family_id", fid).eq("user_id", me.user!.id);
+  } catch {
+    /* 다음에 별명을 바꿀 때 다시 시도 */
   }
 }
 
