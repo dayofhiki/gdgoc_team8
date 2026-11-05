@@ -293,3 +293,12 @@ test("phone panel cue is non-accusatory, appears once after interaction and resp
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(ui, /coverage === "early"/);
 });
+
+
+test("sender-suggested independent safety routes are not handed out as inline answer buttons", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  assert.match(route, /const inlineActions = grounded\.filter\(a => a\.kind !== "app"/);
+  assert.match(route, /a\.kind === "phone" && a\.origin === "preexisting"/);
+  assert.match(route, /buildActions\(inlineActions, state\.turns\)/);
+});
