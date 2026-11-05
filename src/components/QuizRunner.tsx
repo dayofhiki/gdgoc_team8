@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_REMEMBER, loadQuizProgress, pickQuiz, saveQuizProgress, type OX, type QuizItem } from "@/lib/quiz";
-import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
+
 import { SHARED_FAMILY_CODE_PATH } from "@/lib/share";
 import { saveRecord } from "@/lib/records";
 import { BottomCTA, Dialog, Header, Progress, Screen } from "./ui";
@@ -17,8 +17,6 @@ type Answer = { id: string; picked: OX; correct: boolean };
 
 export default function QuizRunner({ ids, from }: Props) {
   const router = useRouter();
-  const { nickname } = useAppState();
-  const displayName = nickname || DEFAULT_NICKNAME;
   const [started, setStarted] = useState(false);
   const [items, setItems] = useState(() => pickQuiz(ids, 0));
   const [idx, setIdx] = useState(0);
