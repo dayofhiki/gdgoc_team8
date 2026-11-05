@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "tsc --noEmit",
-    "test:training": "node --experimental-strip-types --no-warnings --test tests/real-training.test.mjs tests/training-actions.test.mjs tests/training-dialogue.test.mjs tests/training-feedback.test.mjs tests/training-reply-examples.test.mjs",
+    "test:training": "node --experimental-strip-types --no-warnings --test tests/real-training.test.mjs tests/training-actions.test.mjs tests/training-dialogue.test.mjs tests/training-feedback.test.mjs tests/training-reply-examples.test.mjs tests/learning-system.test.mjs",
     "test:backend": "node supabase/tests/db_check.mjs && node --experimental-strip-types --no-warnings --test supabase/functions/_shared/logic_test.ts supabase/functions/_shared/llm_test.ts",
     "test:e2e": "node supabase/tests/e2e.mjs",
     "test:ai": "node supabase/tests/ai_smoke.mjs"
