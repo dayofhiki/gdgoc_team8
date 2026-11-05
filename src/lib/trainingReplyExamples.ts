@@ -5,7 +5,7 @@ type ChatLine = { actor: string; text: string; actions?: { kind: string; origin:
 // 예시는 훈련의 정답이 아니라, 직전 문자에 현실적으로 답할 수 있는 말이다.
 // 출처와 진위는 알 수 없으므로 확인 완료·송금·동의처럼 행동을 가장하는 문구는 넣지 않는다.
 const openingReplies: Record<TrainingTopicId, string[]> = {
-  family: ["응, 무슨 일이야?", "휴대전화는 어떻게 된 거야?", "지금 어디에 있어?"],
+  family: ["응, 무슨 일이야?", "지금 무슨 상황이야?", "괜찮아?"],
   delivery: ["어떤 택배인가요?", "배송에 무슨 문제가 있나요?", "어느 택배사인가요?"],
   bank: ["어떤 거래에 관한 안내인가요?", "언제 발생한 일인가요?", "무슨 문제가 생겼나요?"],
   invitation: ["누구 결혼식이에요?", "결혼식은 언제예요?", "식장은 어디인가요?"],
@@ -95,8 +95,18 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
     }
   } else if (topic === "invitation" && /결혼|예식|식장/.test(line)) {
     add(65, "결혼식은 언제예요?", "어디에서 하나요?");
-  } else if (topic === "family" && /폰|휴대전화|액정|수리/.test(line)) {
-    add(65, "많이 고장 났어?", "어디서 수리하려고?");
+  } else if (topic === "family") {
+    if (/응급|병원|다쳤|입원|진료/.test(line)) {
+      add(78, "괜찮아? 어떻게 된 거야?", "어느 병원에 있는데?");
+    } else if (/여행|지갑|가방|귀국|차비|교통편/.test(line)) {
+      add(78, "무슨 일이야, 괜찮아?", "지금 어디에 있는데?");
+    } else if (/메신저|로그아웃|계정|인증|복구/.test(line)) {
+      add(78, "무슨 계정이 잠겼다는 거야?", "지금 어떤 문제가 생겼어?");
+    } else if (/폰|휴대전화|액정|수리|기기/.test(line)) {
+      add(72, "많이 고장 났어?", "지금 어디서 연락하는 거야?");
+    } else {
+      add(60, "무슨 일인지 좀 더 말해줘.", "지금 상황이 어때?");
+    }
   } else if (topic === "bank" && /결제|거래|승인|보안/.test(line)) {
     add(65, "어떤 결제인가요?", "금액이 얼마인가요?");
   } else if (topic === "delivery" && /배송|주소|반송/.test(line)) {

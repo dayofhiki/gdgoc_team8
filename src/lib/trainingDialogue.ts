@@ -233,17 +233,19 @@ export function actorBrief(scenario: Scenario, memory: DialogueMemory, completed
   return [
     "### 역할 및 사건 사실(세션 내 변경 금지)",
     "역할: " + scenario.persona,
-    "사건의 출발점: " + scenario.situation,
-    ...(caseFacts ? ["이번 세션에서 고정한 세부 정황(발신자의 주장이지 확인된 사실은 아님): " + caseFacts] : []),
+    ...(caseFacts
+      ? ["이번 세션의 독립된 사건 설정(공통 줄거리보다 우선하며 변경 금지): " + caseFacts]
+      : ["사건의 출발점: " + scenario.situation]),
     "숨겨진 정체(화자의 속마음으로만 사용, 공개 금지): " + scenario.identity,
     "확정된 사실: " + scenario.privateFacts,
     "화자의 목적과 허용된 대응: " + scenario.objective,
     ...(scenario.identity === "legitimate" ? ["정상 인물 추가 제약: 본인이 먼저 원래 번호·공식 앱·대표번호·입금 방법을 알려주거나 특정 확인 수단을 추천하면 안 된다. 사용자가 확인하겠다면 수긍만 한다. 문제 해결 방법은 학습자가 스스로 떠올려야 한다."] : []),
     "### 말투와 사건 진행",
     "말투: " + scenario.voice,
-    "가능한 사건 흐름: " + scenario.progression,
+    ...(caseFacts ? [] : ["가능한 사건 흐름: " + scenario.progression]),
     "상대 반응별 원칙: " + scenario.responseRules,
-    "관찰된 사례의 일반적 특징(원문 녹취나 따라 읽을 대본 아님): " + caseGuide(scenario),
+    ...(caseFacts ? [] : ["관찰된 사례의 일반적 특징: " + caseGuide(scenario)]),
+    "이번 사건이 아닌 다른 사건의 설명·요구는 섞지 말고, 질문에 먼저 답하세요.",
     "### 이번 답변",
     "지금까지 사용자가 보낸 답장 횟수: " + completedTurns,
     "현재 대화 국면: " + memory.stage,

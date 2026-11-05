@@ -21,6 +21,7 @@ type Phase = "chat" | "result";
 type Session = {
   token: string;
   topic?: TrainingTopicId;
+  caseVariant?: number;
   title?: string;
   messages: Message[];
   turns: number;
@@ -77,6 +78,25 @@ function contactTitle(topic?: TrainingTopicId): string {
 // 복원 표시(?review=1)는 그 방문 기록 항목에만 남으므로, 새 훈련에는 옛 결과가 뜨지 않는다.
 const REVIEW_KEY = "mikki:training-review";
 const INTRO_HIDE_KEY = "mikki:training-phone-intro-hidden-v1";
+const RECENT_CASES_KEY = "mikki:recent-training-episodes-v1";
+function recentCases(): Record<string, number[]> {
+  try {
+    const raw: unknown = JSON.parse(sessionStorage.getItem(RECENT_CASES_KEY) ?? "{}");
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw)
+      .filter(([topic, indices]) => typeof topic === "string" && Array.isArray(indices))
+      .map(([topic, indices]) => [topic, (indices as unknown[]).filter(
+        (v): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < 20).slice(-2)]));
+  } catch { return {}; }
+}
+function rememberCase(topic?: TrainingTopicId, variant?: number) {
+  if (!topic || variant === undefined || !Number.isInteger(variant)) return;
+  try {
+    const history = recentCases();
+    history[topic] = [...(history[topic] ?? []).filter(i => i !== variant), variant].slice(-2);
+    sessionStorage.setItem(RECENT_CASES_KEY, JSON.stringify(history));
+  } catch { /* 저장소가 꺼져도 훈련은 정상 진행 */ }
+}
 
 function saveReview(result: Result) {
   try {
@@ -171,7 +191,10 @@ export default function RealTraining() {
     try {
       const topic = new URLSearchParams(window.location.search).get("topic");
       // 서버가 주제 허용 목록을 검사하며 정상/사칭 배역은 매번 내부에서 결정한다.
-      const initial = await request({ action: "start", ...(topic ? { topic } : {}) });
+      const initial = await request({
+        action: "start", ...(topic ? { topic } : {}), recentBranches: recentCases(),
+      });
+      rememberCase(initial.topic, initial.caseVariant);
       setSession(initial);
       // 새로운 훈련 시작 시에만 확인한다. 결과 화면으로 돌아올 때는 띄우지 않는다.
       try {

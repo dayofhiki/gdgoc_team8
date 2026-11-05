@@ -25,10 +25,12 @@ export const SCENARIO_DECISIONS: Record<Scenario["topic"], string> = {
 };
 
 export function riskDecisionDue(state: TrainingState, scenario: Scenario, userText: string): boolean {
-  // 사용자의 질문에 한 차례는 맥락을 설명할 여유를 주되, 두 번째 이상 답변에서
-  // 아무 결정을 요구하지 않고 끝없는 설명만 하는 경우를 막는다.
+  // 에피소드마다 다른 시점에 판단 기회를 배치하되, 세 번째 답장 안에 제시한다.
+  const episode = caseBranch(scenario, state.caseVariant ?? 0);
+  const deniedCard = scenario.topic === "card" &&
+    /신청.{0,12}(?:안|없|않)|카드.{0,12}(?:없|아니)/.test(userText);
   return scenario.identity === "fraud" &&
-    (state.turns >= 1 || scenario.topic === "card" && /신청.{0,12}(?:안|없|않)|카드.{0,12}(?:없|아니)/.test(userText)) &&
+    (state.turns >= episode.requestAfterTurns || deniedCard && episode.kind === "phone") &&
     !state.closed &&
     !hasConcreteRequest(state.messages) &&
     !clearlyDisengaged(userText);
@@ -36,8 +38,8 @@ export function riskDecisionDue(state: TrainingState, scenario: Scenario, userTe
 
 export function meaningfulRiskRequest(reply: string, proposals: Proposed[], topic?: Scenario["topic"]): boolean {
   return groundedProposals(reply, proposals, undefined, "fraud").some(a =>
-    a.origin === "sender" && (topic === "card" ? a.kind === "phone" :
-      topic === "team_mission" ? a.kind === "transfer" : ["transfer", "link", "provide_data", "phone"].includes(a.kind)));
+    a.origin === "sender" && (topic === "team_mission"
+      ? a.kind === "transfer" : ["transfer", "link", "provide_data", "phone"].includes(a.kind)));
 }
 
 export function bankQuestionNeedsSpecifics(userText: string): boolean {
