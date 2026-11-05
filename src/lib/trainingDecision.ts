@@ -5,6 +5,8 @@
  */
 import type { Scenario, TrainingState } from "./realTraining.ts";
 import type { Proposed } from "./trainingActions.ts";
+import { BANK_CLAIMS } from "./trainingCaseFacts.ts";
+import { groundedProposals } from "./trainingActionGuard.ts";
 import { hasConcreteRequest, clearlyDisengaged } from "./trainingResolution.ts";
 
 export const SCENARIO_DECISIONS: Record<Scenario["topic"], string> = {
@@ -16,6 +18,8 @@ export const SCENARIO_DECISIONS: Record<Scenario["topic"], string> = {
   traffic: "고지 사유를 설명한 뒤 문자에 붙은 가상 고지서 링크를 열거나 개인 정보를 입력해 달라는 요구. 단순한 공식 기관 직접 조회 안내로 끝내지 않는다.",
   loan: "대출 조건에 관심을 보이면 심사비·보증료·기존 대출 정리라는 명목의 모의 선입금 요청. 실제 계좌를 제공하지 않는다.",
   job: "업무 내용을 설명한 뒤 가상 지원 링크 또는 문자로 개인 인증정보를 보내 달라는 요청. 실제 채용 정보는 지어내지 않는다.",
+  card: "신청하지 않은 카드의 반송을 빌미로, 문자에 첨부한 가상의 반송 접수 번호로 전화해 달라고 요청한다. 공식 대표번호라고 소개하지 않는다.",
+  team_mission: "다른 사람의 소액 정산을 주장한 뒤 팀 전체가 정산되려면 상품대금을 먼저 입금해 달라고 요청한다. 상대가 이미 정산받았다고 하지 않는다.",
   health: "검진 안내를 설명한 뒤 문자 속 가상 예약·결과 확인 링크를 사용해 달라는 요청. 검사 결과나 질병은 지어내지 않는다.",
 };
 
@@ -23,23 +27,23 @@ export function riskDecisionDue(state: TrainingState, scenario: Scenario, userTe
   // 사용자의 질문에 한 차례는 맥락을 설명할 여유를 주되, 두 번째 이상 답변에서
   // 아무 결정을 요구하지 않고 끝없는 설명만 하는 경우를 막는다.
   return scenario.identity === "fraud" &&
-    state.turns >= 1 &&
+    (state.turns >= 1 || scenario.topic === "card" && /신청.{0,12}(?:안|없|않)|카드.{0,12}(?:없|아니)/.test(userText)) &&
     !state.closed &&
     !hasConcreteRequest(state.messages) &&
     !clearlyDisengaged(userText);
 }
 
-export function meaningfulRiskRequest(reply: string, proposals: Proposed[]): boolean {
-  if (!hasConcreteRequest([{ actor: "them", text: reply }])) return false;
-  return proposals.some(a => ["transfer", "link", "provide_data"].includes(a.kind) &&
-    a.origin === "sender");
+export function meaningfulRiskRequest(reply: string, proposals: Proposed[], topic?: Scenario["topic"]): boolean {
+  return groundedProposals(reply, proposals, undefined, "fraud").some(a =>
+    a.origin === "sender" && (topic === "card" ? a.kind === "phone" :
+      topic === "team_mission" ? a.kind === "transfer" : ["transfer", "link", "provide_data", "phone"].includes(a.kind)));
 }
 
 export function bankQuestionNeedsSpecifics(userText: string): boolean {
   // "제가 한 거래가 아닌데요"는 정보 질문이 아니라 부인이다.
   // 이를 상세 조회 질문으로 오인하면 가장 중요한 위험 요청 단계가 밀린다.
-  return /(?:무슨|어떤|뭐|얼마|금액|내역|언제|어디)/.test(userText) &&
-    /(?:거래|결제|내역|상품|금액|뭐|어디|언제|얼마)/.test(userText);
+  return /(?:무슨|어떤|뭐|얼마|가맹점|금액|내역|언제|어디)/.test(userText) &&
+    /(?:거래|결제|내역|상품|가맹점|금액|뭐|어디|언제|얼마)/.test(userText);
 }
 
 /** 이미 설정된 가상 거래 정황을 설명했는지 확인. 사건 금액·종류를 만들어내지 않는다. */
@@ -60,11 +64,21 @@ export function replyQualityIssue(
   actions: Proposed[],
 ): string | undefined {
   if (scenario.topic === "bank" && bankQuestionNeedsSpecifics(userText) &&
-      !bankAnswerIsConcrete(reply)) {
+      (!bankAnswerIsConcrete(reply) || (state.caseVariant !== undefined && !bankClaimMatches(reply, state.caseVariant)))) {
     return "상대가 '어떤 거래/얼마'인지 물었습니다. 세션에 고정된 가상 거래 유형과 금액을 자연스럽게 설명하세요. 그냥 '본인 확인 부탁드립니다'를 반복하지 마세요.";
   }
-  if (riskDecisionDue(state, scenario, userText) && !meaningfulRiskRequest(reply, actions)) {
+  if (riskDecisionDue(state, scenario, userText) && !meaningfulRiskRequest(reply, actions, scenario.topic)) {
     return "이제 상대가 선택해야 할 구체적인 잘못된 요청을 한 가지 제시할 차례입니다. 화자의 숨겨진 목적에 맞춰 위에 정해진 요청을 실제 문자 대사에 명시하고, 그 행동을 actions 배열에 kind/origin=sender로 기록하세요. 공식 앱에서 직접 확인하라는 무해한 안내로 대신하지 마세요.";
   }
   return undefined;
+}
+
+function bankClaimMatches(reply: string, variant: number): boolean {
+  const claim = BANK_CLAIMS[variant];
+  const merchant = claim.split("에서")[0];
+  const amount = claim.match(/\d+만/)?.[0];
+  const digits = amount?.slice(0, -1);
+  const normalized = reply.replace(/[\s,]/g, "");
+  return reply.includes(merchant) && !!digits &&
+    (normalized.includes(digits + "만원") || normalized.includes(digits + "0000원"));
 }

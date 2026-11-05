@@ -12,6 +12,8 @@ export const TRAINING_TOPICS = [
   { id: "loan", title: "저금리 대출 상담", description: "대출 상품이나 조건을 안내하는 연락", category: "금융", contactLabel: "대출 안내" },
   { id: "job", title: "단기 일자리 제안", description: "재택·단기 업무를 소개하는 연락", category: "생활 문자", contactLabel: "구인 안내" },
   { id: "health", title: "건강검진 안내", description: "검진 예약이나 안내사항을 확인하는 연락", category: "공공기관", contactLabel: "건강검진 안내" },
+  { id: "card", title: "신청하지 않은 카드 배송", description: "카드 배송과 반송 접수를 알리는 연락", category: "금융", contactLabel: "카드 배송 안내" },
+  { id: "team_mission", title: "쇼핑 후기 부업", description: "상품 후기와 정산을 안내하는 연락", category: "생활 문자", contactLabel: "부업 안내" },
 ] as const;
 
 export type TrainingTopicId = (typeof TRAINING_TOPICS)[number]["id"];
@@ -28,4 +30,19 @@ export function topicDescriptor(id: TrainingTopicId) {
 
 export function isPersonalTopic(id: TrainingTopicId): boolean {
   return id === "family" || id === "invitation" || id === "obituary";
+}
+
+export const TRAINING_APPS = [
+  { id: "bank_app", label: "은행 앱", topics: ["bank", "loan"] },
+  { id: "card_app", label: "카드 앱", topics: ["card"] },
+  { id: "delivery_app", label: "택배 앱", topics: ["delivery"] },
+  { id: "traffic_app", label: "교통민원 앱", topics: ["traffic"] },
+  { id: "health_app", label: "건강보험 앱", topics: ["health"] },
+] as const satisfies ReadonlyArray<{ id: string; label: string; topics: readonly TrainingTopicId[] }>;
+
+export type TrainingApp = (typeof TRAINING_APPS)[number]["id"];
+
+export function appSupportsTopic(app: TrainingApp, topic: TrainingTopicId): boolean {
+  const topics: readonly TrainingTopicId[] = TRAINING_APPS.find(item => item.id === app)?.topics ?? [];
+  return topics.includes(topic);
 }

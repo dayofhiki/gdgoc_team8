@@ -130,3 +130,36 @@ test("v3 keeps sender-provided and preexisting verification sources distinct", (
   assert.equal(groundedProposals("지금 저희 번호로 전화해 주세요.", [sender], [trusted], "fraud").length, 0);
   assert.equal(groundedProposals("지금 저희 번호로 전화해 주세요.", [sender], [sender], "fraud").length, 1);
 });
+
+test("card callback branches only from the attached number and requires opening the mock page before installing", async () => {
+  const { fallbackTrainingTurn } = await import("../src/lib/trainingFallback.ts");
+  const scenario = SCENARIOS.find(item => item.topic === "card" && item.identity === "fraud");
+  const s = session(SCENARIOS.indexOf(scenario));
+  const beat = fallbackTrainingTurn(s, scenario, "카드 신청한 적 없어요.");
+  const { index, message } = add(s, beat.reply, beat.actions);
+  const recent = recordChoice(s, scenario, "verify_sender", undefined, undefined, "recent_sender");
+  assert.equal(recent.state.messages.filter(item => item.actor === "them").length, 2);
+  const called = recordChoice(s, scenario, "verify_sender", index, message.actions[0].id);
+  assert.equal(called.state.verification, "none");
+  assert.equal(called.state.closed, false);
+  const linkIndex = called.state.messages.length - 1;
+  const link = called.state.messages[linkIndex].actions[0];
+  assert.equal(link.linkPreview.interaction, "install");
+  assert.throws(() => recordChoice(called.state, scenario, "install", linkIndex, link.id));
+  const opened = recordChoice(called.state, scenario, "open_link", linkIndex, link.id);
+  assert.throws(() => recordChoice(opened.state, scenario, "share", linkIndex, link.id));
+  const installed = recordChoice(opened.state, scenario, "install", linkIndex, link.id).state;
+  assert.equal(installed.closed, true);
+  assert.equal(evaluate(installed, scenario, "uncertain").dangerousAction, true);
+  assert.equal(evaluate(installed, scenario, "uncertain").behavior.receipts.at(-1).label, "모의 원격 지원 앱 설치");
+});
+
+test("every authored fallback gives the learner an actionable request by their second reply", async () => {
+  const { fallbackTrainingTurn } = await import("../src/lib/trainingFallback.ts");
+  const { meaningfulRiskRequest } = await import("../src/lib/trainingDecision.ts");
+  for (const scenario of SCENARIOS.filter(item => item.identity === "fraud")) {
+    const s = session(SCENARIOS.indexOf(scenario));
+    const turn = fallbackTrainingTurn(s, scenario, "무슨 내용인가요?");
+    assert.ok(meaningfulRiskRequest(turn.reply, turn.actions, scenario.topic), scenario.topic);
+  }
+});

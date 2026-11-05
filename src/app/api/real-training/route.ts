@@ -13,7 +13,8 @@ import type { Choice, Guess, PhoneMethod, TrainingState } from "@/lib/realTraini
 import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/lib/trainingTurnContext";
 import { shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";
 import { TRAINING_TOPICS, isTrainingTopicId } from "@/lib/trainingCatalog";
-import { SCENARIO_DECISIONS, replyQualityIssue } from "@/lib/trainingDecision";
+import { fallbackTrainingTurn } from "@/lib/trainingFallback";
+import { SCENARIO_DECISIONS, replyQualityIssue, riskDecisionDue, meaningfulRiskRequest } from "@/lib/trainingDecision";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ const MAX_AGE_MS = 45 * 60 * 1000;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT = 40;
 const hits = new Map<string, { count: number; since: number }>();
-const choices: Choice[] = ["verify", "family_contact", "verify_sender", "verify_chat", "comply", "share", "stop", "open_link"];
+const choices: Choice[] = ["verify", "family_contact", "verify_sender", "verify_chat", "comply", "share", "stop", "open_link", "install"];
 const guesses: Guess[] = ["legitimate", "fraud", "uncertain"];
 
 function apiError(message: string, status: number) {
@@ -99,22 +100,42 @@ function trainingProviders() {
     : process.env[key]);
 }
 async function generateOpening(scenario: (typeof SCENARIOS)[number], caseVariant: number): Promise<string> {
-  // 첫 문자는 정상/사칭 여부를 전달하지 않고, 매번 실제 LLM이 만든다.
-  // 실패했을 때 예전 고정 opening으로 조용히 되돌아가지 않는다.
-  const result = await complete([
-    { role: "system", content: openingBrief(scenario, randomInt(8), caseDetail(scenario, caseVariant)) },
-    { role: "user", content: "지금 처음 보낼 문자 한 건만 작성하세요." },
-  ], {
-    temperature: 0.95, maxTokens: 280, json: true, schema: OPENING_SCHEMA,
-    parse: parseOpeningOutput, budgetMs: 7000,
-  }, { list: trainingProviders() });
-  const opening = normalizeKoreanReply(result.value.opening).trim();
-  if (!acceptableOpening(opening)) throw new Error("UNSAFE_OPENING");
-  return opening;
+  // 두 사례는 배송·부업 제안에서 출발해야 후속 행동의 맥락이 유지된다.
+  if (scenario.topic === "card" || scenario.topic === "team_mission") return scenario.opening;
+  const available = trainingProviders();
+  if (!available.length) return scenario.opening;
+  try {
+    const result = await complete([
+      { role: "system", content: openingBrief(scenario, randomInt(8), caseDetail(scenario, caseVariant)) },
+      { role: "user", content: "지금 처음 보낼 문자 한 건만 작성하세요." },
+    ], {
+      temperature: 0.95, maxTokens: 280, json: true, schema: OPENING_SCHEMA,
+      parse: parseOpeningOutput, budgetMs: 4500,
+    }, { list: available });
+    const opening = normalizeKoreanReply(result.value.opening).trim();
+    return acceptableOpening(opening) && !detectPii(opening).length ? opening : scenario.opening;
+  } catch {
+    return scenario.opening;
+  }
 }
 
 async function generateResponse(state: TrainingState, text: string) {
   const scenario = SCENARIOS[state.scenario];
+  try {
+    return await generateActorResponse(state, text, scenario);
+  } catch (err) {
+    console.warn("training: using authored continuation", scenario.topic, err instanceof Error ? err.name : "unknown");
+    const turn = fallbackTrainingTurn(state, scenario, text);
+    const actions = buildActions(turn.actions, state.turns);
+    const next = decideDialogueTurn({
+      memory: state.dialogue, primary: turn.dialogue, reply: turn.reply, userText: text,
+      actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
+    });
+    return { reply: turn.reply, actions, next };
+  }
+}
+
+async function generateActorResponse(state: TrainingState, text: string, scenario: (typeof SCENARIOS)[number]) {
   const available = trainingProviders();
   if (!available.length) throw new Error("AI_NOT_CONFIGURED");
   const dialogue = state.dialogue ?? INITIAL_DIALOGUE;
@@ -159,48 +180,20 @@ async function generateResponse(state: TrainingState, text: string) {
     })),
     { role: "user", content: text },
   ];
-  let first = await complete(messages, {
-    temperature: 0.75, maxTokens: 1450, json: true, schema: DIALOGUE_SCHEMA,
-    parse: parseDialogueOutput, budgetMs: 8500,
+  const first = await complete(messages, {
+    temperature: 0.75, maxTokens: 1100, json: true, schema: DIALOGUE_SCHEMA,
+    parse: parseDialogueOutput, budgetMs: 5000,
   }, { list: available });
-  let reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
-  // 정상 인물은 사용자가 스스로 찾아야 할 인증/확인/입금 경로를 답으로 알려주지 않는다.
-  // 1차 모델이 어기면 같은 사실관계로 재생성하고, 2차도 위반하면 해당 응답을 내보내지 않는다.
-  const givesAwaySolution = () => unsolicitedSolution(reply) ||
-    first.value.actions.some(a => ["app", "phone", "link", "provide_data"].includes(a.kind));
-  if (scenario.identity === "legitimate" && givesAwaySolution()) {
-    first = await complete([
-      { role: "system", content: instruction + "\n[정상인 답변 필수 수정] 기존 번호, 공식 앱, 고객센터, 결제·입금·통화 경로를 직접 제시하지 마세요. 현재 상대가 한 말에만 자연스럽게 답하고 행동 선택은 상대가 하게 두세요. 행동 제안 없는 JSON을 반환하세요." },
-      ...messages.slice(1),
-    ], {
-      temperature: 0.7, maxTokens: 1450, json: true, schema: DIALOGUE_SCHEMA,
-      parse: parseDialogueOutput, budgetMs: 7500,
-    }, { list: available });
-    reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
-    if (givesAwaySolution()) throw new Error("UNSOLICITED_SOLUTION");
+  const reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
+  if (detectPii(reply).length) throw new Error("UNSAFE_REPLY");
+  if (scenario.identity === "legitimate" && (unsolicitedSolution(reply) ||
+      first.value.actions.some(a => ["app", "phone", "link", "provide_data"].includes(a.kind)))) {
+    throw new Error("UNSOLICITED_SOLUTION");
   }
-  // LLM이 질문에 답하지 않은 채 '확인 부탁드립니다'만 반복하거나,
-  // 대화가 충분히 진행됐는데도 위험한 요구 대신 공식 확인 안내로 끝나면 재생성한다.
-  // 고정 대본을 응답으로 끼워 넣지 않고 세션별 사실과 사용자의 질문을 지키게 한다.
-  let qualityIssue = replyQualityIssue(scenario, state, text, reply, first.value.actions);
-  if (qualityIssue) {
-    first = await complete([
-      {
-        role: "system",
-        content: instruction + "\n[대화 품질 필수 수정] " + qualityIssue +
-          "\n앞선 상황과 마지막 사용자 질문을 그대로 유지하고, 사실·금액을 추가로 지어내지 말고 자연스러운 한국어 한두 문장으로 다시 답하세요.",
-      },
-      ...messages.slice(1),
-    ], {
-      temperature: 0.7, maxTokens: 1450, json: true, schema: DIALOGUE_SCHEMA,
-      parse: parseDialogueOutput, budgetMs: 7200,
-    }, { list: available });
-    reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
-    qualityIssue = replyQualityIssue(scenario, state, text, reply, first.value.actions);
-    if (qualityIssue) {
-      console.warn("training: actionable dialogue could not be generated", scenario.topic);
-      throw new Error("INCOMPLETE_TRAINING_DECISION");
-    }
+  if ((scenario.topic === "card" && first.value.actions.some(action => action.kind !== "phone" || action.origin !== "sender")) ||
+      (scenario.topic === "team_mission" && first.value.actions.some(action => action.kind !== "transfer")) ||
+      replyQualityIssue(scenario, state, text, reply, first.value.actions)) {
+    throw new Error("INCOMPLETE_TRAINING_DECISION");
   }
   // 일상 답변에는 2차 LLM 호출을 하지 않아 비용/대기 시간을 줄인다.
   // 행동 버튼이 있거나 실제 대화 종료를 제안할 때만 두 번째 검수를 요청한다.
@@ -233,7 +226,7 @@ async function generateResponse(state: TrainingState, text: string) {
       }) },
     ], {
       temperature: 0, maxTokens: 900, json: true, schema: DIALOGUE_SCHEMA,
-      parse: parseDialogueOutput, budgetMs: 4500,
+      parse: parseDialogueOutput, budgetMs: 2500,
     }, { list: available });
     auditSignal = audit.value.dialogue;
     auditActions = audit.value.actions;
@@ -244,6 +237,9 @@ async function generateResponse(state: TrainingState, text: string) {
   // 검수 단독 제안은 절대로 버튼이 되지 않는다. 발화의 명시적 표현과 모델 간
   // 행동 종류·출처가 맞는 것만 통과한다. 검수 장애 시에도 표면적 요청 근거는 필수다.
   const grounded = groundedProposals(reply, first.value.actions, auditActions, scenario.identity);
+  if (riskDecisionDue(state, scenario, text) && !meaningfulRiskRequest(reply, grounded, scenario.topic)) {
+    throw new Error("INCOMPLETE_TRAINING_DECISION");
+  }
   if (grounded.length !== first.value.actions.length) {
     console.info("training: dropped unsupported model-proposed actions");
   }
@@ -286,7 +282,6 @@ export async function POST(req: NextRequest) {
   }
   try {
     getKey();
-    if (!trainingProviders().length) throw new Error("AI_NOT_CONFIGURED");
     if (body.action === "start") {
       if (body.topic !== undefined && !isTrainingTopicId(body.topic)) {
         return apiError("지원하지 않는 훈련 상황입니다.", 400);
@@ -334,13 +329,13 @@ export async function POST(req: NextRequest) {
       // 독립 확인으로 이미 모순이 드러났거나, 구체적 요구에 명확히 거절하며
       // 연락을 끝내려는 경우 AI가 새 핑계로 설득을 이어가지 못하도록 서버에서 종결한다.
       if (shouldResolveOnLearnerReply(state, text)) {
+        const stopped = recordChoice(state, scenario, "stop").state;
         const ended: TrainingState = {
-          ...state,
+          ...stopped,
           turns: state.turns + 1,
-          closed: true,
           endReason: "resolved",
           messages: [...state.messages, { actor: "me", text },
-            { actor: "system", text: "이번 대화에서 필요한 대응이 마무리됐어요. 지금까지의 선택을 돌아보세요." }],
+            { actor: "system", text: "상대에게 더 응하지 않기로 했어요. 이번 대화는 여기서 마무리합니다." }],
         };
         return apiOk({
           token: seal(ended), messages: ended.messages, turns: ended.turns,
@@ -383,7 +378,7 @@ export async function POST(req: NextRequest) {
       return apiOk({
         token: seal(result.state), topic: scenario.topic, messages: result.state.messages, turns: result.state.turns,
         maxTurns: MAX_TURNS, verified: result.state.verification !== "none",
-        closed: result.state.closed, endReason: result.state.endReason ?? null,
+        closed: result.state.closed, endReason: result.state.endReason ?? null, notice: result.notice,
       });
     }
     if (body.action === "finish") {
@@ -394,7 +389,7 @@ export async function POST(req: NextRequest) {
     return apiError("알 수 없는 요청입니다.", 400);
   } catch (err) {
     if (err instanceof Error && (err.message === "GEMINI_KEY_MISSING" || err.message === "AI_NOT_CONFIGURED")) {
-      return apiError("실전 훈련의 AI 연결이 설정되지 않았습니다. 서버에 Gemini 또는 Groq 키를 등록해 주세요.", 503);
+      return apiError("훈련 연결을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.", 503);
     }
     if (err instanceof Error && err.message === "BAD_TOKEN") {
       return apiError("훈련 정보가 만료되거나 유효하지 않습니다. 새 훈련을 시작해 주세요.", 409);

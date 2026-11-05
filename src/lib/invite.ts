@@ -153,9 +153,11 @@ export async function setShareResults(share: boolean): Promise<boolean> {
   try {
     await ensureAnon();
     const { data: me } = await sb().auth.getUser();
-    const { error } = await sb().from("family_members").update({ share_results: share }).eq("family_id", fid).eq("user_id", me.user!.id);
+    const { data, error } = await sb().from("family_members")
+      .update({ share_results: share }).eq("family_id", fid).eq("user_id", me.user!.id)
+      .select("share_results").maybeSingle();
     if (error) throw error;
-    return true;
+    return data?.share_results === share;
   } catch (e) {
     console.warn("공유 설정 실패", e);
     return false;
