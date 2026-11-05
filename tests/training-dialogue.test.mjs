@@ -29,9 +29,9 @@ const proposed = (kind, target = "") => ({
   kind, origin: "sender", target, task: "알려주기", previewTitle: "", previewDescription: "",
 });
 
-test("all nine normal/fraud pairs reuse grounded, distinct case guides", () => {
-  assert.equal(SCENARIOS.length, 18);
-  assert.deepEqual(Object.keys(CASE_GUIDES).sort(), ["0", "1", "2", "3", "4", "5", "6", "7", "8"]);
+test("all normal/fraud pairs reuse grounded, distinct case guides", () => {
+  assert.equal(SCENARIOS.length, 22);
+  assert.deepEqual(Object.keys(CASE_GUIDES), Array.from({ length: SCENARIOS.length / 2 }, (_, index) => String(index)));
   for (const s of SCENARIOS) {
     assert.ok(caseGuide(s).length > 80);
     assert.ok(CASE_GUIDES[s.id.split("-")[0]].source.every(u => u.startsWith("https://")));
@@ -43,10 +43,10 @@ test("all nine normal/fraud pairs reuse grounded, distinct case guides", () => {
 
 
 test("each case offers indistinguishable neutral opening conditions but distinct later actor objectives", () => {
-  assert.equal(SCENARIOS.length, 18);
+  assert.equal(SCENARIOS.length, 22);
   for (let i = 0; i < SCENARIOS.length; i += 2) {
     const genuine = SCENARIOS[i], impersonation = SCENARIOS[i + 1];
-    assert.equal(genuine.opening, impersonation.opening); // archival template; no longer sent by start API
+    assert.equal(genuine.opening, impersonation.opening);
     for (const style of [0, 1, 5, 7]) {
       assert.equal(openingBrief(genuine, style), openingBrief(impersonation, style));
       assert.ok(!openingBrief(genuine, style).includes("legitimate"));
@@ -212,14 +212,14 @@ test("explicit question punctuation blocks completion even if both models misrea
 });
 
 
-test("first message is genuinely AI-generated, not returned from a static scenario opening", async () => {
+test("neutral openings can use a reviewed fallback when the provider is unavailable", async () => {
   const { readFileSync } = await import("node:fs");
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   assert.match(route, /const opening = await generateOpening\(scenario, caseVariant\)/);
   assert.match(route, /text: opening/);
   assert.doesNotMatch(route, /text: scenario\.opening/);
   assert.match(route, /OPENING_SCHEMA/);
-  assert.doesNotMatch(route, /return scenario\.opening/);
+  assert.match(route, /return scenario\.opening/);
 });
 
 test("neutral opening contract rejects actionable paths and fabricated identifiers", () => {
@@ -318,7 +318,7 @@ test("real training route handles explicit training stop and rejects invented ge
 });
 
 
-test("v3 case variants are bounded, consistent across the six legitimate/fraud pairs and not identifiers", async () => {
+test("v3 case variants are bounded, consistent across legitimate/fraud pairs and not identifiers", async () => {
   const { caseDetail, CASE_VARIANT_COUNT } = await import("../src/lib/trainingCaseFacts.ts");
   assert.equal(CASE_VARIANT_COUNT, 3);
   for (let index = 0; index < SCENARIOS.length; index += 2) {

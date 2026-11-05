@@ -12,7 +12,7 @@ import type { Kind, Proposed } from "./trainingActions.ts";
 function hasExplicitCue(text: string, kind: Kind): boolean {
   const t = text.replace(/\s+/g, " ");
   const money = /송금|이체|입금|돈|금액|수리비|비용|결제|대금|납부/;
-  const request = /보내|부탁|해\s*주|해줄|해\s*주실|주실|줄\s*수|도와주|송금|이체|입금|옮겨|결제|지불|납부/;
+  const request = /보내|부탁|해\s*주|해줄|주실|줄\s*수|도와주|옮겨|(?:송금|이체|입금|결제|지불|납부)(?:해|하세|하셔|하실)/;
   if (kind === "transfer") {
     if (/(?:돈|수리비|금액).{0,15}(?:보내지|줄\s*필요\s*없)|(?:송금|이체|입금|결제)(?:하지|할\s*필요\s*없)/.test(t) &&
         !/(?:보내\s*주세요|이체\s*해주세요|송금\s*해주세요)/.test(t)) return false;

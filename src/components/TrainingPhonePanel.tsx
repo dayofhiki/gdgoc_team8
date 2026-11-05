@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { BottomSheet } from "./ui";
 import type { PhoneMethod } from "@/lib/realTraining";
-import { isPersonalTopic, type TrainingTopicId } from "@/lib/trainingCatalog";
+import { appSupportsTopic, isPersonalTopic, TRAINING_APPS, type TrainingApp, type TrainingTopicId } from "@/lib/trainingCatalog";
 import type { Action } from "@/lib/trainingActions";
 
 type Screen = "home" | "contacts" | "phone" | "apps" | "transfer" | "transfer_confirm" | "outcome";
@@ -13,6 +13,7 @@ export type PhoneTransferRequest = { sourceIndex: number; action: Action };
 
 type Props = {
   topic: Topic;
+  initialScreen: "home" | "phone";
   onClose: () => void;
   onAction: (choice: ActionChoice, method: PhoneMethod) => Promise<string | undefined>;
   transferRequests: PhoneTransferRequest[];
@@ -44,8 +45,8 @@ export function TrainingPhoneIcon() {
  * 모의 휴대전화. 첫 화면에서 정답이나 신원 확인 동작을 직접 노출하지 않는다.
  * 기능을 연 뒤 실제 연락처/번호/앱을 고른 행동만 서버에 기록한다.
  */
-export default function TrainingPhonePanel({ topic, onClose, onAction, transferRequests, onTransfer, senderPhoneRequests, onSenderCall, onStop, busy }: Props) {
-  const [screen, setScreen] = useState<Screen>("home");
+export default function TrainingPhonePanel({ topic, initialScreen, onClose, onAction, transferRequests, onTransfer, senderPhoneRequests, onSenderCall, onStop, busy }: Props) {
+  const [screen, setScreen] = useState<Screen>(initialScreen);
   const [notice, setNotice] = useState("");
   const [chosenTransfer, setChosenTransfer] = useState<PhoneTransferRequest | null>(null);
   const [error, setError] = useState("");
@@ -98,8 +99,8 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
     }
   }
 
-  function openInstalledApp(app: "bank_app" | "delivery_app") {
-    if ((app === "bank_app" && topic !== "bank" && topic !== "loan") || (app === "delivery_app" && topic !== "delivery")) {
+  function openInstalledApp(app: TrainingApp) {
+    if (!appSupportsTopic(app, topic)) {
       setNotice("이 앱에서는 현재 메시지에 해당하는 내용을 찾을 수 없어요.");
       setScreen("outcome");
       return;
@@ -158,8 +159,8 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
             {option("recent", "최근 문자 발신 번호", "지금 문자를 보낸 쪽으로 전화", () => void act("verify_sender", "recent_sender"))}
             {senderPhoneRequests.map(request => option(
               "sender:" + request.sourceIndex + ":" + request.action.id,
-              "문자에서 안내한 연락처",
-              request.action.target || request.action.task || "상대가 문자로 제시한 연락 방법",
+              request.action.target || "문자에서 안내한 연락처",
+              "문자에 첨부된 연락처",
               () => void senderPhoneCall(request),
             ))}
             {!isPersonalTopic(topic)
@@ -169,8 +170,7 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
         )}
         {screen === "apps" && (
           <div className="rt-device-options">
-            {option("bank", "은행 앱", "설치되어 있던 금융 앱", () => openInstalledApp("bank_app"))}
-            {option("delivery", "택배 앱", "설치되어 있던 배송 앱", () => openInstalledApp("delivery_app"))}
+            {TRAINING_APPS.map(app => option(app.id, app.label, "설치된 앱에서 조회하기", () => openInstalledApp(app.id)))}
           </div>
         )}
         {screen === "transfer" && (
@@ -216,6 +216,7 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
             <div className="rt-device-outcome-actions">
               <button type="button" className="btn btn--primary" onClick={onClose}>문자로 돌아가기</button>
               <button type="button" className="btn btn--gray" onClick={() => setScreen("home")}>다른 기능 보기</button>
+              <button type="button" className="rt-device-stop" disabled={locked} onClick={onStop}>이 문자 대화 끝내기</button>
             </div>
           </div>
         )}

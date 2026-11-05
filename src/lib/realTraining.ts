@@ -1,7 +1,8 @@
-import { actionChoice } from "./trainingActions.ts";
+import { actionChoice, buildActions } from "./trainingActions.ts";
 import { hasConcreteRequest, shouldResolveAfterIndependentCheck } from "./trainingResolution.ts";
 import { buildBehaviorFeedback } from "./trainingFeedback.ts";
-import { isPersonalTopic, type TrainingTopicId } from "./trainingCatalog.ts";
+import { appSupportsTopic, isPersonalTopic, TRAINING_APPS, type TrainingApp, type TrainingTopicId } from "./trainingCatalog.ts";
+import { isIndependentCheck, verificationOutcome } from "./trainingVerification.ts";
 import { EXTENDED_PAIRS } from "./trainingScenarioExtras.ts";
 import type { Action } from "./trainingActions";
 import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
@@ -14,14 +15,14 @@ import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
  */
 export type Identity = "legitimate" | "fraud";
 export type Guess = "legitimate" | "fraud" | "uncertain";
-export type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
-export type PhoneMethod = "saved_family" | "recent_sender" | "official_directory" | "bank_app" | "delivery_app";
-export const PHONE_METHODS: PhoneMethod[] = ["saved_family", "recent_sender", "official_directory", "bank_app", "delivery_app"];
+export type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link" | "install";
+export type PhoneMethod = "saved_family" | "recent_sender" | "official_directory" | TrainingApp;
+export const PHONE_METHODS: PhoneMethod[] = ["saved_family", "recent_sender", "official_directory", ...TRAINING_APPS.map(app => app.id)];
 export type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
 export type Actor = "them" | "me" | "system";
 export type LinkPreview = { url: string; domain: string; title: string; description: string };
 export type Message = { actor: Actor; text: string; offer?: OfferKind; offers?: OfferKind[]; linkPreview?: LinkPreview; actions?: Action[] };
-export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string; method?: PhoneMethod };
+export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string; method?: PhoneMethod; evidence?: "confirmed" | "failed" | "inconclusive"; notice?: string };
 export type Scenario = {
   id: string;
   topic: TrainingTopicId;
@@ -227,6 +228,8 @@ export function simulatedLink(scenario: Scenario): LinkPreview {
     traffic: { domain: "m.traffic-notice.example", title: "교통 고지 조회", description: "교통 관련 안내 확인" },
     loan: { domain: "m.loan-notice.example", title: "대출 상담 안내", description: "금융 상품 안내 확인" },
     job: { domain: "m.job-notice.example", title: "채용 지원 안내", description: "단기 업무 관련 안내" },
+    card: { domain: "m.card-notice.example", title: "카드 배송 안내", description: "배송 내용 확인" },
+    team_mission: { domain: "m.review-notice.example", title: "후기 정산 안내", description: "정산 내용 확인" },
     health: { domain: "m.health-notice.example", title: "건강검진 안내", description: "검진 관련 안내 확인" },
   };
   const preview = variants[scenario.topic];
@@ -246,21 +249,18 @@ export function recordChoice(
   if (method) {
     if (sourceIndex !== undefined || actionId !== undefined ||
         state.events.some(e => e.method === method)) throw new Error("이미 선택한 행동입니다.");
-    const delivery = scenario.topic === "delivery";
-    const bank = scenario.topic === "bank" || scenario.topic === "loan";
     const institutional = !isPersonalTopic(scenario.topic);
     const valid = (choice === "family_contact" && method === "saved_family") ||
       (choice === "verify_sender" && method === "recent_sender") ||
       (choice === "verify" && (
         (method === "official_directory" && institutional) ||
-        (method === "bank_app" && bank) ||
-        (method === "delivery_app" && delivery)
+        appSupportsTopic(method as TrainingApp, scenario.topic)
       ));
     if (!valid) throw new Error("이 상황에서 선택할 수 없는 휴대전화 기능입니다.");
   } else if (choice === "verify" && sourceIndex === undefined && actionId === undefined) {
     throw new Error("휴대전화에서 확인에 사용할 경로를 선택해 주세요.");
   }
-  const sourceNeeded = (["verify_sender", "comply", "share", "open_link"].includes(choice) &&
+  const sourceNeeded = (["verify_sender", "comply", "share", "open_link", "install"].includes(choice) &&
     !(choice === "verify_sender" && method === "recent_sender")) ||
     (choice === "verify" && !method);
   if (sourceNeeded) {
@@ -273,7 +273,8 @@ export function recordChoice(
     if (message.actions) {
       const selected = message.actions.find(a => a.id === actionId);
       const expected = selected ? actionChoice(selected) : undefined;
-      const viaLink = selected?.kind === "link" && choice === "share" &&
+      const viaLink = selected?.kind === "link" &&
+        (selected.linkPreview?.interaction === "install" ? choice === "install" : choice === "share") &&
         state.events.some(e => e.choice === "open_link" && e.sourceIndex === sourceIndex && e.actionId === actionId);
       if (message.actor !== "them" || !selected || (expected !== choice && !viaLink)) {
         throw new Error("이 메시지에서는 해당 행동을 할 수 없습니다.");
@@ -300,26 +301,37 @@ export function recordChoice(
     }
   }
 
+  const check = verificationOutcome(scenario, choice, method);
   const event: Event = {
     choice, turn: state.turns, verifiedBefore: state.verification === "confirmed",
     ...(sourceNeeded ? { sourceIndex } : {}),
     ...(actionId ? { actionId } : {}),
     ...(method ? { method } : {}),
+    ...(check ?? {}),
   };
-  const familyScenario = isPersonalTopic(scenario.topic);
-  const verification = choice === "verify" || (choice === "family_contact" && familyScenario)
-    ? scenario.identity === "legitimate" ? "confirmed" : "failed"
-    : state.verification;
-  const resolved = shouldResolveAfterIndependentCheck(state, scenario, choice, verification);
-  const notice = choice === "verify" ? scenario.verification
-    : choice === "family_contact" ? (familyScenario ? scenario.verification :
-        "저장된 번호로 가족에게 연락해 상황을 공유했습니다. 실제 기관의 신원은 아직 별도로 확인하지 않았습니다.")
-    : choice === "verify_sender" ? "안내받은 번호로 전화하니 상대는 자신이 맞다고 말했습니다."
+  const verification = check && check.evidence !== "inconclusive" ? check.evidence : state.verification;
+  const resolved = check?.evidence === "failed" && shouldResolveAfterIndependentCheck(state, scenario, choice, verification);
+  // 카드 사례에서 문자에 첨부한 번호를 골랐을 때만 후속 요청을 재현한다.
+  const cardCallback = scenario.topic === "card" && scenario.identity === "fraud" && choice === "verify_sender" &&
+    sourceNeeded && state.messages[sourceIndex!]?.actions?.some(action => action.id === actionId && action.kind === "phone") &&
+    !state.events.some(e => e.choice === "verify_sender" && e.actionId);
+  const notice = check?.notice ?? (choice === "family_contact"
+    ? "저장된 번호로 가족에게 상황을 말했어요. 가족은 지금 바로 결정하지 말고 따로 확인해 보자고 했어요."
+    : choice === "verify_sender" ? cardCallback
+      ? "문자에서 받은 번호로 전화했어요. 상담원은 반송 확인에 원격 지원이 필요하다며 새 문자를 보냈어요."
+      : "선택한 번호로 전화했어요. 받은 사람은 자신이 담당자라고 답했어요."
     : choice === "verify_chat" ? "대화 상대는 자신이 맞다고 주장했습니다."
     : choice === "open_link" ? "메시지의 주소를 눌렀습니다. 가상의 페이지가 열렸습니다."
     : choice === "comply" ? "요청한 금액을 보낸 것으로 기록했습니다. 실제 돈은 이동하지 않았습니다."
     : choice === "share" ? "요청한 정보를 전송한 것으로 기록했습니다. 실제 정보는 전송하지 않았습니다."
-    : "이 대화를 종료했습니다.";
+    : choice === "install" ? "원격 지원 앱 설치를 선택했어요. 실제 앱은 설치되지 않았어요."
+    : "이 대화를 종료했습니다.");
+  const terminal = ["comply", "share", "install", "stop"].includes(choice);
+  const callback = cardCallback ? buildActions([{
+    kind: "link", origin: "sender", target: "반송 확인 지원", task: "원격 지원 안내 보기",
+    previewTitle: "반송 확인 지원", previewDescription: "원격 지원 앱 설치",
+  }], state.turns + MAX_TURNS) : [];
+  if (callback[0]?.linkPreview) callback[0].linkPreview.interaction = "install";
 
   return {
     state: {
@@ -327,10 +339,14 @@ export function recordChoice(
       verification,
       // 초반의 확인은 진행을 막지 않는다. 그러나 이미 위험 요청이 나왔고
       // 독립 확인으로 사칭이 판명됐다면 남은 대화의 학습 목표가 해소됐다.
-      closed: resolved || ["comply", "share", "stop"].includes(choice),
-      endReason: resolved ? "resolved" : ["comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
+      closed: resolved || terminal,
+      endReason: resolved ? "resolved" : terminal ? "action" : state.endReason,
       events: [...state.events, event],
       messages: [...state.messages, { actor: "system", text: notice },
+        ...(cardCallback ? [{
+          actor: "them" as const, text: "반송 접수 담당입니다. 카드 신청 여부를 확인하려면 아래 링크를 열어서 원격 지원 앱을 설치해 주세요.",
+          actions: callback,
+        }] : []),
         ...(resolved ? [{ actor: "system" as const, text: "확인한 내용과 상대의 요청이 일치하지 않아 문자 대화를 마무리했어요. 지금까지의 대응을 살펴보세요." }] : [])],
     },
     notice,
@@ -342,18 +358,18 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
   // 독립 확인을 일찍 선택한 것과 충분한 대화에서 요청에 대응한 경험을 구분한다.
   // 실제 행동은 언제나 기록하되, 요구가 등장하지 않았다면 요구 대응 역량을 단정하지 않는다.
   const coverage = requestReached ? "request_reached" : state.turns < 2 ? "early" : "conversation_only";
-  const checked = state.events.some((event) => event.choice === "verify" ||
-    (event.choice === "family_contact" && isPersonalTopic(scenario.topic)));
+  const checked = state.events.some(event => isIndependentCheck(event, scenario));
   const consultedFamily = state.events.some((event) => event.choice === "family_contact");
   const complied = state.events.some((event) => event.choice === "comply");
   const shared = state.events.some((event) => event.choice === "share");
+  const installed = state.events.some(event => event.choice === "install");
   const linkOpened = state.events.some((event) => event.choice === "open_link");
   const followedSenderNumber = state.events.some((event) => event.choice === "verify_sender");
   const stopped = state.events.some((event) => event.choice === "stop");
   const riskyComply = state.events.some((event) =>
     event.choice === "comply" && (!event.verifiedBefore || scenario.identity === "fraud"),
   );
-  const risk = shared || riskyComply;
+  const risk = shared || installed || riskyComply;
   const guessCorrect = guess === scenario.identity;
   const judgment = guess === "uncertain" ? "판단 보류" : guessCorrect ? "실제 정체와 일치" : "실제 정체와 다름";
   const safety = risk ? "신원 확인 전 위험한 요청에 응했어요" :
@@ -404,6 +420,8 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
 
   return {
     coverage,
+    topic: scenario.topic,
+    installed,
     behavior: buildBehaviorFeedback(state, scenario),
     highlights: {
       status,

@@ -46,6 +46,7 @@ export function clearlyDisengaged(text: string): boolean {
   if (/[?？]$/.test(s)) return false;
   return /(?:그만|다시|더이상|더는)(?:문자|연락|말|대화)(?:하지마|하지마세요|하지말|그만|끊|해|하세요)/.test(s) ||
     /(?:연락|문자|대화)(?:하지마|그만해|그만하세요|끊을게|끝낼게|끝냅니다|안할게)/.test(s) ||
+    /(?:링크|번호|전화|설치|인증번호|개인정보|잔액|입금|이체|송금)(?:은|는|을|를|로)?(?:절대)?(?:누르지않|열지않|안누르|안열|전화하지않|안걸|안하|하지않|보내지않|알려주지않|안알려)/.test(s) ||
     /(?:차단할게|차단합니다|신고할게|신고합니다|신고할거야|신고하겠습니다)/.test(s) ||
     /(?:돈|수리비|송금|입금|이체)(?:은|는|을|를)?(?:절대)?(?:안보낼|못보낼|안보내|못보내|안할|안해|거절|못줘|안줄|안줘)/.test(s);
 }
@@ -59,7 +60,11 @@ export function shouldResolveAfterIndependentCheck(
 ): boolean {
   const independent = choice === "verify" ||
     (choice === "family_contact" && isPersonalTopic(scenario.topic));
-  return independent && verification === "failed" && hasConcreteRequest(state.messages);
+  const specificClaim = state.messages.some(message => message.actor === "them" && (
+    (scenario.topic === "card" && /카드.{0,12}배송|카드.{0,12}수령/.test(message.text)) ||
+    (scenario.topic === "bank" && /(?:결제|승인)/.test(message.text) && /\d+\s*만\s*원/.test(message.text))
+  ));
+  return independent && verification === "failed" && (hasConcreteRequest(state.messages) || specificClaim);
 }
 
 /**
@@ -69,10 +74,10 @@ export function shouldResolveAfterIndependentCheck(
 export function shouldResolveOnLearnerReply(state: TrainingState, text: string): boolean {
   const asked = hasConcreteRequest(state.messages);
   const dismissed = clearlyDisengaged(text);
-  if (asked && dismissed) return true;
+  if (dismissed) return true;
   if (state.verification !== "failed") return false;
   if (asked) return true; // 확인 결과가 이미 있는데 추가 변명을 들을 필요가 없다.
-  return dismissed || /(?:사기|피싱|사칭|가짜|거짓말|구라|너아니|니가아니)/.test(text.replace(/\s+/g, ""));
+  return /(?:사기|피싱|사칭|가짜|거짓말|구라|너아니|니가아니)/.test(text.replace(/\s+/g, ""));
 }
 
 /** 조기 확인 이후 배우가 뒤늦게 구체적 요청을 제시한 경우에도 종료. */
