@@ -339,3 +339,62 @@ test("feedback and truth screens put memorable keywords first, preserving option
   assert.match(ui, /result\.coverage === "early"/);
   assert.match(css, /@media \(max-width: 365px\)/);
 });
+
+
+test("mock phone workspace replaces duplicate messages tile with transfer, requiring a sealed actor request", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("../src/components/TrainingPhonePanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /tile\("transfer", "송금"/);
+  assert.doesNotMatch(panel, /tile\("messages"/);
+  assert.match(panel, /transferRequests\.length/);
+  assert.match(panel, /선택할 송금 요청이 없어요/);
+  assert.match(panel, /screen === "transfer_confirm"/);
+  assert.match(panel, /onTransfer\(chosenTransfer\)/);
+  assert.match(panel, /실제 돈은 이동하지 않습니다/);
+  assert.match(panel, /senderPhoneRequests\.map/);
+  assert.match(ui, /transferRequests=\{transferRequests\}/);
+  assert.match(ui, /onTransfer=\{\(\{ sourceIndex, action \}\) => perform\("comply", sourceIndex, action\.id, undefined, true\)\}/);
+  assert.match(ui, /onSenderCall=\{\(\{ sourceIndex, action \}\) => perform\("verify_sender", sourceIndex, action\.id, undefined, true\)\}/);
+  assert.match(ui, /!\["transfer", "phone", "app"\]\.includes\(action\.kind\)/);
+  assert.match(ui, /action\.kind === "link"/);
+  assert.match(ui, /rt-message-request/);
+  assert.match(ui, /연락처·전화·앱·송금을 사용할 수 있어요/);
+});
+
+test("transfers from mock phone are permitted only for a genuine bound request and record a risky action", async () => {
+  const { buildActions } = await import("../src/lib/trainingActions.ts");
+  const scenario = SCENARIOS[1];
+  const s = state(1);
+  const action = buildActions([{
+    kind: "transfer", origin: "sender", target: "자녀", task: "수리비 보내기",
+    previewTitle: "", previewDescription: "",
+  }], 0)[0];
+  s.messages.push({ actor: "them", text: "수리비 보내줄래?", actions: [action] });
+  const source = s.messages.length - 1;
+  assert.throws(() => recordChoice(s, scenario, "comply"));
+  assert.throws(() => recordChoice(s, scenario, "comply", source, "forged"));
+  assert.throws(() => recordChoice(s, scenario, "comply", 0, action.id));
+  const paid = recordChoice(s, scenario, "comply", source, action.id).state;
+  assert.equal(paid.closed, true);
+  assert.equal(paid.events.at(-1).sourceIndex, source);
+  assert.equal(paid.events.at(-1).actionId, action.id);
+  assert.equal(evaluate(paid, scenario, "uncertain").dangerousAction, true);
+});
+
+test("sender-provided phone numbers remain actionable in the phone panel without being mistaken for verification", async () => {
+  const { buildActions } = await import("../src/lib/trainingActions.ts");
+  const scenario = SCENARIOS[5];
+  const s = state(5);
+  const action = buildActions([{
+    kind: "phone", origin: "sender", target: "안내 번호", task: "직접 전화",
+    previewTitle: "", previewDescription: "",
+  }], 0)[0];
+  s.messages.push({ actor: "them", text: "제가 알려 드린 번호로 전화해 주세요.", actions: [action] });
+  const source = s.messages.length - 1;
+  assert.throws(() => recordChoice(s, scenario, "verify_sender", source, "wrong"));
+  const called = recordChoice(s, scenario, "verify_sender", source, action.id).state;
+  assert.equal(called.closed, false);
+  assert.equal(called.verification, "none");
+  assert.equal(evaluate(called, scenario, "uncertain").checked, false);
+});
