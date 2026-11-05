@@ -273,7 +273,7 @@ const BRANCHES: readonly (readonly CaseBranch[])[] = [
     {
       "opening": "안녕하세요. 대환대출 조건에 관한 안내입니다.",
       "context": "기존 채무를 낮은 금리로 바꾸는 상담을 내세웁니다.",
-      "request": "금리 변경 접수 전에 기존 대출금을 먼저 이 계좌로 상환해 주세요.",
+      "request": "금리 변경 접수 전에 기존 대출금을 먼저 이 계좌로 송금해 상환해 주세요.",
       "kind": "transfer",
       "target": "기존 대출 선상환",
       "task": "대출 상환 송금"
