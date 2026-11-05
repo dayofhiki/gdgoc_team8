@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "node:crypto";
-import { evaluate, MAX_TURNS, normalizeKoreanReply, recordChoice, SCENARIOS } from "@/lib/realTraining";
+import { evaluate, MAX_TURNS, normalizeKoreanReply, PHONE_METHODS, recordChoice, SCENARIOS } from "@/lib/realTraining";
 import { ACTION_RULES, buildActions } from "@/lib/trainingActions";
 import type { Proposed } from "@/lib/trainingActions";
 import { CASE_VARIANT_COUNT, caseDetail } from "@/lib/trainingCaseFacts";
@@ -9,7 +9,7 @@ import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, OPENING_SCHEMA, act
 import type { DialogueSignal } from "@/lib/trainingDialogue";
 import { complete, providers, type Msg } from "../../../../supabase/functions/_shared/llm";
 import { detectPii } from "../../../../supabase/functions/_shared/pii";
-import type { Choice, Guess, TrainingState } from "@/lib/realTraining";
+import type { Choice, Guess, PhoneMethod, TrainingState } from "@/lib/realTraining";
 import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/lib/trainingTurnContext";
 
 export const runtime = "nodejs";
@@ -215,7 +215,12 @@ async function generateResponse(state: TrainingState, text: string) {
   if (grounded.length !== first.value.actions.length) {
     console.info("training: dropped unsupported model-proposed actions");
   }
-  const actions = buildActions(grounded, state.turns);
+  // 독립 검증 수단은 발신자 말풍선 아래에 정답 버튼처럼 달지 않는다.
+  // 사용자가 별도의 모의 휴대전화 패널에서 직접 찾게 한다.
+  // 단, 상대가 보낸 링크·번호 및 송금·정보 요청은 그 메시지의 일부로 유지한다.
+  const inlineActions = grounded.filter(a => a.kind !== "app" &&
+    !(a.kind === "phone" && a.origin === "preexisting"));
+  const actions = buildActions(inlineActions, state.turns);
   const decision = decideDialogueTurn({
     memory: dialogue, primary: first.value.dialogue, audit: auditSignal,
     reply, userText: text, actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
@@ -303,7 +308,11 @@ export async function POST(req: NextRequest) {
       if (!choices.includes(body.choice as Choice)) return apiError("알 수 없는 행동입니다.", 400);
       const sourceIndex = typeof body.sourceIndex === "number" && Number.isInteger(body.sourceIndex) ? body.sourceIndex : undefined;
       const actionId = typeof body.actionId === "string" && body.actionId.length <= 30 ? body.actionId : undefined;
-      const result = recordChoice(state, scenario, body.choice as Choice, sourceIndex, actionId);
+      if (body.method !== undefined && !PHONE_METHODS.includes(body.method as PhoneMethod)) {
+        return apiError("지원하지 않는 휴대전화 기능입니다.", 400);
+      }
+      const method = body.method as PhoneMethod | undefined;
+      const result = recordChoice(state, scenario, body.choice as Choice, sourceIndex, actionId, method);
       return apiOk({
         token: seal(result.state), messages: result.state.messages, turns: result.state.turns,
         maxTurns: MAX_TURNS, verified: result.state.verification !== "none",
@@ -323,7 +332,7 @@ export async function POST(req: NextRequest) {
     if (err instanceof Error && err.message === "BAD_TOKEN") {
       return apiError("훈련 정보가 만료되거나 유효하지 않습니다. 새 훈련을 시작해 주세요.", 409);
     }
-    if (err instanceof Error && ["이미 종료된 훈련입니다.", "행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.", "해당 메시지에서 행동을 선택해 주세요.", "이 메시지에서는 해당 행동을 할 수 없습니다.", "이미 선택한 행동입니다."].includes(err.message)) {
+    if (err instanceof Error && ["이미 종료된 훈련입니다.", "행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.", "해당 메시지에서 행동을 선택해 주세요.", "이 메시지에서는 해당 행동을 할 수 없습니다.", "이미 선택한 행동입니다.", "이 상황에서 선택할 수 없는 휴대전화 기능입니다.", "휴대전화에서 확인에 사용할 경로를 선택해 주세요."].includes(err.message)) {
       return apiError(err.message, 409);
     }
     console.error("real-training: request failed", err instanceof Error ? err.name : "unknown");

@@ -1041,3 +1041,58 @@ p, h1, h2, h3 { margin: 0; }
   font-weight: 600;
 }
 .fb-note { font-size: 13px; line-height: 20px; color: var(--g600); }
+
+
+/* 실전 문자 훈련의 모의 휴대전화: 위험 신호가 아닌, 사용자 선택을 돕는 단발성 안내 */
+.rt-header-more { transition: background-color .2s, box-shadow .2s; }
+.rt-header-more:disabled { opacity: .42; cursor: default; }
+.rt-header-more--hint { animation: rt-phone-hint 1.9s ease-in-out 1; }
+@keyframes rt-phone-hint {
+  0%, 100% { background: transparent; box-shadow: 0 0 0 0 rgba(49,130,246,0); }
+  32%, 68% { background: #edf5ff; box-shadow: 0 0 0 3px rgba(49,130,246,.14); }
+}
+.rt-device { display: flex; flex-direction: column; gap: 16px; max-height: calc(100dvh - 124px); overflow-y: auto; }
+.rt-device-heading { display: flex; align-items: center; gap: 11px; }
+.rt-device-heading > div { flex: 1; min-width: 0; }
+.rt-device-heading h2 { font-size: 21px; line-height: 1.4; letter-spacing: -.4px; font-weight: 750; }
+.rt-device-eyebrow { color: #8090a3; font-size: 12px; }
+.rt-device-head-icon, .rt-device-back { display: grid; place-items: center; flex: 0 0 39px; width: 39px; height: 39px; border-radius: 11px; background: #f0f4f9; color: #54708d; }
+.rt-device-back { font-size: 29px; line-height: 1; }
+.rt-device-close { flex: 0 0 40px; width: 40px; height: 40px; font-size: 25px; color: #6f7c8c; border-radius: 12px; }
+.rt-device-description { color: #758495; font-size: 14px; line-height: 1.5; }
+.rt-device-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.rt-device-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  min-width: 0; min-height: 112px; border-radius: 15px;
+  padding: 15px; border: 1px solid #e6ecf3; background: #f9fbfe;
+  color: #2f3c4b; text-align: left;
+}
+.rt-device-tile-icon { display: flex; color: #587996; margin-bottom: 6px; }
+.rt-device-tile strong { font-size: 16px; }
+.rt-device-tile small { font-size: 12px; color: #7f8c9c; line-height: 1.4; }
+.rt-device-divider { height: 1px; background: #edf1f5; }
+.rt-device-stop { align-self: flex-start; color: #65788e; font-size: 14px; padding: 8px 0; text-decoration: underline; text-underline-offset: 4px; }
+.rt-device-options { display: flex; flex-direction: column; gap: 2px; }
+.rt-device-option {
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 76px; gap: 10px; padding: 14px 4px;
+  border-bottom: 1px solid #edf1f5; text-align: left;
+}
+.rt-device-option > span:first-child { display: flex; flex-direction: column; gap: 5px; }
+.rt-device-option strong { font-size: 16px; color: #314154; }
+.rt-device-option small { font-size: 13px; color: #7c8a9b; line-height: 1.45; }
+.rt-device-option > span:last-child { color: #a0abb9; font-size: 23px; }
+.rt-device-tile:disabled, .rt-device-option:disabled, .rt-device-stop:disabled { opacity: .6; }
+.rt-device-tile:focus-visible, .rt-device-option:focus-visible, .rt-device-stop:focus-visible,
+.rt-device-close:focus-visible, .rt-device-back:focus-visible {
+  outline: 3px solid #8dbaf9; outline-offset: 2px;
+}
+.rt-device-outcome { display: flex; flex-direction: column; gap: 18px; padding: 11px 0 3px; }
+.rt-device-outcome p { border-radius: 13px; background: #f4f7fb; padding: 16px; font-size: 15px; line-height: 1.7; color: #42556a; }
+.rt-device-outcome-actions { display: flex; flex-direction: column; gap: 9px; }
+.rt-device-outcome-actions .btn { width: 100%; }
+.rt-device-error { color: #b8404c; font-size: 13px; line-height: 1.5; }
+.rt-device-footnote { color: #929ead; font-size: 12px; line-height: 1.5; text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .rt-header-more--hint { animation: none; background: #edf5ff; box-shadow: inset 0 0 0 1px #dbeafb; }
+}
