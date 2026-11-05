@@ -529,7 +529,7 @@ export default function RealTraining() {
   return (
     <main className="screen rt-screen">
       <header className="rt-header">
-        <button type="button" className="rt-nav-back" onClick={() => router.replace("/roleplay/select")} aria-label="뒤로 가기">
+        <button type="button" className="rt-nav-back" onClick={() => router.replace(new URLSearchParams(window.location.search).has("topic") ? "/roleplay/select" : "/roleplay/mode")} aria-label="뒤로 가기">
           <span aria-hidden="true">‹</span>
         </button>
         <div className="rt-avatar" aria-hidden="true"><PersonIcon /></div>
