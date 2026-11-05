@@ -84,6 +84,9 @@ const [{ create_family: F2 }] = await as(A, "select create_family('엄마')");
 ok((await as(A, "select family_id from family_members where user_id = $1", [A])).length === 2 && F2 !== F, "한 사람이 여러 가족에 속할 수 있음");
 await as(A, "update family_members set nickname = 'x' where user_id = $1", [G]);
 ok((await as(G, "select nickname from family_members where user_id = $1 and family_id = $2", [G, F]))[0].nickname === "보호자", "남의 별명 변경 불가");
+await as(B, "update family_members set nickname = '아빠2' where family_id = $1 and user_id = $2", [F, B]);
+ok((await as(G, "select nickname from family_members where user_id = $1 and family_id = $2", [B, F]))[0]?.nickname === "아빠2", "자기 별명 변경 가능 (가족 목록 이름 맞추기)");
+await as(B, "update family_members set nickname = '아빠' where family_id = $1 and user_id = $2", [F, B]);
 
 // 연습 기록 + 가족 공유 (가족 F = G보호자, A엄마, B아빠 / C는 남)
 await as(A, "insert into practice_records (kind, title, safe) values ('training', '가족의 급한 연락', true)");
