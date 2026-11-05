@@ -119,7 +119,7 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, onStop, b
           <div className="rt-device-options">
             {option("recent", "최근 문자 발신 번호", "지금 문자를 보낸 쪽으로 전화", () => void act("verify_sender", "recent_sender"))}
             {topic !== "family"
-              ? option("official", "직접 찾은 기관 대표번호", "문자에서 안내받은 번호는 사용하지 않음", () => void act("verify", "official_directory"))
+              ? option("official", "기관 번호 검색", "전화 앱의 연락처 검색", () => void act("verify", "official_directory"))
               : option("family", "기존 가족 연락처", "저장된 연락처로 전화", () => void act("family_contact", "saved_family"))}
           </div>
         )}
