@@ -379,8 +379,6 @@ export default function RealTraining() {
     const feedback = result.behavior;
     const hasFamilyQuestion = familyReady && familyQuestion.trim();
     const nextPromise = feedback.promises.find(p => !p.practiced) ?? feedback.promises[0];
-    const shortPromise = (id: string) => id === "verify" ? "독립 확인" :
-      id === "hold" ? "돈·정보 보류" : "가족과 상의";
     return (
       <Screen>
         <Header title="정체 확인" back={() => setReviewPage("feedback")} />
@@ -412,7 +410,7 @@ export default function RealTraining() {
                 {feedback.promises.map((promise, index) => (
                   <div className="fb-promise-tile" key={promise.id}>
                     <span className="fb-promise-number">0{index + 1}</span>
-                    <strong>{shortPromise(promise.id)}</strong>
+                    <strong>{promise.title}</strong>
                     <span className={promise.practiced ? "fb-promise-status fb-promise-status--done" : "fb-promise-status"}>
                       {promise.practiced ? "✓ 이번에 실천" : "다음에 기억"}
                     </span>
