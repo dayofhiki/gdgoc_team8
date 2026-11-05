@@ -32,7 +32,14 @@ export default function FamilyCodeDone() {
     };
   }, [ready, familyQuestion]);
 
+  useEffect(() => {
+    if (!shareMessage) return;
+    const timer = setTimeout(() => setShareMessage(""), 5000);
+    return () => clearTimeout(timer);
+  }, [shareMessage]);
+
   const shareWithFamily = async () => {
+    setShareMessage(""); // 다시 눌러도 같은 문구의 타이머가 처음부터 시작되도록
     const text = `우리 가족 확인 질문: ${familyQuestion}\n답은 메시지로 보내지 말고 직접 만나서 정해요.\n미끼주의보에서 함께 연습해요.`;
     if (navigator.share) {
       try {

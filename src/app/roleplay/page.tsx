@@ -30,7 +30,7 @@ export default async function RoleplayIntro({ searchParams }: { searchParams: Pr
         </div>
       </section>
       <BottomCTA>
-        <Link href={destination} className="btn btn--primary btn--lg" style={{ fontWeight: 600 }}>확인했어요</Link>
+        <Link href={destination} className="btn btn--primary btn--lg">확인했어요</Link>
       </BottomCTA>
     </Screen>
   );
