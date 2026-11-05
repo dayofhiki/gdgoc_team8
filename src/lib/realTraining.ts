@@ -217,24 +217,21 @@ export function classifyOffers(reply: string, proposed: unknown): OfferKind[] {
 
 /** 실제 외부 사이트로 연결할 수 없는 예약 도메인을 사용한 문자 링크 미리보기 */
 export function simulatedLink(scenario: Scenario): LinkPreview {
-  if (scenario.title.includes("택배")) return {
-    url: "https://m.delivery-notice.example/track",
-    domain: "m.delivery-notice.example",
-    title: "배송 정보 확인",
-    description: "배송 상태 및 주소 확인 안내",
+  // 실제 접속될 수 없는 example 예약 도메인. 교육용 미리보기만 제공한다.
+  const variants: Record<TrainingTopicId, { domain: string; title: string; description: string }> = {
+    family: { domain: "m.message-notice.example", title: "메시지 안내 확인", description: "전달받은 내용 확인" },
+    delivery: { domain: "m.delivery-notice.example", title: "배송 정보 확인", description: "배송 상태 및 주소 확인 안내" },
+    bank: { domain: "m.account-notice.example", title: "거래 내역 확인", description: "거래 내역 확인 안내" },
+    invitation: { domain: "m.invitation-notice.example", title: "모바일 초대장", description: "결혼식 안내 확인" },
+    obituary: { domain: "m.memorial-notice.example", title: "부고 안내", description: "장례 안내 내용 확인" },
+    traffic: { domain: "m.traffic-notice.example", title: "교통 고지 조회", description: "교통 관련 안내 확인" },
+    loan: { domain: "m.loan-notice.example", title: "대출 상담 안내", description: "금융 상품 안내 확인" },
+    job: { domain: "m.job-notice.example", title: "채용 지원 안내", description: "단기 업무 관련 안내" },
+    health: { domain: "m.health-notice.example", title: "건강검진 안내", description: "검진 관련 안내 확인" },
   };
-  if (scenario.title.includes("은행")) return {
-    url: "https://m.account-notice.example/check",
-    domain: "m.account-notice.example",
-    title: "거래 내역 확인",
-    description: "요청하신 거래 정보를 조회하세요",
-  };
-  return {
-    url: "https://m.message-notice.example/view",
-    domain: "m.message-notice.example",
-    title: "메시지 안내 확인",
-    description: "전달받은 안내 내용 확인",
-  };
+  const preview = variants[scenario.topic];
+  return { url: "https://" + preview.domain + "/view", domain: preview.domain,
+    title: preview.title, description: preview.description };
 }
 
 /** 메신저 말풍선의 행동만 송금/정보제공/링크 열기로 인정한다. */
