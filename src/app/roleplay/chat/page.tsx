@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertIcon, CheckIcon, ChevronRight, FlagIcon, PersonIcon, SearchIcon, ShieldIcon } from "@/components/Icons";
-import { BottomCTA, BottomSheet, Header, Notice, Screen } from "@/components/ui";
+import { AlertIcon, CheckIcon, ChevronRight, PersonIcon, ShieldIcon } from "@/components/Icons";
+import { BottomCTA, BottomSheet, Header, Screen } from "@/components/ui";
 import { actionChoice, type Action } from "@/lib/trainingActions";
-import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
+import { useAppState } from "@/components/AppState";
 import { copyText } from "@/lib/share";
 import { familyShareUrl } from "@/lib/invite";
 import { saveRecord } from "@/lib/records";
@@ -105,7 +105,7 @@ function takeSavedReview(): Result | null {
 
 export default function RealTraining() {
   const router = useRouter();
-  const { ready: familyReady, familyQuestion, nickname } = useAppState();
+  const { ready: familyReady, familyQuestion } = useAppState();
   const started = useRef(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>("chat");
@@ -117,7 +117,6 @@ export default function RealTraining() {
   const [phoneHint, setPhoneHint] = useState(false);
   const [introOpen, setIntroOpen] = useState(false);
   const [skipIntroNextTime, setSkipIntroNextTime] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const phoneHintShown = useRef(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [previewActionId, setPreviewActionId] = useState<string | null>(null);
@@ -151,7 +150,6 @@ export default function RealTraining() {
     setPhoneHint(false);
     setIntroOpen(false);
     setSkipIntroNextTime(false);
-    setDetailsOpen(false);
     phoneHintShown.current = false;
     setBusy(true);
     try {
@@ -378,70 +376,75 @@ export default function RealTraining() {
   if (phase === "result" && result && reviewPage === "truth") {
     const feedback = result.behavior;
     const hasFamilyQuestion = familyReady && familyQuestion.trim();
+    const nextPromise = feedback.promises.find(p => !p.practiced) ?? feedback.promises[0];
+    const shortPromise = (id: string) => id === "verify" ? "독립 확인" :
+      id === "hold" ? "돈·정보 보류" : "가족과 상의";
     return (
       <Screen>
         <Header title="정체 확인" back={() => setReviewPage("feedback")} />
         <section className="screen__body">
-          <div className="stack" style={{ marginTop: 20, gap: 20 }}>
-            <section className="card" aria-labelledby="fb-truth">
-              <div className="fb-title">
-                <span className="fb-title__icon fb-title__icon--gray"><SearchIcon /></span>
-                <h2 className="card__title fb-card-title" id="fb-truth">가상 연락의 정체와 확인 결과</h2>
-              </div>
-              <p className={"fb-item__title " + (result.identity === "fraud" ? "fb-truth-label--fraud" : "fb-truth-label--real")}>{result.truthLabel}</p>
-              <p className="fb-item__text">{result.purpose}</p>
-              <p className="fb-item__text">{result.verificationEvidence}</p>
-              <p className="fb-note">이것은 훈련을 위해 정해진 가상 상황의 정체예요. 실제 연락에서는 말투나 정답 추측보다 독립 확인이 중요해요.</p>
+          <div className="fb-summary-flow">
+            <section className="fb-truth-summary" aria-labelledby="fb-truth">
+              <span className="fb-eyebrow">가상 연락의 정체</span>
+              <h2 id="fb-truth" className={result.identity === "fraud"
+                ? "fb-truth-word fb-truth-word--fraud" : "fb-truth-word fb-truth-word--real"}>
+                {result.identity === "fraud" ? "사칭 연락" : "실제 연락"}
+              </h2>
+              <p className="fb-truth-purpose">{result.purpose}</p>
+              <details className="fb-inline-disclosure">
+                <summary>어떻게 확인했나요?</summary>
+                <p>{result.verificationEvidence}</p>
+                <p>가상 훈련의 확인 결과입니다. 실제 상황에서는 별도의 경로로 직접 확인해야 해요.</p>
+              </details>
             </section>
 
-            <div className="card card--blue">
-              <div className="fb-title">
-                <span className="fb-title__icon fb-title__icon--white"><FlagIcon /></span>
-                <p className="card__title fb-card-title">다음 연습의 목표</p>
-              </div>
-              <p className="card__text--blue">{feedback.focus}</p>
-            </div>
+            <section className="fb-priority" aria-labelledby="fb-next-goal">
+              <span className="fb-eyebrow">다음에 기억할 한 가지</span>
+              <h3 id="fb-next-goal">{nextPromise?.title ?? "다른 경로로 직접 확인하기"}</h3>
+              <p>정체를 맞히는 것보다 직접 행동하는 것이 중요해요.</p>
+            </section>
 
-            <section className="card" aria-labelledby="fb-promise">
-              <div className="fb-title">
-                <span className="fb-title__icon"><ShieldIcon /></span>
-                <h3 className="card__title fb-card-title" id="fb-promise">우리 가족의 안전 약속</h3>
-              </div>
-              <p className="fb-item__text">가족과 함께 정하고, 낯선 연락이 올 때마다 이 순서를 떠올려 보세요.</p>
-              <ol className="fb-list">
+            <section className="fb-compact-section" aria-labelledby="fb-promise">
+              <h3 id="fb-promise" className="fb-compact-heading"><ShieldIcon /> 우리 가족의 안전 약속</h3>
+              <div className="fb-promise-grid">
                 {feedback.promises.map((promise, index) => (
-                  <li className="fb-item" key={promise.id}>
-                    <span className="fb-mark" aria-hidden="true">{index + 1}</span>
-                    <div>
-                      <p className="fb-item__title">{promise.title}</p>
-                      <p className="fb-item__text">{promise.detail}</p>
-                      <span className={promise.practiced ? "tag tag--blue" : "tag tag--gray"} style={{ marginTop: 4 }}>
-                        {promise.practiced ? "이번 훈련에서 실천" : "다음에 기억할 약속"}
-                      </span>
-                    </div>
-                  </li>
+                  <div className="fb-promise-tile" key={promise.id}>
+                    <span className="fb-promise-number">0{index + 1}</span>
+                    <strong>{shortPromise(promise.id)}</strong>
+                    <span className={promise.practiced ? "fb-promise-status fb-promise-status--done" : "fb-promise-status"}>
+                      {promise.practiced ? "✓ 이번에 실천" : "다음에 기억"}
+                    </span>
+                  </div>
                 ))}
-              </ol>
-              <div className="fb-subcard">
-                <p className="fb-item__title">가족 확인 질문</p>
-                {hasFamilyQuestion ? (
-                  <>
-                    <p className="fb-item__text">{familyQuestion}</p>
-                    <p className="fb-note">이 기기에 저장된 질문이에요. 실제 답은 문자로 보내지 말고 가족과 직접 정하세요.</p>
-                  </>
-                ) : (
-                  <p className="fb-item__text">아직 이 기기에 저장된 확인 질문이 없어요. 가족과 직접 만나 함께 정해 보세요.</p>
-                )}
-                <Link className="fb-link" href={hasFamilyQuestion ? "/family-code/question" : "/family-code/guide"} onClick={() => saveReview(result)}>
-                  {hasFamilyQuestion ? "질문 변경하기" : "가족 확인 질문 정하기"}
-                  <ChevronRight size={18} />
-                </Link>
               </div>
-              <button type="button" className="btn btn--secondary" onClick={() => void shareFamilyPromises()}>가족에게 안전 약속 공유하기</button>
-              <Notice>안전 약속만 공유하고, 가족 확인 질문과 답은 외부로 보내지 않아요.</Notice>
+              <details className="fb-inline-disclosure">
+                <summary>안전 약속 자세히 보기</summary>
+                <ol className="fb-list">
+                  {feedback.promises.map(promise => (
+                    <li className="fb-item" key={promise.id}>
+                      <div><strong className="fb-item__title">{promise.title}</strong><p className="fb-item__text">{promise.detail}</p></div>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+              <details className="fb-inline-disclosure">
+                <summary>가족 확인 질문 {hasFamilyQuestion ? "보기" : "정하기"}</summary>
+                <div className="fb-subcard">
+                  {hasFamilyQuestion
+                    ? <p className="fb-item__text">{familyQuestion}</p>
+                    : <p className="fb-item__text">아직 정한 질문이 없어요. 가족과 직접 정해 보세요.</p>}
+                  <p className="fb-note">질문의 답은 문자로 보내지 않아요.</p>
+                  <Link className="fb-link" href={hasFamilyQuestion ? "/family-code/question" : "/family-code/guide"}
+                    onClick={() => saveReview(result)}>
+                    {hasFamilyQuestion ? "질문 변경하기" : "질문 만들기"} <ChevronRight size={18} />
+                  </Link>
+                </div>
+              </details>
+              <button type="button" className="btn btn--secondary" onClick={() => void shareFamilyPromises()}>
+                가족에게 안전 약속 공유하기
+              </button>
+              <p className="fb-note">안전 약속만 공유돼요. 가족 확인 질문과 답은 제외됩니다.</p>
             </section>
-
-            <p className="fb-note">{result.note}</p>
           </div>
         </section>
         {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
@@ -459,72 +462,62 @@ export default function RealTraining() {
       <Screen>
         <Header title="내 대응 돌아보기" back={() => router.replace("/home")} />
         <section className="screen__body">
-          <div className="stack" style={{ marginTop: 20, gap: 8 }}>
-            <h2 className="title">{feedback.headline}</h2>
-            <p className="desc"><strong className="fb-nick">{nickname || DEFAULT_NICKNAME}</strong>님의 대응 피드백</p>
-            <p className="desc">{feedback.explanation}</p>
-            {result.coverage === "early" && (
-              <p className="fb-note">대화 초반에 마무리해 이번에는 이후에 나올 요청에 대한 대응까지 살펴보지 못했어요. 확인이나 중단 행동은 그대로 기록했습니다.</p>
-            )}
-            {result.coverage === "conversation_only" && (
-              <p className="fb-note">이번 대화에서는 송금·정보 제공 등 구체적인 요구까지 이어지지 않았어요. 그런 요청에 대한 대응은 별도로 연습할 수 있어요.</p>
-            )}
-            <p className="fb-note">정답이 아닌, 실제로 선택한 행동을 기준으로 살펴봤어요.</p>
-          </div>
-
-          <div className="stack" style={{ marginTop: 40, gap: 20 }}>
-            <section className="card" aria-labelledby="fb-actions">
-              <h3 className="card__title fb-card-title" id="fb-actions">이번에 내가 한 행동</h3>
-              <ol className="fb-list">
-                {feedback.receipts.map((receipt, i) => (
-                  <li key={i} className="fb-item">
-                    <span className={receipt.tone === "good" ? "fb-mark" : "fb-mark fb-mark--" + receipt.tone} aria-hidden="true">{i + 1}</span>
-                    <div>
-                      <p className="fb-item__title">{receipt.label}</p>
-                      <p className="fb-item__text">{receipt.detail}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
+          <div className="fb-summary-flow">
+            <section className={"fb-impact-hero fb-impact-hero--" + feedback.tone} aria-labelledby="fb-headline">
+              <span className="fb-eyebrow">이번 훈련 · 행동 피드백</span>
+              <h2 id="fb-headline">{feedback.headline}</h2>
+              {result.coverage === "early"
+                ? <p className="fb-coverage-note">초반 종료 · 이후 요청 대응은 아직 평가하지 않았어요.</p>
+                : result.coverage === "conversation_only"
+                  ? <p className="fb-coverage-note">요청 전 대화 종료 · 위험 요청 대응은 아직 평가하지 않았어요.</p>
+                  : <p className="fb-coverage-note">상대의 정체보다 내가 선택한 행동을 봤어요.</p>}
             </section>
 
-            <section className="card" aria-labelledby="fb-good">
-              <div className="fb-title">
-                <span className="fb-title__icon"><CheckIcon /></span>
-                <h3 className="card__title fb-card-title" id="fb-good">잘한 점</h3>
+            <section className="fb-compact-section" aria-labelledby="fb-good">
+              <h3 id="fb-good" className="fb-compact-heading"><CheckIcon /> 잘한 행동</h3>
+              <div className="fb-keyword-grid">
+                {feedback.good.length ? feedback.good.map(point => (
+                  <div key={point.keyword} className="fb-keyword fb-keyword--good">
+                    <strong>{point.keyword}</strong>
+                  </div>
+                )) : <p className="fb-keyword-empty">아직 확인된 안전 행동이 없어요.</p>}
               </div>
-              {feedback.good.length > 0 ? (
-                <div className="fb-points">
-                  {feedback.good.map((item, i) => (
-                    <div className="fb-point" key={i}>
-                      <p className="fb-item__title">{item.keyword}</p>
-                      <p className="fb-item__text">{item.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : <p className="fb-item__text">이번에는 확인된 안전 행동이 없었어요. 다음 연습에서는 직접 확인하는 행동부터 선택해 보세요.</p>}
             </section>
 
-            <section className="card" aria-labelledby="fb-improve">
-              <div className="fb-title">
-                <span className="fb-title__icon fb-title__icon--amber"><AlertIcon /></span>
-                <h3 className="card__title fb-card-title" id="fb-improve">다음에는 이렇게 해봐요</h3>
+            <section className="fb-compact-section" aria-labelledby="fb-improve">
+              <h3 id="fb-improve" className="fb-compact-heading fb-compact-heading--amber"><AlertIcon /> 다음에 기억할 행동</h3>
+              <div className="fb-keyword-grid">
+                {feedback.improve.length ? feedback.improve.map(point => (
+                  <div key={point.keyword} className="fb-keyword fb-keyword--improve">
+                    <strong>{point.keyword}</strong>
+                  </div>
+                )) : <p className="fb-keyword-empty">잘한 행동을 계속 이어가세요.</p>}
               </div>
-              {feedback.improve.length > 0 ? (
-                <div className="fb-points">
-                  {feedback.improve.map((item, i) => (
-                    <div className="fb-point" key={i}>
-                      <p className="fb-item__title">{item.keyword}</p>
-                      <p className="fb-item__text">{item.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : <p className="fb-item__text">이번에는 크게 고칠 행동이 없어요. 다음 상황에서도 같은 확인 습관을 이어가세요.</p>}
             </section>
+
+            <details className="fb-detail-panel">
+              <summary>내가 한 행동과 이유 자세히 보기</summary>
+              <div className="fb-detail-content">
+                <p className="fb-item__text">{feedback.explanation}</p>
+                <h4>실제 선택 기록</h4>
+                <ol className="fb-list">
+                  {feedback.receipts.map((receipt, i) => (
+                    <li key={i} className="fb-item">
+                      <span className={receipt.tone === "good" ? "fb-mark" : "fb-mark fb-mark--" + receipt.tone}>{i + 1}</span>
+                      <div><strong className="fb-item__title">{receipt.label}</strong><p className="fb-item__text">{receipt.detail}</p></div>
+                    </li>
+                  ))}
+                </ol>
+                {feedback.good.length > 0 && <h4>잘한 점의 근거</h4>}
+                {feedback.good.map(point => <p className="fb-item__text" key={point.keyword}><strong>{point.keyword}</strong> · {point.text}</p>)}
+                {feedback.improve.length > 0 && <h4>개선할 행동의 이유</h4>}
+                {feedback.improve.map(point => <p className="fb-item__text" key={point.keyword}><strong>{point.keyword}</strong> · {point.text}</p>)}
+              </div>
+            </details>
           </div>
         </section>
         <BottomCTA>
-          <button className="btn btn--primary" onClick={() => setReviewPage("truth")}>정체 확인하기</button>
+          <button className="btn btn--primary" onClick={() => setReviewPage("truth")}>정체와 안전 약속 확인하기</button>
         </BottomCTA>
       </Screen>
     );
