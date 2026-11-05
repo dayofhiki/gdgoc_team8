@@ -1121,7 +1121,7 @@ p, h1, h2, h3 { margin: 0; }
 .fb-detail-panel[open] > summary::after, .fb-inline-disclosure[open] > summary::after, .case-play-sources[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
 .fb-detail-panel > summary:focus-visible, .fb-inline-disclosure > summary:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
 .fb-detail-content { display: flex; flex-direction: column; gap: 13px; border-top: 1px solid var(--g200); padding: 16px 18px 19px; }
-.fb-detail-content h4 { font-size: 16px; font-weight: 700; color: var(--g800); }
+.fb-detail-content h4 { margin: 8px 0 0; font-size: 16px; font-weight: 700; color: var(--g800); }
 .fb-detail-content .fb-list { gap: 12px; margin-bottom: 4px; }
 .fb-truth-summary { display: flex; flex-direction: column; gap: 10px; padding: 23px 20px; border-radius: 20px; border: 1px solid var(--g200); background: var(--g100); }
 .fb-truth-word { font-size: 28px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.2; }
@@ -1207,7 +1207,6 @@ p, h1, h2, h3 { margin: 0; }
 .rt-mode-intro p { color: var(--g600); font-size: 15px; line-height: 1.65; max-width: 36ch; }
 .rt-mode-options { display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }
 .rt-mode-card { display: flex; width: 100%; align-items: center; gap: 13px; min-height: 115px; padding: 17px 16px; border: 1px solid var(--g200); border-radius: 16px; background: #fff; text-align: left; transition: border-color .16s ease, background .16s ease; }
-.rt-mode-card--featured { border-color: var(--blue-50); background: var(--blue-50); }
 .rt-mode-card:hover { border-color: var(--blue); background: var(--g100); }
 .rt-mode-card img { width: 48px; height: 48px; flex: 0 0 48px; object-fit: contain; }
 .rt-mode-copy { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }

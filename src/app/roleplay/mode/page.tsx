@@ -12,7 +12,6 @@ const OPTIONS = [
     desc: "답장 예시를 누르거나 직접 쓰고, 전화·앱으로 대응해 보세요.",
     image: "/images/icon-chat.png",
     path: "/roleplay/chat",
-    featured: true,
   },
   {
     title: "상황별 연습",
@@ -20,7 +19,6 @@ const OPTIONS = [
     desc: "가족·택배·금융 등 원하는 유형을 골라 집중해서 연습해 보세요.",
     image: "/images/icon-chat.png",
     path: "/roleplay/select",
-    featured: false,
   },
 ] as const;
 
@@ -38,8 +36,7 @@ export default function RoleplayMode() {
         </div>
         <div className="rt-mode-options" aria-label="훈련 방식">
           {OPTIONS.map(option => (
-            <button key={option.path} type="button"
-              className={option.featured ? "rt-mode-card rt-mode-card--featured" : "rt-mode-card"}
+            <button key={option.path} type="button" className="rt-mode-card"
               onClick={() => router.push(option.path)}
             >
               <img src={option.image} alt="" width={52} height={52} />
