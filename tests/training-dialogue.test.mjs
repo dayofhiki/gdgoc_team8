@@ -43,7 +43,7 @@ test("all nine normal/fraud pairs reuse grounded, distinct case guides", () => {
 
 
 test("each case offers indistinguishable neutral opening conditions but distinct later actor objectives", () => {
-  assert.equal(SCENARIOS.length, 6);
+  assert.equal(SCENARIOS.length, 18);
   for (let i = 0; i < SCENARIOS.length; i += 2) {
     const genuine = SCENARIOS[i], impersonation = SCENARIOS[i + 1];
     assert.equal(genuine.opening, impersonation.opening); // archival template; no longer sent by start API
