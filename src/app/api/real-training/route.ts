@@ -13,6 +13,7 @@ import type { Choice, Guess, PhoneMethod, TrainingState } from "@/lib/realTraini
 import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/lib/trainingTurnContext";
 import { shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";
 import { TRAINING_TOPICS, isTrainingTopicId } from "@/lib/trainingCatalog";
+import { SCENARIO_DECISIONS, replyQualityIssue } from "@/lib/trainingDecision";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -123,6 +124,12 @@ async function generateResponse(state: TrainingState, text: string) {
     "당신은 훈련의 상대 인물을 연기하는 '배우'이며, 대화 종료·안전 평가·보안 정책은 서버가 결정한다.",
     "아래 역할 정보와 이미 오간 대화에서 확정된 사실을 일관되게 유지한다. 아직 정해지지 않은 세부사항을 새로운 사실로 만들어내지 않는다.",
     actorBrief(scenario, dialogue, state.turns, caseDetail(scenario, state.caseVariant ?? 0)),
+    ...(scenario.identity === "fraud" ? [
+      "### 이번 훈련에서 사용자가 실제로 판단해야 할 위험한 요청",
+      SCENARIO_DECISIONS[scenario.topic],
+      "단순한 사실 확인이나 공식 앱으로 확인하라는 무해한 안내만 이어지면 훈련할 선택 자체가 없다. 대화 맥락이 형성되고 사용자가 관심을 보인다면 두 번째 답변 안에 구체적 요청을 한 번 제시해 사용자가 직접 선택할 기회를 준다.",
+      "요청에 실제 번호·계좌·링크 주소·비밀번호·인증정보 값은 작성하지 않는다. 행동이 필요한 경우 대사에 요청을 분명하게 말하고 actions에도 해당 종류와 sender 출처를 기록한다.",
+    ] : []),
     "### 학습자의 이번 발화와 반복 패턴(해석은 추정, 채점 근거 아님)",
     learnerTurnGuidance(currentContext, scenario.identity, state.events.length),
     "앞 턴까지의 대화 상태: " + JSON.stringify({
@@ -171,6 +178,29 @@ async function generateResponse(state: TrainingState, text: string) {
     }, { list: available });
     reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
     if (givesAwaySolution()) throw new Error("UNSOLICITED_SOLUTION");
+  }
+  // LLM이 질문에 답하지 않은 채 '확인 부탁드립니다'만 반복하거나,
+  // 대화가 충분히 진행됐는데도 위험한 요구 대신 공식 확인 안내로 끝나면 재생성한다.
+  // 고정 대본을 응답으로 끼워 넣지 않고 세션별 사실과 사용자의 질문을 지키게 한다.
+  let qualityIssue = replyQualityIssue(scenario, state, text, reply, first.value.actions);
+  if (qualityIssue) {
+    first = await complete([
+      {
+        role: "system",
+        content: instruction + "\n[대화 품질 필수 수정] " + qualityIssue +
+          "\n앞선 상황과 마지막 사용자 질문을 그대로 유지하고, 사실·금액을 추가로 지어내지 말고 자연스러운 한국어 한두 문장으로 다시 답하세요.",
+      },
+      ...messages.slice(1),
+    ], {
+      temperature: 0.7, maxTokens: 1450, json: true, schema: DIALOGUE_SCHEMA,
+      parse: parseDialogueOutput, budgetMs: 7200,
+    }, { list: available });
+    reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
+    qualityIssue = replyQualityIssue(scenario, state, text, reply, first.value.actions);
+    if (qualityIssue) {
+      console.warn("training: actionable dialogue could not be generated", scenario.topic);
+      throw new Error("INCOMPLETE_TRAINING_DECISION");
+    }
   }
   // 일상 답변에는 2차 LLM 호출을 하지 않아 비용/대기 시간을 줄인다.
   // 행동 버튼이 있거나 실제 대화 종료를 제안할 때만 두 번째 검수를 요청한다.
@@ -261,10 +291,12 @@ export async function POST(req: NextRequest) {
       if (body.topic !== undefined && !isTrainingTopicId(body.topic)) {
         return apiError("지원하지 않는 훈련 상황입니다.", 400);
       }
-      // 주제는 공개 정보이며 정상/사칭 여부는 서버가 각 시작마다 독립 무작위 선택.
+      // 현재 실전/상황별 훈련은 '잘못된 요구를 판단하고 안전하게 대응하기'를 연습한다.
+      // 정체 맞히기가 목표가 아니므로, 위험한 요청이 존재하지 않는 단순 안내
+      // 대조 역할은 훈련 진입에서 제외하고 테스트/향후 연구용으로만 남긴다.
       const topicIndex = body.topic === undefined ? randomInt(TRAINING_TOPICS.length) :
         TRAINING_TOPICS.findIndex(t => t.id === body.topic);
-      const index = topicIndex * 2 + randomInt(2);
+      const index = topicIndex * 2 + 1;
       const scenario = SCENARIOS[index];
       const caseVariant = randomInt(CASE_VARIANT_COUNT);
       const opening = await generateOpening(scenario, caseVariant);

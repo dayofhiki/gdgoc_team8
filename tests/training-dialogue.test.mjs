@@ -226,6 +226,7 @@ test("neutral opening contract rejects actionable paths and fabricated identifie
   const opener = parseOpeningOutput(JSON.stringify({ opening: "엄마, 나 폰이 고장 나서 잠깐 다른 기기로 문자해. 지금 바빠?" }));
   assert.ok(acceptableOpening(opener.opening));
   assert.ok(acceptableOpening("안녕하세요, 배송 확인이 필요한 건이 있어 안내드립니다."));
+  assert.ok(acceptableOpening("안녕하세요. 계좌 관련 안내 사항이 있어 연락드렸습니다."));
   assert.equal(acceptableOpening("그 계좌로 입금해 주세요."), false);
   assert.equal(acceptableOpening("원래 번호로 전화해 주세요."), false);
   assert.equal(acceptableOpening("아래 링크로 들어가세요."), false);
@@ -377,6 +378,8 @@ test("termination requires observed training progress, not just a guessed identi
   assert.equal(shouldResolveAfterIndependentCheck(early, SCENARIOS[1], "family_contact", "confirmed"), false);
   assert.equal(hasConcreteRequest([{ actor: "them", text: "수리비 얼마나 드니?" }]), false);
   assert.equal(hasConcreteRequest([{ actor: "them", text: "돈을 보내지 마세요." }]), false);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "모바일 상품권 48만 원 결제 시도가 있었습니다. 본인 거래인지 확인 부탁해요." }]), false);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "계좌 잔액과 계좌번호 끝 4자리를 보내주실 수 있을까요?" }]), true);
   assert.equal(hasConcreteRequest([{ actor: "me", text: "80만 원 보내줄래?" }]), false);
   assert.equal(hasConcreteRequest([{ actor: "them", text: "일단 80만 원 정도 보내줄 수 있어?" }]), true);
   assert.equal(hasConcreteRequest([{ actor: "them", text: "이 링크를 눌러 주소 확인해 주세요." }]), true);
