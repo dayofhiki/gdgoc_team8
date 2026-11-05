@@ -286,7 +286,8 @@ test("phone panel cue is non-accusatory, appears once after interaction and resp
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
-  assert.match(ui, /next\.turns >= 2/);
+  assert.match(ui, /shouldCuePhonePanel\(text, latestActorReply\)/);
+  assert.doesNotMatch(ui, /next\.turns >= 2/);
   assert.match(ui, /phoneHintShown\.current = true/);
   assert.match(ui, /setPhoneHint\(false\)/);
   assert.match(css, /\.rt-header-more--hint/);
@@ -397,4 +398,32 @@ test("sender-provided phone numbers remain actionable in the phone panel without
   assert.equal(called.closed, false);
   assert.equal(called.verification, "none");
   assert.equal(evaluate(called, scenario, "uncertain").checked, false);
+});
+
+
+test("phone cue appears when the learner needs a tool, not automatically after a fixed turn count", async () => {
+  const { shouldCuePhonePanel } = await import("../src/lib/trainingPhoneCue.ts");
+  assert.equal(shouldCuePhonePanel("안녕하세요", { text: "오늘 날씨는 좋네요." }), false);
+  assert.equal(shouldCuePhonePanel("알겠어요", { text: "어머니, 안녕히 주무세요." }), false);
+  assert.equal(shouldCuePhonePanel("기존 번호로 확인해볼게요", { text: "응, 알겠어." }), true);
+  assert.equal(shouldCuePhonePanel("은행 앱에서 확인할래요", { text: "그러세요." }), true);
+  assert.equal(shouldCuePhonePanel("어떤 전화번호로 연락할까요?", { text: "그럼요." }), true);
+  assert.equal(shouldCuePhonePanel("잘 모르겠어요", { text: "수리비 조금만 송금해 줄 수 있어?" }), true);
+  assert.equal(shouldCuePhonePanel("네", { text: "아래 링크를 눌러 주세요." }), true);
+  assert.equal(shouldCuePhonePanel("알겠습니다", { text: "배송지 입력을 부탁드려요.", actions: [{kind: "provide_data"}] }), true);
+  assert.equal(shouldCuePhonePanel("네", { text: "통화할 필요 없어요", actions: [] }), false);
+  assert.equal(shouldCuePhonePanel("보류할게요", { text: "지금 잠시 기다려주세요." }), false);
+});
+
+test("the phone cue has no identity input, no spoiler text and stays a single subtle prompt", async () => {
+  const { readFileSync } = await import("node:fs");
+  const implementation = readFileSync(new URL("../src/lib/trainingPhoneCue.ts", import.meta.url), "utf8");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(ui, /!phoneHintShown\.current && !next\.closed/);
+  assert.match(ui, /phoneHintShown\.current = true/);
+  assert.match(ui, /shouldCuePhonePanel\(text, latestActorReply\)/);
+  assert.doesNotMatch(implementation, /identity|scenario\.identity|truthLabel/);
+  assert.match(css, /rt-phone-hint 1\.9s ease-in-out 1/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
 });
