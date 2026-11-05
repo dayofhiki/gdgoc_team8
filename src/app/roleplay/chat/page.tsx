@@ -645,7 +645,7 @@ export default function RealTraining() {
             <div className="rt-intro-steps">
               <div><strong>① 대화하기</strong><span>상대방의 말에 자유롭게 답해요.</span></div>
               <div><strong>② 휴대전화 사용</strong><span>필요하다고 느낄 때, 대화 중간에도 직접 기능을 선택해 보세요.</span></div>
-              <div><strong>③ 다시 돌아오기</strong><span>기능을 사용해도 훈련이 바로 끝나지 않아요.</span></div>
+              <div><strong>③ 상황에 맞게 대응하기</strong><span>확인 후 문자로 돌아올 수 있어요. 송금이나 종료처럼 훈련을 마치는 행동도 있어요.</span></div>
             </div>
             <p className="rt-intro-note">어떤 연락에도 필요한 행동을 직접 선택해 보세요. 실제 통화나 송금은 일어나지 않아요.</p>
             <label className="rt-intro-check">
