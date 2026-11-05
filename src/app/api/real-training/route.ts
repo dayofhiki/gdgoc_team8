@@ -11,6 +11,7 @@ import { complete, providers, type Msg } from "../../../../supabase/functions/_s
 import { detectPii } from "../../../../supabase/functions/_shared/pii";
 import type { Choice, Guess, PhoneMethod, TrainingState } from "@/lib/realTraining";
 import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/lib/trainingTurnContext";
+import { shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -291,6 +292,23 @@ export async function POST(req: NextRequest) {
           closed: ended.closed, endReason: ended.endReason ?? null,
         });
       }
+      // 독립 확인으로 이미 모순이 드러났거나, 구체적 요구에 명확히 거절하며
+      // 연락을 끝내려는 경우 AI가 새 핑계로 설득을 이어가지 못하도록 서버에서 종결한다.
+      if (shouldResolveOnLearnerReply(state, text)) {
+        const ended: TrainingState = {
+          ...state,
+          turns: state.turns + 1,
+          closed: true,
+          endReason: "resolved",
+          messages: [...state.messages, { actor: "me", text },
+            { actor: "system", text: "이번 대화에서 필요한 대응이 마무리됐어요. 지금까지의 선택을 돌아보세요." }],
+        };
+        return apiOk({
+          token: seal(ended), messages: ended.messages, turns: ended.turns,
+          maxTurns: MAX_TURNS, verified: ended.verification !== "none",
+          closed: ended.closed, endReason: ended.endReason,
+        });
+      }
       const response = await generateResponse(state, text);
       state.messages.push({ actor: "me", text });
       if (response.reply) state.messages.push({ actor: "them", text: response.reply, actions: response.actions });
@@ -298,6 +316,16 @@ export async function POST(req: NextRequest) {
       state.dialogue = response.next.memory;
       state.closed = response.next.closed;
       state.endReason = response.next.reason;
+      if (response.next.issues.includes("stalled_request_stopped")) {
+        state.messages.push({ actor: "system", text: "같은 요청이 반복되어 대화를 마무리했어요. 지금까지의 선택을 돌아보세요." });
+      }
+      // 사용자가 사칭 여부를 조기에 직접 확인한 뒤에도 AI가 새 송금/정보 요구를
+      // 꺼내면 그 즉시 훈련 목표가 끝난 것으로 보아 종료한다.
+      if (!state.closed && shouldResolveAfterActorReply(state)) {
+        state.closed = true;
+        state.endReason = "resolved";
+        state.messages.push({ actor: "system", text: "앞서 직접 확인한 내용과 이번 요청이 일치하지 않아 대화를 마무리했어요." });
+      }
       return apiOk({
         token: seal(state), messages: state.messages, turns: state.turns,
         maxTurns: MAX_TURNS, verified: state.verification !== "none",

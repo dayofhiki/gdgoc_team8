@@ -1,4 +1,5 @@
 import { actionChoice } from "./trainingActions.ts";
+import { hasConcreteRequest, shouldResolveAfterIndependentCheck } from "./trainingResolution.ts";
 import { buildBehaviorFeedback } from "./trainingFeedback.ts";
 import type { Action } from "./trainingActions";
 import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
@@ -304,6 +305,7 @@ export function recordChoice(
   const verification = choice === "verify" || (choice === "family_contact" && familyScenario)
     ? scenario.identity === "legitimate" ? "confirmed" : "failed"
     : state.verification;
+  const resolved = shouldResolveAfterIndependentCheck(state, scenario, choice, verification);
   const notice = choice === "verify" ? scenario.verification
     : choice === "family_contact" ? (familyScenario ? scenario.verification :
         "저장된 번호로 가족에게 연락해 상황을 공유했습니다. 실제 기관의 신원은 아직 별도로 확인하지 않았습니다.")
@@ -318,21 +320,20 @@ export function recordChoice(
     state: {
       ...state,
       verification,
-      // 전화/앱 사용은 훈련 진행 중의 행동이지, 곧바로 결과 화면으로 가는 지름길이 아니다.
-      closed: ["comply", "share", "stop"].includes(choice),
-      endReason: ["comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
+      // 초반의 확인은 진행을 막지 않는다. 그러나 이미 위험 요청이 나왔고
+      // 독립 확인으로 사칭이 판명됐다면 남은 대화의 학습 목표가 해소됐다.
+      closed: resolved || ["comply", "share", "stop"].includes(choice),
+      endReason: resolved ? "resolved" : ["comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
       events: [...state.events, event],
-      messages: [...state.messages, { actor: "system", text: notice }],
+      messages: [...state.messages, { actor: "system", text: notice },
+        ...(resolved ? [{ actor: "system" as const, text: "확인한 내용과 상대의 요청이 일치하지 않아 문자 대화를 마무리했어요. 지금까지의 대응을 살펴보세요." }] : [])],
     },
     notice,
   };
 }
 
 export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess) {
-  const requestReached = state.messages.some(m => m.actor === "them" && (
-    (m.actions ?? []).some(a => ["transfer", "link", "provide_data"].includes(a.kind)) ||
-    (m.offers ?? (m.offer ? [m.offer] : [])).some(a => ["transfer", "share", "link"].includes(a))
-  ));
+  const requestReached = hasConcreteRequest(state.messages);
   // 독립 확인을 일찍 선택한 것과 충분한 대화에서 요청에 대응한 경험을 구분한다.
   // 실제 행동은 언제나 기록하되, 요구가 등장하지 않았다면 요구 대응 역량을 단정하지 않는다.
   const coverage = requestReached ? "request_reached" : state.turns < 2 ? "early" : "conversation_only";

@@ -427,3 +427,47 @@ test("the phone cue has no identity input, no spoiler text and stays a single su
   assert.match(css, /rt-phone-hint 1\.9s ease-in-out 1/);
   assert.match(css, /prefers-reduced-motion: reduce/);
 });
+
+
+test("verified scam is resolved immediately once a concrete money request has been made", () => {
+  const scam = state(1);
+  scam.turns = 4;
+  scam.messages.push({ actor: "them", text: "일단 80만 원 정도 보내줄 수 있어? 수리비 나오고 남으면 바로 다시 입금해 줄게.", actions: [] });
+  const checked = recordChoice(scam, SCENARIOS[1], "family_contact", undefined, undefined, "saved_family").state;
+  assert.equal(checked.verification, "failed");
+  assert.equal(checked.closed, true);
+  assert.equal(checked.endReason, "resolved");
+  assert.match(checked.messages.at(-1).text, /문자 대화를 마무리/);
+  assert.equal(evaluate(checked, SCENARIOS[1], "uncertain").coverage, "request_reached");
+});
+
+test("verification before a meaningful request is still nonterminal, including failed verification", () => {
+  const early = recordChoice(state(1), SCENARIOS[1], "family_contact", undefined, undefined, "saved_family").state;
+  assert.equal(early.verification, "failed");
+  assert.equal(early.closed, false);
+  assert.equal(early.endReason, undefined);
+  const normal = state(0);
+  normal.messages.push({ actor: "them", text: "수리비 좀 보내줄 수 있어?", actions: [] });
+  const genuine = recordChoice(normal, SCENARIOS[0], "family_contact", undefined, undefined, "saved_family").state;
+  assert.equal(genuine.verification, "confirmed");
+  assert.equal(genuine.closed, false); // 정상 연락인 경우 실제 용건을 처리할 여지를 남긴다.
+});
+
+test("existing action IDs still allow requested money transfers and terminate after payment", () => {
+  const s = state(1);
+  const offered = withOffer(s, "transfer", "수리비 80만 원 보내줄래?");
+  const paid = recordChoice(offered.state, SCENARIOS[1], "comply", offered.source).state;
+  assert.equal(paid.closed, true);
+  assert.equal(paid.endReason, "action");
+  assert.equal(evaluate(paid, SCENARIOS[1], "uncertain").dangerousAction, true);
+});
+
+test("closed verified resolution keeps its explanation visible before the user opens behavior feedback", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  assert.match(ui, /next\.endReason === "resolved"/);
+  assert.match(ui, /session\.endReason === "resolved" && session\.verified/);
+  assert.match(ui, /void finish\(\)/);
+  assert.match(ui, /내 대응 피드백 보기/);
+  assert.match(ui, /"resolved" \| null/);
+});
