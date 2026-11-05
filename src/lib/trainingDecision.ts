@@ -5,7 +5,7 @@
  */
 import type { Scenario, TrainingState } from "./realTraining.ts";
 import type { Proposed } from "./trainingActions.ts";
-import { BANK_CLAIMS } from "./trainingCaseFacts.ts";
+import { BANK_CLAIMS, caseBranch } from "./trainingCaseFacts.ts";
 import { revealsSimulation } from "./trainingDialogue.ts";
 import { groundedProposals } from "./trainingActionGuard.ts";
 import { hasConcreteRequest, clearlyDisengaged } from "./trainingResolution.ts";
@@ -69,8 +69,14 @@ export function replyQualityIssue(
       (!bankAnswerIsConcrete(reply) || (state.caseVariant !== undefined && !bankClaimMatches(reply, state.caseVariant)))) {
     return "상대가 '어떤 거래/얼마'인지 물었습니다. 세션에 고정된 가상 거래 유형과 금액을 자연스럽게 설명하세요. 그냥 '본인 확인 부탁드립니다'를 반복하지 마세요.";
   }
-  if (riskDecisionDue(state, scenario, userText) && !meaningfulRiskRequest(reply, actions, scenario.topic)) {
-    return "이제 상대가 선택해야 할 구체적인 잘못된 요청을 한 가지 제시할 차례입니다. 화자의 숨겨진 목적에 맞춰 위에 정해진 요청을 실제 문자 대사에 명시하고, 그 행동을 actions 배열에 kind/origin=sender로 기록하세요. 공식 앱에서 직접 확인하라는 무해한 안내로 대신하지 마세요.";
+  if (riskDecisionDue(state, scenario, userText)) {
+    const expected = caseBranch(scenario, state.caseVariant ?? 0);
+    if (!meaningfulRiskRequest(reply, actions, scenario.topic) ||
+      !actions.some(action => action.kind === expected.kind && action.origin === "sender")) {
+      return "이제 상대가 선택해야 할 구체적인 잘못된 요청을 한 가지 제시할 차례입니다. 이번 사건에 지정된 요청만 수행하세요: " +
+        expected.request + ". 대사에 이를 명시하고 actions 배열에도 kind=" + expected.kind +
+        ", origin=sender로 기록하세요. 공식 앱 확인 안내로 대체하거나 다른 사기 요구로 바꾸지 마세요.";
+    }
   }
   return undefined;
 }
