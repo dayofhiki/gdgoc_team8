@@ -353,7 +353,8 @@ p, h1, h2, h3 { margin: 0; }
 .hero {
   position: relative;
   margin: 0 16px;
-  height: 254px;
+  min-height: 254px;
+  height: auto;
   border-radius: 36px;
   overflow: hidden;
   padding: 16px 16px 16px;
@@ -373,9 +374,9 @@ p, h1, h2, h3 { margin: 0; }
   letter-spacing: -0.4px;
 }
 .hero__title { margin-top: 12px; padding-left: 4px; font-size: 24px; font-weight: 700; line-height: 32px; letter-spacing: -0.6px; white-space: pre-line; }
-.hero__sub { margin-top: 8px; padding-left: 4px; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: -0.4px; }
+.hero__sub { margin-top: 8px; margin-bottom: 20px; padding-left: 4px; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: -0.4px; }
 .hero__btn { margin-top: auto; border-radius: 20px; font-size: 18px; font-weight: 600; }
-.hero__bobber { position: absolute; right: 13px; top: 59px; width: 90px; height: 90px; }
+.hero__bobber { position: absolute; right: 15px; top: 5px; width: 56px; height: 56px; pointer-events: none; }
 .home__sections { padding: 20px 16px 32px; display: flex; flex-direction: column; gap: 20px; }
 .sec__head { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; margin-bottom: 12px; }
 .sec__title { font-size: 18px; font-weight: 600; line-height: 25px; letter-spacing: -0.3px; }
@@ -1281,3 +1282,22 @@ p, h1, h2, h3 { margin: 0; }
 .rt-main-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .rt-main-actions .rt-choice { text-align: center; background: #fff; }
 .rt-transfer-entry { min-height: 44px; }
+
+/* 훈련 중 외부 활동과 종료 결과는 시간 제한 없이 읽을 수 있게 유지한다. */
+.rt-system {
+  align-self: stretch;
+  max-width: 100%;
+  margin: 8px 0;
+  padding: 15px 17px;
+  text-align: left;
+  border: 1px solid #bfd7f1;
+  border-left: 5px solid #347bc4;
+  border-radius: 15px;
+  background: #edf5ff;
+}
+.rt-system strong { display: block; margin-bottom: 7px; color: #285a8b; font-size: 16px; line-height: 1.5; }
+.rt-system span { display: block; background: transparent; padding: 0; color: #253f5a; border-radius: 0; font-size: 17px; line-height: 1.65; white-space: pre-wrap; }
+.rt-finish-notice { padding: 13px 15px; margin-bottom: 10px; background: #eff6ff; border: 1px solid #bad6f3; border-radius: 13px; color: #24486e; }
+.rt-finish-notice strong { display: block; font-size: 18px; margin-bottom: 4px; }
+.rt-finish-notice p { font-size: 16px; line-height: 1.55; }
+.rt-device-outcome p { font-size: 17px; line-height: 1.65; }

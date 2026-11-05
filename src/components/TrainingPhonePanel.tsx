@@ -21,7 +21,6 @@ type Props = {
   onTransfer: (request: PhoneTransferRequest) => Promise<string | undefined>;
   senderPhoneRequests: PhoneTransferRequest[];
   onSenderCall: (request: PhoneTransferRequest) => Promise<string | undefined>;
-  onStop: () => void;
   busy: boolean;
 };
 
@@ -46,7 +45,7 @@ export function TrainingPhoneIcon() {
  * 모의 휴대전화. 첫 화면에서 정답이나 신원 확인 동작을 직접 노출하지 않는다.
  * 기능을 연 뒤 실제 연락처/번호/앱을 고른 행동만 서버에 기록한다.
  */
-export default function TrainingPhonePanel({ topic, initialScreen, initialTransfer, onClose, onAction, transferRequests, onTransfer, senderPhoneRequests, onSenderCall, onStop, busy }: Props) {
+export default function TrainingPhonePanel({ topic, initialScreen, initialTransfer, onClose, onAction, transferRequests, onTransfer, senderPhoneRequests, onSenderCall, busy }: Props) {
   const [screen, setScreen] = useState<Screen>(initialTransfer ? "transfer_confirm" : initialScreen);
   const [notice, setNotice] = useState("");
   const [chosenTransfer, setChosenTransfer] = useState<PhoneTransferRequest | null>(initialTransfer ?? null);
@@ -92,7 +91,10 @@ export default function TrainingPhonePanel({ topic, initialScreen, initialTransf
     setError("");
     try {
       // 실제 발신자 메시지의 봉인된 actionId만 사용한다.
-      await onTransfer(chosenTransfer);
+      const response = await onTransfer(chosenTransfer);
+      if (!response) throw new Error("모의 송금 결과를 확인하지 못했어요.");
+      setNotice(response);
+      setScreen("outcome");
     } catch (e) {
       setError(e instanceof Error ? e.message : "모의 송금을 처리하지 못했어요.");
     } finally {
@@ -145,8 +147,6 @@ export default function TrainingPhonePanel({ topic, initialScreen, initialTransf
               {tile("apps", "앱", "설치된 앱", () => setScreen("apps"))}
               {tile("transfer", "송금", "가상 송금 기능", () => setScreen("transfer"))}
             </div>
-            <div className="rt-device-divider" />
-            <button type="button" className="rt-device-stop" onClick={onStop} disabled={locked}>이 문자 대화 끝내기</button>
           </>
         )}
         {screen === "contacts" && (
@@ -217,7 +217,6 @@ export default function TrainingPhonePanel({ topic, initialScreen, initialTransf
             <div className="rt-device-outcome-actions">
               <button type="button" className="btn btn--primary" onClick={onClose}>문자로 돌아가기</button>
               <button type="button" className="btn btn--gray" onClick={() => setScreen("home")}>다른 기능 보기</button>
-              <button type="button" className="rt-device-stop" disabled={locked} onClick={onStop}>이 문자 대화 끝내기</button>
             </div>
           </div>
         )}

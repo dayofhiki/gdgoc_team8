@@ -5,10 +5,10 @@ import { TRAINING_TOPICS } from "@/lib/trainingCatalog";
 
 const shortcuts = [
   { title: "실전 훈련", description: "어떤 연락이 올지 모르는 상태에서 대응해요", href: "/roleplay?mode=live" },
+  { title: "상황별 연습", description: `가족·택배·금융 등 ${TRAINING_TOPICS.length}가지 상황 중 골라 연습해요`, href: "/roleplay/select" },
   { title: "사례로 배우기", description: "사례 속 대화에서 대처 방법을 살펴봐요", href: "/roleplay/case" },
   { title: "OX 퀴즈", description: "10문제로 대처 방법을 확인해요", href: "/quiz" },
 ];
-const categories = [...new Set(TRAINING_TOPICS.map(topic => topic.category))];
 
 export default function PracticeCatalog() {
   return (
@@ -17,7 +17,7 @@ export default function PracticeCatalog() {
       <section className="screen__body rt-select-page">
         <div className="rt-select-heading">
           <h2>오늘은 어떤 연습을 해볼까요?</h2>
-          <p>바로 실전에 들어가거나 연습할 상황을 골라 보세요.</p>
+          <p>문자·채팅 대응 훈련을 시작하거나 원하는 학습 방식을 선택하세요.</p>
         </div>
         <div className="list">
           {shortcuts.map(item => (
@@ -28,22 +28,6 @@ export default function PracticeCatalog() {
               </span>
               <ChevronRight />
             </Link>
-          ))}
-        </div>
-        <div className="rt-select-categories">
-          <h2 className="sec__title">상황별 연습 · {TRAINING_TOPICS.length}가지</h2>
-          {categories.map(category => (
-            <section key={category} className="rt-select-category">
-              <h3>{category}</h3>
-              <div className="rt-select-list">
-                {TRAINING_TOPICS.filter(topic => topic.category === category).map(topic => (
-                  <Link key={topic.id} href={`/roleplay?topic=${topic.id}`} className="rt-select-item">
-                    <span className="rt-select-copy"><strong>{topic.title}</strong><small>{topic.description}</small></span>
-                    <ChevronRight />
-                  </Link>
-                ))}
-              </div>
-            </section>
           ))}
         </div>
       </section>

@@ -37,7 +37,7 @@ export default function RoleplayMode() {
 
   return (
     <Screen>
-      <Header title="훈련 방식 선택" back={() => router.replace("/roleplay")} />
+      <Header title="문자·채팅 대응 훈련" back={() => router.replace("/roleplay")} />
       <section className="screen__body rt-mode-page">
         <div className="rt-mode-intro">
           <span className="chip">미끼주의보 · 대응 훈련</span>
