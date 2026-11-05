@@ -42,7 +42,7 @@ export function hasConcreteRequest(messages: Message[]): boolean {
 export function clearlyDisengaged(text: string): boolean {
   const s = text.replace(/\s+/g, "").replace(/[.!~…]+$/g, "");
   if (/[?？]$/.test(s)) return false;
-  return /(?:그만|다시|더이상|더는)(?:문자|연락|말|대화)(?:하지마|하지마세요|하지말|그만|끊)/.test(s) ||
+  return /(?:그만|다시|더이상|더는)(?:문자|연락|말|대화)(?:하지마|하지마세요|하지말|그만|끊|해|하세요)/.test(s) ||
     /(?:연락|문자|대화)(?:하지마|그만해|그만하세요|끊을게|끝낼게|끝냅니다|안할게)/.test(s) ||
     /(?:차단할게|차단합니다|신고할게|신고합니다|신고할거야|신고하겠습니다)/.test(s) ||
     /(?:돈|수리비|송금|입금|이체)(?:은|는|을|를)?(?:절대)?(?:안보내|못보내|안할|안해|거절|못줘|안줘)/.test(s);
