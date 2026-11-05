@@ -1,21 +1,14 @@
-"use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { isTrainingTopicId, topicDescriptor, type TrainingTopicId } from "@/lib/trainingCatalog";
+import { isTrainingTopicId, topicDescriptor } from "@/lib/trainingCatalog";
 import { BottomCTA, Header, Screen } from "@/components/ui";
 
 /** 실전 대응 훈련 · 시작 전 안내 */
-export default function RoleplayIntro() {
-  const router = useRouter();
-  const [topic, setTopic] = useState<TrainingTopicId>();
-  useEffect(() => {
-    const sharedTopic = new URLSearchParams(location.search).get("topic");
-    if (isTrainingTopicId(sharedTopic)) setTopic(sharedTopic);
-  }, []);
+export default async function RoleplayIntro({ searchParams }: { searchParams: Promise<{ topic?: string | string[] }> }) {
+  const { topic: requestedTopic } = await searchParams;
+  const topic = isTrainingTopicId(requestedTopic) ? requestedTopic : undefined;
   return (
     <Screen>
-      <Header title="실전 대응 훈련" back={() => router.replace("/home")} />
+      <Header title="실전 대응 훈련" back="/home" />
       <section className="screen__body">
         <img className="rp-intro__img" src="/images/fish-clipboard.png" alt="안내문을 든 뻐끄미" />
         <h2 className="rp-intro__title">시작 전에 확인해주세요</h2>

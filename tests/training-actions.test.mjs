@@ -151,7 +151,12 @@ test("card callback branches only from the attached number and requires opening 
   const installed = recordChoice(opened.state, scenario, "install", linkIndex, link.id).state;
   assert.equal(installed.closed, true);
   assert.equal(evaluate(installed, scenario, "uncertain").dangerousAction, true);
-  assert.equal(evaluate(installed, scenario, "uncertain").behavior.receipts.at(-1).label, "모의 원격 지원 앱 설치");
+  const feedback = evaluate(installed, scenario, "uncertain").behavior;
+  assert.equal(feedback.receipts.at(-1).label, "모의 원격 지원 앱 설치");
+  assert.match(feedback.promises[0].title, /원격 지원 앱을 설치하지 않기/);
+  assert.equal(feedback.promises[0].practiced, false);
+  const stopped = recordChoice(called.state, scenario, "stop").state;
+  assert.equal(evaluate(stopped, scenario, "uncertain").behavior.promises.find(p => p.id === "hold").practiced, true);
 });
 
 test("every authored fallback gives the learner an actionable request by their second reply", async () => {

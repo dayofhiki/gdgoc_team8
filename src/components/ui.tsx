@@ -12,12 +12,16 @@ export function Screen({ children, variant = "default" }: ScreenProps) {
 type HeaderProps = {
   title?: string;
   small?: boolean;
-  back?: boolean | (() => void);
+  back?: boolean | string | (() => void);
   onClose?: () => void;
 };
 export function Header({ title, small, back = true, onClose }: HeaderProps) {
   const router = useRouter();
-  const goBack = () => (typeof back === "function" ? back() : router.back());
+  const goBack = () => {
+    if (typeof back === "function") return back();
+    if (typeof back === "string") return router.replace(back);
+    router.back();
+  };
   return (
     <header className="header">
       {back ? (
