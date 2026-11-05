@@ -351,3 +351,60 @@ test("v3 uses second AI audit only for proposed actions, closing or near-duplica
   assert.match(route, /const caseVariant = randomInt\(CASE_VARIANT_COUNT\)/);
   assert.match(route, /caseVariant, createdAt/);
 });
+
+
+test("termination requires observed training progress, not just a guessed identity or elapsed turns", async () => {
+  const { hasConcreteRequest, clearlyDisengaged, shouldResolveOnLearnerReply,
+    shouldResolveAfterActorReply, shouldResolveAfterIndependentCheck } =
+      await import("../src/lib/trainingResolution.ts");
+  const early = {
+    version: 1, scenario: 1, createdAt: Date.now(), turns: 0,
+    messages: [{ actor: "them", text: "엄마, 폰이 고장 나서 다른 기기로 문자를 보내." }],
+    events: [], verification: "failed", closed: false,
+  };
+  assert.equal(hasConcreteRequest(early.messages), false);
+  assert.equal(shouldResolveAfterActorReply(early), false);
+  assert.equal(shouldResolveOnLearnerReply(early, "왜 고장 났어?"), false);
+  assert.equal(shouldResolveAfterIndependentCheck(early, SCENARIOS[1], "family_contact", "failed"), false);
+  assert.equal(shouldResolveAfterIndependentCheck(early, SCENARIOS[1], "family_contact", "confirmed"), false);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "수리비 얼마나 드니?" }]), false);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "돈을 보내지 마세요." }]), false);
+  assert.equal(hasConcreteRequest([{ actor: "me", text: "80만 원 보내줄래?" }]), false);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "일단 80만 원 정도 보내줄 수 있어?" }]), true);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "이 링크를 눌러 주소 확인해 주세요." }]), true);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "인증번호 알려주세요." }]), true);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "문의사항이 있으신가요?" }]), false);
+  assert.equal(hasConcreteRequest([{ actor: "them", text: "상세 내용은 나중에 안내하겠습니다.", actions: [{ kind: "transfer", origin: "sender" }] }]), true);
+  assert.equal(clearlyDisengaged("너 사기꾼이지?"), false);
+  assert.equal(clearlyDisengaged("왜 연락했어?"), false);
+  assert.equal(clearlyDisengaged("그만 연락해"), true);
+  assert.equal(clearlyDisengaged("다시 연락하지 마"), true);
+  assert.equal(clearlyDisengaged("차단할게"), true);
+  assert.equal(clearlyDisengaged("돈 안 보낼게"), true);
+  assert.equal(clearlyDisengaged("송금은 안 해"), true);
+
+  const meaningful = { ...early,
+    messages: [...early.messages, { actor: "them", text: "80만 원 보내줄 수 있어?" }],
+  };
+  assert.equal(shouldResolveOnLearnerReply(meaningful, "왜 80만 원이야?"), true); // 이미 검증한 모순, 더 추궁할 필요가 없다.
+  assert.equal(shouldResolveOnLearnerReply(meaningful, "뭐야 이 새끼는"), true);
+  assert.equal(shouldResolveAfterActorReply(meaningful), true);
+  assert.equal(shouldResolveAfterIndependentCheck(meaningful, SCENARIOS[1], "family_contact", "failed"), true);
+
+  const uncertain = { ...meaningful, verification: "none" };
+  assert.equal(shouldResolveOnLearnerReply(uncertain, "왜 돈을 보내야 해?"), false);
+  assert.equal(shouldResolveOnLearnerReply(uncertain, "돈 안 보낼게"), true);
+  assert.equal(shouldResolveOnLearnerReply(uncertain, "그만 연락해"), true);
+  assert.equal(shouldResolveOnLearnerReply(early, "그만 연락해"), true);
+});
+
+test("server stops resolved dialogue without another AI generation and keeps final guess optional", async () => {
+  const { readFileSync } = await import("node:fs");
+  const api = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  assert.match(api, /shouldResolveOnLearnerReply\(state, text\)/);
+  assert.match(api, /shouldResolveAfterActorReply\(state\)/);
+  assert.match(api, /endReason: "resolved"/);
+  assert.match(api, /state\.endReason = "resolved"/);
+  const messageBranch = api.slice(api.indexOf('if (body.action === "message")'), api.indexOf('if (body.action === "choice")'));
+  assert.ok(messageBranch.indexOf("shouldResolveOnLearnerReply(state, text)") < messageBranch.indexOf("await generateResponse(state, text)"));
+});
