@@ -29,7 +29,7 @@ export type DialogueMemory = {
   lastSummary: string;
   repeatCount: number;
 };
-export type EndReason = "natural" | "turn_limit" | "action";
+export type EndReason = "natural" | "turn_limit" | "action" | "resolved";
 
 const STAGES: Stage[] = ["contact", "context", "request", "closing"];
 const LEARNER: LearnerMove[] = ["question", "acknowledge", "decline", "verify_intent", "verified_claimed", "claimed_action", "suspect", "engage", "exit"];
@@ -165,7 +165,7 @@ export function caseGuide(scenario: Scenario): string {
  * 말투·확정된 사실·비공개 목적을 세션 전체에서 유지하도록 한다.
  * 고정 대본이나 순차 대사 번호를 LLM에 넘기는 방식이 아니다.
  */
-export function actorBrief(scenario: Scenario, memory: DialogueMemory, completedTurns: number): string {
+export function actorBrief(scenario: Scenario, memory: DialogueMemory, completedTurns: number, caseFacts?: string): string {
   const beat = memory.stage === "closing"
     ? "상대가 실제로 대화를 끝냈다면 새로운 사건을 만들지 말고 짧게 마무리한다."
     : memory.stage === "request"
@@ -177,6 +177,7 @@ export function actorBrief(scenario: Scenario, memory: DialogueMemory, completed
     "### 역할 및 사건 사실(세션 내 변경 금지)",
     "역할: " + scenario.persona,
     "사건의 출발점: " + scenario.situation,
+    ...(caseFacts ? ["이번 세션에서 고정한 세부 정황(발신자의 주장이지 확인된 사실은 아님): " + caseFacts] : []),
     "숨겨진 정체(화자의 속마음으로만 사용, 공개 금지): " + scenario.identity,
     "확정된 사실: " + scenario.privateFacts,
     "화자의 목적과 허용된 대응: " + scenario.objective,
@@ -225,7 +226,7 @@ const OPENING_STYLES = [
   "간단한 인사와 현재 상황을 균형 있게 담는다.",
 ];
 
-export function openingBrief(scenario: Scenario, styleIndex: number): string {
+export function openingBrief(scenario: Scenario, styleIndex: number, caseFacts?: string): string {
   // identity, privateFacts, objective, progression을 일부러 전달하지 않는다.
   // 둘 중 누가 실제 발신자인지 첫 메시지 문체만으로 구별할 수 없게 한다.
   const style = OPENING_STYLES[Math.abs(styleIndex) % OPENING_STYLES.length];
@@ -235,6 +236,7 @@ export function openingBrief(scenario: Scenario, styleIndex: number): string {
     "상황명: " + scenario.title,
     "화자: " + scenario.persona,
     "현재 상황: " + scenario.situation,
+    ...(caseFacts ? ["이 세션에서 고정한 사건의 맥락(확인 완료를 주장하지 말 것): " + caseFacts] : []),
     "말투: " + scenario.voice,
     "첫 메시지 표현 방향: " + style,
     "이미 수신자가 무엇을 답했는지는 모른다. 첫 연락으로 자연스러운 한국어 한두 문장을 작성한다.",
@@ -293,8 +295,13 @@ export function decideDialogueTurn(args: {
   const nearRepeat = replySimilarity(previous.lastReply, reply) >= 0.78 && !!reply.trim();
   const repeats = nearRepeat ? previous.repeatCount + 1 : 0;
   if (nearRepeat) issues.push("near_duplicate_reply");
-  const agree = !!audit && audit.conversationComplete && !audit.hasPendingRequest &&
-    (audit.speakerMove === "close" || audit.speakerMove === "none");
+  // 감사 모델이 실제로 반대하면 그 판단을 존중한다.
+  // 다만 감사 호출 실패만으로 대화가 무한히 이어지지 않게,
+  // 4턴 이후 또는 이전부터 closing인 경우에는 보수적인 단독 종료를 허용한다.
+  const agree = audit
+    ? audit.conversationComplete && !audit.hasPendingRequest &&
+      (audit.speakerMove === "close" || audit.speakerMove === "none")
+    : (nextTurn >= 4 || (nextTurn >= 3 && previous.stage === "closing"));
   const replyEnded = primary.speakerMove === "close" || primary.speakerMove === "none";
   const learnerDone = ["acknowledge", "decline", "verify_intent", "verified_claimed", "claimed_action", "suspect", "exit"].includes(primary.learnerMove) &&
     (!audit || ["acknowledge", "decline", "verify_intent", "verified_claimed", "claimed_action", "suspect", "exit"].includes(audit.learnerMove));
@@ -308,10 +315,18 @@ export function decideDialogueTurn(args: {
   const loop = nextTurn >= 4 && repeats >= 2 &&
     !primary.hasPendingRequest && !audit?.hasPendingRequest &&
     learnerDone && !activeRequest && !explicitQuestion;
+  // 같은 말을 세 번째 반복하고 사용자가 새 질문을 하지 않았다면
+  // 아직 남은 요청이 있다는 AI 판단만으로 대화를 끝없이 재촉하게 두지 않는다.
+  // 요청 버튼이 있더라도 같은 발화의 반복이면 이전 말풍선에서 충분히 보였다.
+  const stalledRequest = nextTurn >= 4 && repeats >= 2 && !explicitQuestion &&
+    ["acknowledge", "decline", "suspect", "exit", "verified_claimed"].includes(primary.learnerMove) &&
+    (!audit || audit.learnerMove !== "question") &&
+    (primary.hasPendingRequest || audit?.hasPendingRequest || activeRequest);
   const turnLimit = nextTurn >= maxTurns;
-  const closed = natural || loop || turnLimit;
-  const reason: EndReason | undefined = natural || loop ? "natural" : turnLimit ? "turn_limit" : undefined;
+  const closed = natural || loop || stalledRequest || turnLimit;
+  const reason: EndReason | undefined = natural || loop || stalledRequest ? "natural" : turnLimit ? "turn_limit" : undefined;
   if (loop) issues.push("repetition_stopped");
+  if (stalledRequest) issues.push("stalled_request_stopped");
   const nextMemory: DialogueMemory = {
     stage: closed ? "closing" : primary.stage,
     hasPendingRequest: closed ? false : primary.hasPendingRequest,

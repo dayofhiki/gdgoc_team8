@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "node:crypto";
-import { evaluate, MAX_TURNS, normalizeKoreanReply, recordChoice, SCENARIOS } from "@/lib/realTraining";
+import { evaluate, MAX_TURNS, normalizeKoreanReply, PHONE_METHODS, recordChoice, SCENARIOS } from "@/lib/realTraining";
 import { ACTION_RULES, buildActions } from "@/lib/trainingActions";
-import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, OPENING_SCHEMA, actorBrief, openingBrief, acceptableOpening, unsolicitedSolution, parseOpeningOutput, decideDialogueTurn, parseDialogueOutput } from "@/lib/trainingDialogue";
+import type { Proposed } from "@/lib/trainingActions";
+import { CASE_VARIANT_COUNT, caseDetail } from "@/lib/trainingCaseFacts";
+import { groundedProposals } from "@/lib/trainingActionGuard";
+import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, OPENING_SCHEMA, actorBrief, openingBrief, acceptableOpening, unsolicitedSolution, parseOpeningOutput, decideDialogueTurn, parseDialogueOutput, replySimilarity } from "@/lib/trainingDialogue";
 import type { DialogueSignal } from "@/lib/trainingDialogue";
 import { complete, providers, type Msg } from "../../../../supabase/functions/_shared/llm";
 import { detectPii } from "../../../../supabase/functions/_shared/pii";
-import type { Choice, Guess, TrainingState } from "@/lib/realTraining";
+import type { Choice, Guess, PhoneMethod, TrainingState } from "@/lib/realTraining";
 import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/lib/trainingTurnContext";
+import { shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +56,8 @@ function unseal(token: unknown): TrainingState {
     !Number.isInteger(state.turns) || state.turns < 0 || state.turns > MAX_TURNS ||
     !Array.isArray(state.messages) || state.messages.length > 40 ||
     !Array.isArray(state.events) || state.events.length > 10 ||
+    (state.caseVariant !== undefined && (!Number.isInteger(state.caseVariant) ||
+      state.caseVariant < 0 || state.caseVariant >= CASE_VARIANT_COUNT)) ||
     !["none", "confirmed", "failed"].includes(state.verification) || typeof state.closed !== "boolean" ||
     (state.endReason !== undefined && !["natural", "turn_limit", "action"].includes(state.endReason)) ||
     (state.dialogue !== undefined && (!state.dialogue || typeof state.dialogue !== "object" ||
@@ -90,11 +96,11 @@ function trainingProviders() {
     ? (process.env.TRAINING_GEMINI_API_KEY || process.env.GEMINI_API_KEY)
     : process.env[key]);
 }
-async function generateOpening(scenario: (typeof SCENARIOS)[number]): Promise<string> {
+async function generateOpening(scenario: (typeof SCENARIOS)[number], caseVariant: number): Promise<string> {
   // 첫 문자는 정상/사칭 여부를 전달하지 않고, 매번 실제 LLM이 만든다.
   // 실패했을 때 예전 고정 opening으로 조용히 되돌아가지 않는다.
   const result = await complete([
-    { role: "system", content: openingBrief(scenario, randomInt(8)) },
+    { role: "system", content: openingBrief(scenario, randomInt(8), caseDetail(scenario, caseVariant)) },
     { role: "user", content: "지금 처음 보낼 문자 한 건만 작성하세요." },
   ], {
     temperature: 0.95, maxTokens: 280, json: true, schema: OPENING_SCHEMA,
@@ -115,7 +121,7 @@ async function generateResponse(state: TrainingState, text: string) {
     "당신은 사용자가 참여한 금융사기 예방 문자 훈련에서 실제 문자 대화 상대를 연기하는 배우다. 대사에 훈련·AI·시나리오라는 말을 꺼내지 않는다.",
     "당신은 훈련의 상대 인물을 연기하는 '배우'이며, 대화 종료·안전 평가·보안 정책은 서버가 결정한다.",
     "아래 역할 정보와 이미 오간 대화에서 확정된 사실을 일관되게 유지한다. 아직 정해지지 않은 세부사항을 새로운 사실로 만들어내지 않는다.",
-    actorBrief(scenario, dialogue, state.turns),
+    actorBrief(scenario, dialogue, state.turns, caseDetail(scenario, state.caseVariant ?? 0)),
     "### 학습자의 이번 발화와 반복 패턴(해석은 추정, 채점 근거 아님)",
     learnerTurnGuidance(currentContext, scenario.identity, state.events.length),
     "앞 턴까지의 대화 상태: " + JSON.stringify({
@@ -165,9 +171,14 @@ async function generateResponse(state: TrainingState, text: string) {
     reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
     if (givesAwaySolution()) throw new Error("UNSOLICITED_SOLUTION");
   }
-  let extracted = first.value.actions;
+  // 일상 답변에는 2차 LLM 호출을 하지 않아 비용/대기 시간을 줄인다.
+  // 행동 버튼이 있거나 실제 대화 종료를 제안할 때만 두 번째 검수를 요청한다.
+  const needsAudit = first.value.actions.length > 0 || first.value.dialogue.conversationComplete ||
+    replySimilarity(dialogue.lastReply, reply) >= 0.78 && !!reply;
+  let auditActions: Proposed[] | undefined;
   let auditSignal: DialogueSignal | undefined;
   try {
+    if (needsAudit) {
     const audit = await complete([
       {
         role: "system",
@@ -194,16 +205,23 @@ async function generateResponse(state: TrainingState, text: string) {
       parse: parseDialogueOutput, budgetMs: 4500,
     }, { list: available });
     auditSignal = audit.value.dialogue;
-    // 모델의 다른 해석을 모아 행동 누락을 줄이되, 실제 허용 여부는 서버에서 검증한다.
-    // 정상인 대사의 안전 경로는 감사 모델의 재해석만으로 생성하지 않는다.
-    // 실제 답변을 작성한 1차 모델의 명시적 송금 부탁만 행동으로 허용한다.
-    extracted = scenario.identity === "legitimate"
-      ? first.value.actions.filter(a => a.kind === "transfer")
-      : [...extracted, ...audit.value.actions];
+    auditActions = audit.value.actions;
+    }
   } catch (error) {
     console.warn("training: independent conversation audit unavailable", error instanceof Error ? error.name : "unknown");
   }
-  const actions = buildActions(extracted, state.turns);
+  // 검수 단독 제안은 절대로 버튼이 되지 않는다. 발화의 명시적 표현과 모델 간
+  // 행동 종류·출처가 맞는 것만 통과한다. 검수 장애 시에도 표면적 요청 근거는 필수다.
+  const grounded = groundedProposals(reply, first.value.actions, auditActions, scenario.identity);
+  if (grounded.length !== first.value.actions.length) {
+    console.info("training: dropped unsupported model-proposed actions");
+  }
+  // 독립 검증 수단은 발신자 말풍선 아래에 정답 버튼처럼 달지 않는다.
+  // 사용자가 별도의 모의 휴대전화 패널에서 직접 찾게 한다.
+  // 단, 상대가 보낸 링크·번호 및 송금·정보 요청은 그 메시지의 일부로 유지한다.
+  const inlineActions = grounded.filter(a => a.kind !== "app" &&
+    !(a.kind === "phone" && a.origin === "preexisting"));
+  const actions = buildActions(inlineActions, state.turns);
   const decision = decideDialogueTurn({
     memory: dialogue, primary: first.value.dialogue, audit: auditSignal,
     reply, userText: text, actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
@@ -241,9 +259,10 @@ export async function POST(req: NextRequest) {
     if (body.action === "start") {
       const index = randomInt(SCENARIOS.length);
       const scenario = SCENARIOS[index];
-      const opening = await generateOpening(scenario);
+      const caseVariant = randomInt(CASE_VARIANT_COUNT);
+      const opening = await generateOpening(scenario, caseVariant);
       const state: TrainingState = {
-        version: 1, scenario: index, createdAt: Date.now(), turns: 0,
+        version: 1, scenario: index, caseVariant, createdAt: Date.now(), turns: 0,
         messages: [{ actor: "them", text: opening }],
         events: [], verification: "none", closed: false, dialogue: INITIAL_DIALOGUE,
       };
@@ -273,6 +292,23 @@ export async function POST(req: NextRequest) {
           closed: ended.closed, endReason: ended.endReason ?? null,
         });
       }
+      // 독립 확인으로 이미 모순이 드러났거나, 구체적 요구에 명확히 거절하며
+      // 연락을 끝내려는 경우 AI가 새 핑계로 설득을 이어가지 못하도록 서버에서 종결한다.
+      if (shouldResolveOnLearnerReply(state, text)) {
+        const ended: TrainingState = {
+          ...state,
+          turns: state.turns + 1,
+          closed: true,
+          endReason: "resolved",
+          messages: [...state.messages, { actor: "me", text },
+            { actor: "system", text: "이번 대화에서 필요한 대응이 마무리됐어요. 지금까지의 선택을 돌아보세요." }],
+        };
+        return apiOk({
+          token: seal(ended), messages: ended.messages, turns: ended.turns,
+          maxTurns: MAX_TURNS, verified: ended.verification !== "none",
+          closed: ended.closed, endReason: ended.endReason,
+        });
+      }
       const response = await generateResponse(state, text);
       state.messages.push({ actor: "me", text });
       if (response.reply) state.messages.push({ actor: "them", text: response.reply, actions: response.actions });
@@ -280,6 +316,16 @@ export async function POST(req: NextRequest) {
       state.dialogue = response.next.memory;
       state.closed = response.next.closed;
       state.endReason = response.next.reason;
+      if (response.next.issues.includes("stalled_request_stopped")) {
+        state.messages.push({ actor: "system", text: "같은 요청이 반복되어 대화를 마무리했어요. 지금까지의 선택을 돌아보세요." });
+      }
+      // 사용자가 사칭 여부를 조기에 직접 확인한 뒤에도 AI가 새 송금/정보 요구를
+      // 꺼내면 그 즉시 훈련 목표가 끝난 것으로 보아 종료한다.
+      if (!state.closed && shouldResolveAfterActorReply(state)) {
+        state.closed = true;
+        state.endReason = "resolved";
+        state.messages.push({ actor: "system", text: "앞서 직접 확인한 내용과 이번 요청이 일치하지 않아 대화를 마무리했어요." });
+      }
       return apiOk({
         token: seal(state), messages: state.messages, turns: state.turns,
         maxTurns: MAX_TURNS, verified: state.verification !== "none",
@@ -290,7 +336,11 @@ export async function POST(req: NextRequest) {
       if (!choices.includes(body.choice as Choice)) return apiError("알 수 없는 행동입니다.", 400);
       const sourceIndex = typeof body.sourceIndex === "number" && Number.isInteger(body.sourceIndex) ? body.sourceIndex : undefined;
       const actionId = typeof body.actionId === "string" && body.actionId.length <= 30 ? body.actionId : undefined;
-      const result = recordChoice(state, scenario, body.choice as Choice, sourceIndex, actionId);
+      if (body.method !== undefined && !PHONE_METHODS.includes(body.method as PhoneMethod)) {
+        return apiError("지원하지 않는 휴대전화 기능입니다.", 400);
+      }
+      const method = body.method as PhoneMethod | undefined;
+      const result = recordChoice(state, scenario, body.choice as Choice, sourceIndex, actionId, method);
       return apiOk({
         token: seal(result.state), messages: result.state.messages, turns: result.state.turns,
         maxTurns: MAX_TURNS, verified: result.state.verification !== "none",
@@ -310,7 +360,7 @@ export async function POST(req: NextRequest) {
     if (err instanceof Error && err.message === "BAD_TOKEN") {
       return apiError("훈련 정보가 만료되거나 유효하지 않습니다. 새 훈련을 시작해 주세요.", 409);
     }
-    if (err instanceof Error && ["이미 종료된 훈련입니다.", "행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.", "해당 메시지에서 행동을 선택해 주세요.", "이 메시지에서는 해당 행동을 할 수 없습니다.", "이미 선택한 행동입니다."].includes(err.message)) {
+    if (err instanceof Error && ["이미 종료된 훈련입니다.", "행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.", "해당 메시지에서 행동을 선택해 주세요.", "이 메시지에서는 해당 행동을 할 수 없습니다.", "이미 선택한 행동입니다.", "이 상황에서 선택할 수 없는 휴대전화 기능입니다.", "휴대전화에서 확인에 사용할 경로를 선택해 주세요."].includes(err.message)) {
       return apiError(err.message, 409);
     }
     console.error("real-training: request failed", err instanceof Error ? err.name : "unknown");

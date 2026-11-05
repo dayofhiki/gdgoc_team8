@@ -66,3 +66,38 @@ export const PersonIcon = ({ size = 22, color = "#8B95A1" }: P) => (
     <path d="M4 18c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5v.5H4V18Z" fill={color} />
   </svg>
 );
+
+const stroke = { strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+
+export const CheckIcon = ({ size = 18, color = "currentColor" }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <path d="m5 12.5 4.5 4.5L19 7" stroke={color} {...stroke} />
+  </svg>
+);
+
+export const AlertIcon = ({ size = 18, color = "currentColor" }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <path d="M12 4.5v10" stroke={color} {...stroke} strokeWidth={2.6} />
+    <circle cx="12" cy="19.2" r="1.6" fill={color} />
+  </svg>
+);
+
+export const FlagIcon = ({ size = 18, color = "currentColor" }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <path d="M6 21V4M6 4.5c4-2.2 8 2.2 12 0v9.5c-4 2.2-8-2.2-12 0" stroke={color} {...stroke} />
+  </svg>
+);
+
+export const ShieldIcon = ({ size = 18, color = "currentColor" }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <path d="M12 3 5 5.8v5.7c0 4.4 2.9 7.7 7 9.5 4.1-1.8 7-5.1 7-9.5V5.8L12 3Z" stroke={color} {...stroke} />
+    <path d="m9 12 2.2 2.2L15.2 10" stroke={color} {...stroke} />
+  </svg>
+);
+
+export const SearchIcon = ({ size = 18, color = "currentColor" }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <circle cx="11" cy="11" r="7" stroke={color} {...stroke} />
+    <path d="m20.5 20.5-4.5-4.5" stroke={color} {...stroke} />
+  </svg>
+);

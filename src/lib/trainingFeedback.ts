@@ -4,6 +4,7 @@
  * 이 모듈은 서버의 봉인된 행동 이벤트만 이용하며 대사 속 약속을 실행으로 간주하지 않는다.
  */
 import type { Scenario, TrainingState, Choice } from "./realTraining.ts";
+import { hasConcreteRequest } from "./trainingResolution.ts";
 
 export type BehaviorTone = "good" | "caution" | "neutral";
 export type FeedbackPoint = { keyword: string; text: string };
@@ -39,10 +40,7 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
   const reliedOnChat = used("verify_chat");
   const moneyWithoutVerification = events.some(e => e.choice === "comply" && !e.verifiedBefore);
   const risk = sentData || moneyWithoutVerification;
-  const offeredRisk = state.messages.some(m => m.actor === "them" && (
-    (m.actions ?? []).some(a => ["transfer", "provide_data", "link"].includes(a.kind)) ||
-    (m.offers ?? (m.offer ? [m.offer] : [])).some(a => ["transfer", "share", "link"].includes(a))
-  ));
+  const offeredRisk = hasConcreteRequest(state.messages);
   const deliberatePause = offeredRisk && !sentMoney && !sentData && (stopped || verified || consulted);
 
   const good: FeedbackPoint[] = [];

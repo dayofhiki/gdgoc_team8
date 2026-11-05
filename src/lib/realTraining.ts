@@ -1,4 +1,5 @@
 import { actionChoice } from "./trainingActions.ts";
+import { hasConcreteRequest, shouldResolveAfterIndependentCheck } from "./trainingResolution.ts";
 import { buildBehaviorFeedback } from "./trainingFeedback.ts";
 import type { Action } from "./trainingActions";
 import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
@@ -12,11 +13,13 @@ import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
 export type Identity = "legitimate" | "fraud";
 export type Guess = "legitimate" | "fraud" | "uncertain";
 export type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
+export type PhoneMethod = "saved_family" | "recent_sender" | "official_directory" | "bank_app" | "delivery_app";
+export const PHONE_METHODS: PhoneMethod[] = ["saved_family", "recent_sender", "official_directory", "bank_app", "delivery_app"];
 export type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
 export type Actor = "them" | "me" | "system";
 export type LinkPreview = { url: string; domain: string; title: string; description: string };
 export type Message = { actor: Actor; text: string; offer?: OfferKind; offers?: OfferKind[]; linkPreview?: LinkPreview; actions?: Action[] };
-export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string };
+export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string; method?: PhoneMethod };
 export type Scenario = {
   id: string;
   identity: Identity;
@@ -128,6 +131,7 @@ export type TrainingState = {
   verification: "none" | "confirmed" | "failed";
   closed: boolean;
   dialogue?: DialogueMemory;
+  caseVariant?: number; // 최초 시작할 때 선택; 봉인 토큰에 저장되어 전 턴에서 동일하게 유지
   endReason?: EndReason;
 };
 
@@ -228,12 +232,32 @@ export function simulatedLink(scenario: Scenario): LinkPreview {
 
 /** 메신저 말풍선의 행동만 송금/정보제공/링크 열기로 인정한다. */
 export function recordChoice(
-  state: TrainingState, scenario: Scenario, choice: Choice, sourceIndex?: number, actionId?: string,
+  state: TrainingState, scenario: Scenario, choice: Choice, sourceIndex?: number, actionId?: string, method?: PhoneMethod,
 ): { state: TrainingState; notice: string } {
   if (state.closed || state.turns >= MAX_TURNS) throw new Error("이미 종료된 훈련입니다.");
-  if (state.events.length >= 6) throw new Error("행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.");
+  if (state.events.length >= 6 && choice !== "stop") throw new Error("행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.");
 
-  const sourceNeeded = ["verify", "verify_sender", "comply", "share", "open_link"].includes(choice);
+  // 휴대전화 패널은 연락처/전화/앱의 실제 선택 경로를 서버에 전달한다.
+  // 첫 화면에서 직접 '검증 성공'을 실행하거나 타 경로로 위장하지 못하도록 확인한다.
+  if (method) {
+    if (sourceIndex !== undefined || actionId !== undefined ||
+        state.events.some(e => e.method === method)) throw new Error("이미 선택한 행동입니다.");
+    const delivery = scenario.id.startsWith("1-");
+    const bank = scenario.id.startsWith("2-");
+    const valid = (choice === "family_contact" && method === "saved_family") ||
+      (choice === "verify_sender" && method === "recent_sender") ||
+      (choice === "verify" && (
+        (method === "official_directory" && (delivery || bank)) ||
+        (method === "bank_app" && bank) ||
+        (method === "delivery_app" && delivery)
+      ));
+    if (!valid) throw new Error("이 상황에서 선택할 수 없는 휴대전화 기능입니다.");
+  } else if (choice === "verify" && sourceIndex === undefined && actionId === undefined) {
+    throw new Error("휴대전화에서 확인에 사용할 경로를 선택해 주세요.");
+  }
+  const sourceNeeded = (["verify_sender", "comply", "share", "open_link"].includes(choice) &&
+    !(choice === "verify_sender" && method === "recent_sender")) ||
+    (choice === "verify" && !method);
   if (sourceNeeded) {
     if (!Number.isInteger(sourceIndex) || sourceIndex! < 0 || sourceIndex! >= state.messages.length) {
       throw new Error("해당 메시지에서 행동을 선택해 주세요.");
@@ -275,11 +299,13 @@ export function recordChoice(
     choice, turn: state.turns, verifiedBefore: state.verification === "confirmed",
     ...(sourceNeeded ? { sourceIndex } : {}),
     ...(actionId ? { actionId } : {}),
+    ...(method ? { method } : {}),
   };
   const familyScenario = scenario.id.startsWith("0-");
   const verification = choice === "verify" || (choice === "family_contact" && familyScenario)
     ? scenario.identity === "legitimate" ? "confirmed" : "failed"
     : state.verification;
+  const resolved = shouldResolveAfterIndependentCheck(state, scenario, choice, verification);
   const notice = choice === "verify" ? scenario.verification
     : choice === "family_contact" ? (familyScenario ? scenario.verification :
         "저장된 번호로 가족에게 연락해 상황을 공유했습니다. 실제 기관의 신원은 아직 별도로 확인하지 않았습니다.")
@@ -294,16 +320,23 @@ export function recordChoice(
     state: {
       ...state,
       verification,
-      closed: ["verify", "family_contact", "comply", "share", "stop"].includes(choice),
-      endReason: ["verify", "family_contact", "comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
+      // 초반의 확인은 진행을 막지 않는다. 그러나 이미 위험 요청이 나왔고
+      // 독립 확인으로 사칭이 판명됐다면 남은 대화의 학습 목표가 해소됐다.
+      closed: resolved || ["comply", "share", "stop"].includes(choice),
+      endReason: resolved ? "resolved" : ["comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
       events: [...state.events, event],
-      messages: [...state.messages, { actor: "system", text: notice }],
+      messages: [...state.messages, { actor: "system", text: notice },
+        ...(resolved ? [{ actor: "system" as const, text: "확인한 내용과 상대의 요청이 일치하지 않아 문자 대화를 마무리했어요. 지금까지의 대응을 살펴보세요." }] : [])],
     },
     notice,
   };
 }
 
 export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess) {
+  const requestReached = hasConcreteRequest(state.messages);
+  // 독립 확인을 일찍 선택한 것과 충분한 대화에서 요청에 대응한 경험을 구분한다.
+  // 실제 행동은 언제나 기록하되, 요구가 등장하지 않았다면 요구 대응 역량을 단정하지 않는다.
+  const coverage = requestReached ? "request_reached" : state.turns < 2 ? "early" : "conversation_only";
   const checked = state.events.some((event) => event.choice === "verify" ||
     (event.choice === "family_contact" && scenario.id.startsWith("0-")));
   const consultedFamily = state.events.some((event) => event.choice === "family_contact");
@@ -365,6 +398,7 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
     linkOpened ? "링크 열람" : followedSenderNumber ? "안내 번호 연락" : "대화 종료";
 
   return {
+    coverage,
     behavior: buildBehaviorFeedback(state, scenario),
     highlights: {
       status,

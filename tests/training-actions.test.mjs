@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ACTION_RULES, RESPONSE_SCHEMA, parseResponse, buildActions, actionChoice } from "../src/lib/trainingActions.ts";
 import { SCENARIOS, recordChoice, evaluate } from "../src/lib/realTraining.ts";
+import { groundedProposals } from "../src/lib/trainingActionGuard.ts";
 
 function session(i) {
   return { version: 1, scenario: i, createdAt: Date.now(), turns: 1,
@@ -102,4 +103,30 @@ test("model response and second semantic audit cannot duplicate one action via p
   ], 2);
   assert.equal(actions.length, 2);
   assert.deepEqual(actions.map(a => a.kind), ["app", "link"]);
+});
+
+
+test("v3 uses only actions actually requested by the actor, confirmed by independent semantic audit", () => {
+  const link = proposal("link", "sender", "택배사", "배송지 확인");
+  const money = proposal("transfer", "sender", "가족", "수리비 송금");
+  const app = proposal("app", "installed", "은행", "거래 확인");
+  assert.equal(groundedProposals("아래 링크를 눌러서 배송지를 확인해 주세요.", [link], [link], "fraud").length, 1);
+  assert.equal(groundedProposals("주소 확인이 필요합니다.", [link], [link], "fraud").length, 0);
+  assert.equal(groundedProposals("아래 링크를 눌러서 확인해 주세요.", [], [link], "fraud").length, 0);
+  assert.equal(groundedProposals("아래 링크를 눌러서 확인해 주세요.", [link], [], "fraud").length, 0);
+  assert.equal(groundedProposals("아래 링크를 눌러서 확인해 주세요.", [link], undefined, "fraud").length, 1);
+  assert.equal(groundedProposals("링크는 누르지 마시고 공식 앱에서 확인하세요.", [link, app], [link, app], "fraud").length, 1);
+  assert.equal(groundedProposals("수리비 좀 보내줄 수 있어?", [money], [money], "legitimate").length, 1);
+  assert.equal(groundedProposals("수리비가 필요하긴 해.", [money], [money], "legitimate").length, 0);
+  assert.equal(groundedProposals("돈은 보내지 마세요.", [money], [money], "fraud").length, 0);
+  assert.equal(groundedProposals("수리비 조금 도와주실 수 있어?", [money], [money], "legitimate").length, 1);
+  assert.equal(groundedProposals("은행 앱에서 직접 확인해 주세요.", [app], [app], "legitimate").length, 0);
+  assert.equal(groundedProposals("", [link], [link], "fraud").length, 0);
+});
+
+test("v3 keeps sender-provided and preexisting verification sources distinct", () => {
+  const sender = proposal("phone", "sender", "고객센터", "확인");
+  const trusted = proposal("phone", "preexisting", "고객센터", "확인");
+  assert.equal(groundedProposals("지금 저희 번호로 전화해 주세요.", [sender], [trusted], "fraud").length, 0);
+  assert.equal(groundedProposals("지금 저희 번호로 전화해 주세요.", [sender], [sender], "fraud").length, 1);
 });
