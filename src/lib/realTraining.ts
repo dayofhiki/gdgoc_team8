@@ -329,6 +329,13 @@ export function recordChoice(
 }
 
 export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess) {
+  const requestReached = state.messages.some(m => m.actor === "them" && (
+    (m.actions ?? []).some(a => ["transfer", "link", "provide_data"].includes(a.kind)) ||
+    (m.offers ?? (m.offer ? [m.offer] : [])).some(a => ["transfer", "share", "link"].includes(a))
+  ));
+  // 독립 확인을 일찍 선택한 것과 충분한 대화에서 요청에 대응한 경험을 구분한다.
+  // 실제 행동은 언제나 기록하되, 요구가 등장하지 않았다면 요구 대응 역량을 단정하지 않는다.
+  const coverage = requestReached ? "request_reached" : state.turns < 2 ? "early" : "conversation_only";
   const checked = state.events.some((event) => event.choice === "verify" ||
     (event.choice === "family_contact" && scenario.id.startsWith("0-")));
   const consultedFamily = state.events.some((event) => event.choice === "family_contact");
@@ -390,6 +397,7 @@ export function evaluate(state: TrainingState, scenario: Scenario, guess: Guess)
     linkOpened ? "링크 열람" : followedSenderNumber ? "안내 번호 연락" : "대화 종료";
 
   return {
+    coverage,
     behavior: buildBehaviorFeedback(state, scenario),
     highlights: {
       status,
