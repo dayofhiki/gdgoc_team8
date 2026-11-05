@@ -12,11 +12,13 @@ import type { DialogueMemory, EndReason } from "./trainingDialogue.ts";
 export type Identity = "legitimate" | "fraud";
 export type Guess = "legitimate" | "fraud" | "uncertain";
 export type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
+export type PhoneMethod = "saved_family" | "recent_sender" | "official_directory" | "bank_app" | "delivery_app";
+export const PHONE_METHODS: PhoneMethod[] = ["saved_family", "recent_sender", "official_directory", "bank_app", "delivery_app"];
 export type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "official_call";
 export type Actor = "them" | "me" | "system";
 export type LinkPreview = { url: string; domain: string; title: string; description: string };
 export type Message = { actor: Actor; text: string; offer?: OfferKind; offers?: OfferKind[]; linkPreview?: LinkPreview; actions?: Action[] };
-export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string };
+export type Event = { choice: Choice; verifiedBefore: boolean; turn: number; sourceIndex?: number; actionId?: string; method?: PhoneMethod };
 export type Scenario = {
   id: string;
   identity: Identity;
@@ -229,15 +231,35 @@ export function simulatedLink(scenario: Scenario): LinkPreview {
 
 /** 메신저 말풍선의 행동만 송금/정보제공/링크 열기로 인정한다. */
 export function recordChoice(
-  state: TrainingState, scenario: Scenario, choice: Choice, sourceIndex?: number, actionId?: string,
+  state: TrainingState, scenario: Scenario, choice: Choice, sourceIndex?: number, actionId?: string, method?: PhoneMethod,
 ): { state: TrainingState; notice: string } {
   if (state.closed || state.turns >= MAX_TURNS) throw new Error("이미 종료된 훈련입니다.");
   if (state.events.length >= 6) throw new Error("행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.");
 
-  // 사용자가 '···' 메뉴에서 직접 독립 확인한 경우는 발신자 대사/버튼에 의존하지 않는다.
-  // 반면 메시지 안에서 제안된 확인 버튼을 선택했다면 기존처럼 봉인된 action ID를 검증한다.
-  const sourceNeeded = ["verify_sender", "comply", "share", "open_link"].includes(choice) ||
-    (choice === "verify" && (sourceIndex !== undefined || actionId !== undefined));
+  // 휴대전화 패널은 연락처/전화/앱의 실제 선택 경로를 서버에 전달한다.
+  // 첫 화면에서 직접 '검증 성공'을 실행하거나 타 경로로 위장하지 못하도록 확인한다.
+  if (method) {
+    if (sourceIndex !== undefined || actionId !== undefined ||
+        state.events.some(e => e.method === method)) throw new Error("이미 선택한 행동입니다.");
+    const family = scenario.id.startsWith("0-");
+    const delivery = scenario.id.startsWith("1-");
+    const bank = scenario.id.startsWith("2-");
+    const valid = (choice === "family_contact" && method === "saved_family") ||
+      (choice === "verify_sender" && method === "recent_sender") ||
+      (choice === "verify" && (
+        (method === "official_directory" && (delivery || bank)) ||
+        (method === "bank_app" && bank) ||
+        (method === "delivery_app" && delivery)
+      ));
+    if (!valid) throw new Error("이 상황에서 선택할 수 없는 휴대전화 기능입니다.");
+    // 저장된 가족 연락처는 가족 시나리오에서만 독립 검증으로 평가한다.
+    void family;
+  } else if (choice === "verify" && sourceIndex === undefined && actionId === undefined) {
+    throw new Error("휴대전화에서 확인에 사용할 경로를 선택해 주세요.");
+  }
+  const sourceNeeded = ["verify_sender", "comply", "share", "open_link"].includes(choice) &&
+    !(choice === "verify_sender" && method === "recent_sender") ||
+    (choice === "verify" && !method);
   if (sourceNeeded) {
     if (!Number.isInteger(sourceIndex) || sourceIndex! < 0 || sourceIndex! >= state.messages.length) {
       throw new Error("해당 메시지에서 행동을 선택해 주세요.");
@@ -279,6 +301,7 @@ export function recordChoice(
     choice, turn: state.turns, verifiedBefore: state.verification === "confirmed",
     ...(sourceNeeded ? { sourceIndex } : {}),
     ...(actionId ? { actionId } : {}),
+    ...(method ? { method } : {}),
   };
   const familyScenario = scenario.id.startsWith("0-");
   const verification = choice === "verify" || (choice === "family_contact" && familyScenario)
@@ -298,8 +321,9 @@ export function recordChoice(
     state: {
       ...state,
       verification,
-      closed: ["verify", "family_contact", "comply", "share", "stop"].includes(choice),
-      endReason: ["verify", "family_contact", "comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
+      // 전화/앱 사용은 훈련 진행 중의 행동이지, 곧바로 결과 화면으로 가는 지름길이 아니다.
+      closed: ["comply", "share", "stop"].includes(choice),
+      endReason: ["comply", "share", "stop"].includes(choice) ? "action" : state.endReason,
       events: [...state.events, event],
       messages: [...state.messages, { actor: "system", text: notice }],
     },
