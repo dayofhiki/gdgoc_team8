@@ -519,11 +519,11 @@ export default function RealTraining() {
           <strong>{contact}</strong>
           <span>문자 메시지</span>
         </div>
-        <button type="button" className="rt-header-more" onClick={openActions} aria-label="다른 사람에게 연락하거나 대화 중단 메뉴 열기" aria-expanded={actionsOpen}>···</button>
+        <button type="button" className="rt-header-more" onClick={openActions} aria-label="직접 확인하거나 가족에게 연락하고 대화 중단하는 메뉴 열기" aria-expanded={actionsOpen}>···</button>
       </header>
       {tipVisible && session && (
         <div className="rt-menu-guide" role="status">
-          <span>위의 <b>···</b>에서 가족에게 연락하거나 대화를 중단할 수 있어요.</span>
+          <span>위의 <b>···</b>에서 직접 확인, 가족 연락 또는 대화 중단을 선택할 수 있어요.</span>
           <button type="button" onClick={dismissGuide} aria-label="안내 닫기">×</button>
         </div>
       )}
@@ -616,7 +616,11 @@ export default function RealTraining() {
             <h2>다음에 어떻게 하시겠어요?</h2>
             <p>대화 밖에서 할 수 있는 행동을 선택해 보세요.</p>
           </div>
-          <button type="button" className="rt-sheet-action" onClick={() => void perform("family_contact")} disabled={busy}>
+          <button type="button" className="rt-sheet-action" onClick={() => void perform("verify")} disabled={busy || !session || session.closed}>
+            <span className="rt-sheet-icon">✓</span>
+            <span><strong>다른 경로로 직접 확인하기</strong><small>상대가 보내 준 번호·링크 말고, 기존 연락처나 공식 앱으로 확인</small></span><span aria-hidden="true">›</span>
+          </button>
+          <button type="button" className="rt-sheet-action" onClick={() => void perform("family_contact")} disabled={busy || !session || session.closed}>
             <span className="rt-sheet-icon">☎</span>
             <span><strong>저장된 번호로 가족에게 연락</strong><small>가족에게 직접 연락하고 대화 마무리</small></span><span aria-hidden="true">›</span>
           </button>
