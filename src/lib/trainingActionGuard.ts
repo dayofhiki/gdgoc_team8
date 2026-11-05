@@ -12,8 +12,12 @@ import type { Kind, Proposed } from "./trainingActions.ts";
 function hasExplicitCue(text: string, kind: Kind): boolean {
   const t = text.replace(/\s+/g, " ");
   const money = /송금|이체|입금|돈|금액|수리비|비용|결제|대금|납부/;
-  const request = /보내|부탁|해\s*주|해줄|해\s*주실|송금|이체|입금|옮겨|결제|지불|납부/;
-  if (kind === "transfer") return money.test(t) && request.test(t);
+  const request = /보내|부탁|해\s*주|해줄|해\s*주실|주실|줄\s*수|도와주|송금|이체|입금|옮겨|결제|지불|납부/;
+  if (kind === "transfer") {
+    if (/(?:돈|수리비|금액).{0,15}(?:보내지|줄\s*필요\s*없)|(?:송금|이체|입금|결제)(?:하지|할\s*필요\s*없)/.test(t) &&
+        !/(?:보내\s*주세요|이체\s*해주세요|송금\s*해주세요)/.test(t)) return false;
+    return money.test(t) && request.test(t);
+  }
   if (kind === "link") {
     const link = /링크|사이트|웹\s*(?:주소|페이지)|인터넷\s*주소|문자(?:로|에)\s*(?:보낸|있는)\s*주소|페이지/;
     const action = /열어|누르|눌러|들어가|접속|클릭|확인|입력|방문|통해|진행/;
