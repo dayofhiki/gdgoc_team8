@@ -5,7 +5,7 @@
 export const TRAINING_TOPICS = [
   { id: "family", title: "가족의 급한 연락", description: "새 번호로 연락해 온 가족의 사정", category: "가족·지인", contactLabel: "처음 보는 번호" },
   { id: "delivery", title: "택배 주소 확인", description: "배송 주소가 맞는지 묻는 연락", category: "생활 문자", contactLabel: "배송 안내" },
-  { id: "bank", title: "은행 거래 알림", description: "평소와 다른 거래를 확인해 달라는 연락", category: "금융", contactLabel: "거래 안내" },
+  { id: "bank", title: "금융 보안 관련 연락", description: "계좌 보호와 거래 관련 용건을 알리는 문자", category: "금융", contactLabel: "금융 안내" },
   { id: "invitation", title: "모바일 청첩장", description: "지인이 보낸 결혼식 초대 연락", category: "가족·지인", contactLabel: "지인 연락" },
   { id: "obituary", title: "부고 알림", description: "지인의 부고 소식을 전하는 문자", category: "가족·지인", contactLabel: "지인 연락" },
   { id: "traffic", title: "교통 과태료 안내", description: "교통위반 내용을 확인하라는 연락", category: "공공기관", contactLabel: "교통 안내" },
