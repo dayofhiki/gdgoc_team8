@@ -259,7 +259,10 @@ async function generateActorResponse(state: TrainingState, text: string, scenari
   // 검수 단독 제안은 절대로 버튼이 되지 않는다. 발화의 명시적 표현과 모델 간
   // 행동 종류·출처가 맞는 것만 통과한다. 검수 장애 시에도 표면적 요청 근거는 필수다.
   const grounded = groundedProposals(reply, first.value.actions, auditActions, scenario.identity);
-  if (riskDecisionDue(state, scenario, text) && !meaningfulRiskRequest(reply, grounded, scenario.topic)) {
+  if (riskDecisionDue(state, scenario, text) &&
+    (!meaningfulRiskRequest(reply, grounded, scenario.topic) ||
+     !grounded.some(action => action.kind === caseBranch(scenario, state.caseVariant ?? 0).kind &&
+       action.origin === "sender"))) {
     throw new Error("INCOMPLETE_TRAINING_DECISION");
   }
   if (grounded.length !== first.value.actions.length) {
