@@ -234,7 +234,7 @@ export function recordChoice(
   state: TrainingState, scenario: Scenario, choice: Choice, sourceIndex?: number, actionId?: string, method?: PhoneMethod,
 ): { state: TrainingState; notice: string } {
   if (state.closed || state.turns >= MAX_TURNS) throw new Error("이미 종료된 훈련입니다.");
-  if (state.events.length >= 6) throw new Error("행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.");
+  if (state.events.length >= 6 && choice !== "stop") throw new Error("행동 선택 횟수가 많습니다. 훈련을 마쳐 주세요.");
 
   // 휴대전화 패널은 연락처/전화/앱의 실제 선택 경로를 서버에 전달한다.
   // 첫 화면에서 직접 '검증 성공'을 실행하거나 타 경로로 위장하지 못하도록 확인한다.
