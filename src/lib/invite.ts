@@ -131,21 +131,6 @@ export async function familySize(): Promise<number | null> {
   }
 }
 
-/** 지금 이 가족에게 내 결과를 보여주는 중인지. 가족이 없거나 오프라인이면 null */
-export async function shareResults(): Promise<boolean | null> {
-  const fid = configured() ? load(KEY_FAMILY) : null;
-  if (!fid) return null;
-  try {
-    await ensureAnon();
-    const { data: me } = await sb().auth.getUser();
-    const { data, error } = await sb().from("family_members").select("share_results").eq("family_id", fid).eq("user_id", me.user!.id).maybeSingle();
-    if (error) throw error;
-    return data?.share_results ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** 이 가족에게 내 연습 결과를 보여줄지 (가족별 동의, 기본 꺼짐). 성공 여부 반환 */
 export async function setShareResults(share: boolean): Promise<boolean> {
   const fid = configured() ? load(KEY_FAMILY) : null;
@@ -198,7 +183,13 @@ export async function joinInvite(token: string, nickname = storedNickname()): Pr
   try {
     await ensureAnon();
     const res = await callFn<InviteJoinResponse>("invite-join", { token, nickname });
-    if (res.invite.family_id) save(KEY_FAMILY, res.invite.family_id);
+    const fid = res.invite.family_id;
+    if (fid) {
+      save(KEY_FAMILY, fid);
+      // 예전에 이름 없이 들어온 구성원이면 이번 별명으로 채움 (이미 이름이 있으면 그대로)
+      const { data: me } = await sb().auth.getUser();
+      if (nickname && me.user) await sb().from("family_members").update({ nickname }).eq("family_id", fid).eq("user_id", me.user.id).eq("nickname", "");
+    }
     return "ok";
   } catch (e) {
     const code = e instanceof Error ? e.message : "";

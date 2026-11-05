@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
 import { ChevronRight, LockIcon, SendIcon } from "@/components/Icons";
 import { Screen } from "@/components/ui";
-import { setShareResults, shareResults } from "@/lib/invite";
+import { familyOverview, setShareResults, type FamilyMemberSummary } from "@/lib/invite";
 
 export default function Home() {
   const { ready, nickname } = useAppState();
@@ -13,14 +13,17 @@ export default function Home() {
   useEffect(() => {
     if (ready && !nickname) router.replace("/onboarding");
   }, [ready, nickname, router]);
-  // 가족에 연결된 경우에만 보이는 결과 공유 동의 (기본 꺼짐)
-  const [share, setShare] = useState<boolean | null>(null);
+  // 가족에 연결된 경우에만: 연결된 가족 목록 + 결과 공유 동의 (기본 꺼짐)
+  const [family, setFamily] = useState<FamilyMemberSummary[] | null>(null);
   useEffect(() => {
-    shareResults().then(setShare);
+    familyOverview().then(setFamily);
   }, []);
+  const others = family?.filter((m) => !m.is_me) ?? [];
+  const share = family?.find((m) => m.is_me)?.share_results ?? null;
+  const setMyShare = (on: boolean) => setFamily((f) => f?.map((m) => (m.is_me ? { ...m, share_results: on } : m)) ?? f);
   const toggleShare = async (on: boolean) => {
-    setShare(on);
-    if (!(await setShareResults(on))) setShare(!on);
+    setMyShare(on);
+    if (!(await setShareResults(on))) setMyShare(!on);
   };
 
   return (
@@ -85,6 +88,16 @@ export default function Home() {
               </span>
               <ChevronRight />
             </Link>
+            {family && (
+              <div className="list-row">
+                <span className="list-row__text">
+                  <span className="list-row__title">연결된 가족 {others.length}명</span>
+                  <span className="list-row__desc">
+                    {others.length ? others.map((m) => m.nickname || "이름 없음").join(", ") : "가족에게 퀴즈나 암호를 보내면 여기에 보여요"}
+                  </span>
+                </span>
+              </div>
+            )}
             {share !== null && (
               <label className="list-row">
                 <span className="list-row__text">
