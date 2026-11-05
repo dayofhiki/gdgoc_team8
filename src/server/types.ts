@@ -101,16 +101,11 @@ export type AiOutput = {
   used_fallback: boolean;
 };
 
-// Edge Functions
-export type InviteJoinRequest = { token: string; nickname?: string };
+// 가족 백엔드 joinInvite 응답
 export type InviteJoinResponse = {
   participant_id: string;
   invite: Pick<Invite, "senior_name" | "difficulty" | "family_id" | "inviter_name">;
 };
-export type ChatTurnRequest = { session_id: string; text?: string };
-export type ChatTurnResponse = { reply: Message; stage: Stage; ended: boolean; used_fallback: boolean };
-export type SessionEndRequest = { session_id: string };
-export type SessionEndResponse = { result: Result };
 
 // 가족 백엔드 (Cloud Function backend). functions/src/family.ts의 타입과 맞출 것
 export type FamilyMemberSummary = {

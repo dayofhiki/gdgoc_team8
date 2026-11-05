@@ -35,6 +35,42 @@ function save(key: string, v: string) {
   }
 }
 
+function forget(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* 저장 불가 환경은 버릴 것도 없음 */
+  }
+}
+
+const isForbidden = (e: unknown) => e instanceof Error && e.message === "FORBIDDEN";
+
+/**
+ * 저장된 가족 id로 호출. FORBIDDEN = 이 계정이 그 가족 구성원이 아님(로그인 계정이 바뀜·가족 삭제 등)
+ * → 저장값을 버려서 이 기기가 계속 실패 상태로 남지 않게 함.
+ */
+async function callFamily<Res>(action: string, fid: string, body: object = {}): Promise<Res> {
+  try {
+    return await callFn<Res>(action, { ...body, familyId: fid });
+  } catch (e) {
+    if (isForbidden(e)) {
+      forget(KEY_FAMILY);
+      forget(KEY_INVITE);
+    }
+    throw e;
+  }
+}
+
+/** 가족을 만들 수 있는 호출용: FORBIDDEN이면 저장값을 버린 뒤 한 번 더 (서버에서 내 가족을 다시 찾거나 새로 만듦) */
+async function retryForbidden<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (isForbidden(e)) return fn();
+    throw e;
+  }
+}
+
 /** 화면이 별명을 안 넘겨도 되게: AppState가 저장한 별명(mikki:nickname)을 그대로 씀 */
 const storedNickname = () => (load("mikki:nickname") ?? "").slice(0, 20);
 
@@ -54,12 +90,14 @@ async function myFamilyId(nickname: string): Promise<string> {
 export async function getInviteToken(nickname = storedNickname()): Promise<string | null> {
   if (!configured()) return null;
   try {
-    const fid = await myFamilyId(nickname);
-    const c = JSON.parse(load(KEY_INVITE) ?? "null") as Cached | null;
-    if (c?.token && c.family_id === fid && new Date(c.expires_at).getTime() - Date.now() > RENEW_BEFORE_MS) return c.token;
-    const data = await callFn<Cached>("createInvite", { maxParticipants: MAX_PARTICIPANTS, familyId: fid, nickname: nickname.slice(0, 20) });
-    save(KEY_INVITE, JSON.stringify(data));
-    return data.token as string;
+    return await retryForbidden(async () => {
+      const fid = await myFamilyId(nickname);
+      const c = JSON.parse(load(KEY_INVITE) ?? "null") as Cached | null;
+      if (c?.token && c.family_id === fid && new Date(c.expires_at).getTime() - Date.now() > RENEW_BEFORE_MS) return c.token;
+      const data = await callFamily<Cached>("createInvite", fid, { maxParticipants: MAX_PARTICIPANTS, nickname: nickname.slice(0, 20) });
+      save(KEY_INVITE, JSON.stringify(data));
+      return data.token;
+    });
   } catch (e) {
     console.warn("초대 링크 생성 실패 → 토큰 없는 링크 사용", e);
     return null;
@@ -77,8 +115,7 @@ export async function familyShareUrl(origin: string): Promise<string> {
 export async function saveFamilyQuestion(question: string, nickname = storedNickname()): Promise<void> {
   if (!configured() || !question) return;
   try {
-    const fid = await myFamilyId(nickname);
-    await callFn("saveQuestion", { familyId: fid, question });
+    await retryForbidden(async () => callFamily("saveQuestion", await myFamilyId(nickname), { question }));
   } catch (e) {
     console.warn("가족 질문 저장 실패", e);
   }
@@ -89,7 +126,7 @@ export async function familyQuestions(): Promise<{ id: string; question: string;
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return null;
   try {
-    return await callFn<{ id: string; question: string; created_at: string }[]>("questions", { familyId: fid });
+    return await callFamily<{ id: string; question: string; created_at: string }[]>("questions", fid);
   } catch (e) {
     console.warn("가족 질문 불러오기 실패", e);
     return null;
@@ -101,7 +138,7 @@ export async function familySize(): Promise<number | null> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return null;
   try {
-    return (await callFn<{ count: number }>("familySize", { familyId: fid })).count;
+    return (await callFamily<{ count: number }>("familySize", fid)).count;
   } catch {
     return null;
   }
@@ -112,7 +149,7 @@ export async function setShareResults(share: boolean): Promise<boolean> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return false;
   try {
-    const data = await callFn<{ share_results: boolean }>("setShare", { familyId: fid, share });
+    const data = await callFamily<{ share_results: boolean }>("setShare", fid, { share });
     return data.share_results === share;
   } catch (e) {
     console.warn("공유 설정 실패", e);
@@ -125,7 +162,7 @@ export async function familyOverview(): Promise<FamilyMemberSummary[] | null> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid) return null;
   try {
-    return await callFn<FamilyMemberSummary[]>("overview", { familyId: fid });
+    return await callFamily<FamilyMemberSummary[]>("overview", fid);
   } catch (e) {
     console.warn("가족 요약 불러오기 실패", e);
     return null;
@@ -137,7 +174,7 @@ export async function syncFamilyNickname(nickname: string): Promise<void> {
   const fid = configured() ? load(KEY_FAMILY) : null;
   if (!fid || !nickname) return;
   try {
-    await callFn("syncNickname", { familyId: fid, nickname: nickname.slice(0, 20) });
+    await callFamily("syncNickname", fid, { nickname: nickname.slice(0, 20) });
   } catch {
     /* 다음에 별명을 바꿀 때 다시 시도 */
   }

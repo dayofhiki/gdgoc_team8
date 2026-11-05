@@ -2,19 +2,16 @@
 뻐끄미와 함께 AI 보이스피싱 대처법을 연습하고, 가족과 퀴즈·가족 암호로 함께 대비하는 **모바일 웹 서비스**입니다.
 
 ## 실행
-Node.js 20 이상 권장. 백엔드는 팀 공용 Supabase 클라우드 프로젝트 1개를 씁니다 (Docker 불필요).
+Node.js 20 이상 권장. 백엔드는 팀 공용 Firebase 프로젝트 `gdgoc-team8` 1개를 씁니다.
 1. git clone https://github.com/dayofhiki/gdgoc_team8.git && cd gdgoc_team8
 2. npm install
-3. `.env.example`을 `.env.local`로 복사하고 Supabase URL·anon key 입력
+3. `.env.example`을 `.env.local`로 복사하고 Firebase 웹 앱 설정값 4개 입력 (비우면 가족·기록 기능은 오프라인 모드)
 4. npm run dev → http://localhost:3000
 
 백엔드 담당 (최초 1회 / 변경 시):
-- `npx supabase login` → `npx supabase link --project-ref <ref>`
-- 대시보드 Authentication > Sign In / Providers에서 **Anonymous sign-ins 활성화**
-- `npx supabase db push --remote --include-seed` (마이그레이션 + 미션 시드. CLI v3는 `--remote` 없으면 로컬로 감)
-- `npx supabase functions deploy invite-join chat-turn session-end --use-api` (Docker 불필요)
-- 클라우드 E2E: `npm run test:e2e` (`.env.local` 필요)
-- 백엔드 검사 (Supabase 없이 실행): `npm run test:backend` — 마이그레이션·RLS·입장 규칙 20개 + 판정 로직 테스트
+- `npx firebase-tools@14 login` (별도 터미널에서)
+- `functions/` 변경 시: `npx firebase-tools@14 deploy --only functions,firestore:rules --project gdgoc-team8`
+- 가족 백엔드 검사: `npm run test:firebase` (Firestore emulator, Java 11+ 필요) · 판정·PII·LLM 로직: `npm run test:backend`
 
 PC에서는 Chrome 개발자 도구(F12 → Ctrl+Shift+M)에서 **iPhone 16 Pro (402×874)** 로 보면 Figma 시안과 같은 크기입니다.
 
@@ -42,20 +39,17 @@ PC에서는 Chrome 개발자 도구(F12 → Ctrl+Shift+M)에서 **iPhone 16 Pro 
 
 ## 중요한 제한
 **아래 항목은 초기 화면 구현 시점의 기록으로, 일부는 현재 구현과 다를 수 있습니다.**
-- 별명과 가족 암호 질문은 브라우저 localStorage에 저장하고, 가족 링크로 연결된 경우 가족 암호 질문은 서버(`family_questions`)에도 저장해 **같은 가족 구성원만** 볼 수 있습니다. 가족 암호 **답은 어디에도 저장하지 않습니다.**
-- 연습 결과는 요약만 서버(`practice_records`)에 저장하고, 본인이 그 가족에 공유를 켠 경우에만(기본 꺼짐) 가족에게 보입니다. 대화 원문은 가족에게 공유하지 않습니다.
+- 별명과 가족 암호 질문은 브라우저 localStorage에 저장하고, 가족 링크로 연결된 경우 가족 암호 질문은 서버(Firestore `families/{id}/questions`)에도 저장해 **같은 가족 구성원만** 볼 수 있습니다. 가족 암호 **답은 어디에도 저장하지 않습니다.**
+- 연습 결과는 요약만 서버(Firestore `users/{uid}/records`)에 저장하고, 본인이 그 가족에 공유를 켠 경우에만(기본 꺼짐) 가족에게 보입니다. 대화 원문은 가족에게 공유하지 않습니다.
 - 채팅 상황극은 고정 시나리오이며 실제 AI 호출이 아닙니다.
 - "카카오톡 공유하기"는 카카오 JavaScript 키 발급 전까지 기기 공유 시트(또는 링크 복사)로 동작합니다.
 - 전화 연습의 "대화 중단 / 다른 번호로 확인" 결과는 AI 통화 분석 연동 전까지 고정 문구입니다.
 
-## 백엔드 (Supabase)
-- Next.js App Router 웹 (레포 루트 `src/`)
-- Supabase: 테이블 6개 + RLS (`supabase/migrations`), Edge Functions `invite-join`·`chat-turn`·`session-end`
-- 보호자 초대 링크 생성 → 시니어 익명 입장 → 미션 선택 → 채팅 상황극 → 결과 저장
-- AI는 mock (`supabase/functions/_shared/ai.ts`, 미션별 기본 대사 + 키워드 판정)
-- Gemini 연동·보호자 진행 현황(Realtime)·안전 약속 저장은 아직 없습니다 (BE_FLOW Phase 2·3).
-
-**Gemini 연동·보호자 진행 현황(Realtime)·안전 약속 저장은 아직 없습니다** (BE_FLOW Phase 2·3). 안전 약속은 화면에서만 보입니다.
+## 백엔드 (Firebase)
+- Next.js App Router 웹 (레포 루트 `src/`, Dokploy 배포). AI 문자 훈련도 Next 서버(`/api/real-training`)에서 돌고 키는 Dokploy env에 있습니다.
+- Firebase: 익명 로그인 + Firestore + Cloud Function `backend` (`functions/`) — 가족 만들기·초대·입장·가족 암호 질문·연습 기록·공유
+- 화면은 `src/lib/invite.ts` · `src/lib/records.ts` 함수만 부릅니다. 자세한 구조는 [BE_FLOW](docs/BE_FLOW.md)
+- 안전 약속은 화면에서만 보입니다 (서버 저장 없음).
 
 ## 연결 자료
 - [전체 화면 기능 명세](docs/SCREEN_FLOW.md)
@@ -67,5 +61,5 @@ PC에서는 Chrome 개발자 도구(F12 → Ctrl+Shift+M)에서 **iPhone 16 Pro 
 - Figma Design: https://www.figma.com/design/N0cMsK4GaxHGvCahJURbin
 - FigJam: https://www.figma.com/board/CKjLATOtuQVCTifOT6Lbqf
 
-공개 저장소에 API 키, Supabase service role 키, 실제 피해자 정보, 실계좌번호를 절대 올리지 마세요.
+공개 저장소에 API 키, Firebase 서비스 계정 키, 실제 피해자 정보, 실계좌번호를 절대 올리지 마세요.
 개발 담당자 배정은 화면 흐름 승인 후 진행합니다.

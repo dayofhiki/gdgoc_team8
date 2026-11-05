@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,7 +25,18 @@ jobs:
         run: npm run typecheck
       - name: Training regression tests
         run: npm run test:training
-      - name: Backend PII / LLM / database tests
+      - name: Backend PII / LLM tests
         run: npm run test:backend
+      - name: Install Cloud Functions dependencies
+        run: npm ci --prefix functions
+      - name: Cloud Functions typecheck/build
+        run: npm run build --prefix functions
+      - name: Setup Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Family backend tests (Firestore emulator)
+        run: npm run test:firebase
       - name: Next.js production build
         run: npm run build

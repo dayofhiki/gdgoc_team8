@@ -37,7 +37,6 @@
   ],
   "exclude": [
     "functions",
-    "node_modules",
-    "supabase/functions"
+    "node_modules"
   ]
 }

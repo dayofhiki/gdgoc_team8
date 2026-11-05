@@ -23,7 +23,7 @@ type Body =
 const AI_TIMEOUT_MS = 8000;
 const MAX_TEXT = 500;
 
-// 결과 판정 규칙 (예전 session-end Edge Function과 동일)
+// 결과 판정 규칙 (키워드 방식)
 const STAGE_FLAGS: Record<Stage, string> = {
   approach: "낯선 번호·처음 보는 상대가 먼저 연락함",
   trust: "그럴듯한 사연이나 신분을 내세워 믿게 만듦",
