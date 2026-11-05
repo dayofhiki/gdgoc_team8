@@ -51,6 +51,12 @@ test("가족 생성 → 초대 → 입장 → 공유 → 요약", async () => {
   await code(run("mom", "overview", { familyId: "../users/kid" }), "FORBIDDEN");
 });
 
+test("같은 사람이 동시에 myFamily를 불러도 가족은 하나", async () => {
+  const ids = await Promise.all(Array.from({ length: 5 }, () => run("racer", "myFamily", {})));
+  assert.equal(new Set(ids.map((r) => r.familyId)).size, 1);
+  assert.equal((await db.collection("families").where("createdBy", "==", "racer").get()).size, 1);
+});
+
 test("초대 토큰 오류·만료", async () => {
   await code(run("a", "joinInvite", { token: "nope" }), "INVITE_INVALID");
   await code(run("a", "joinInvite", { token: "f".repeat(64) }), "INVITE_INVALID");

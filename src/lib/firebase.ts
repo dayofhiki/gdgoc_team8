@@ -16,10 +16,18 @@ function auth(): Auth {
   return getAuth(app);
 }
 
-export async function ensureAnon(): Promise<void> {
-  const a = auth();
-  await a.authStateReady();
-  if (!a.currentUser) await signInAnonymously(a);
+// 동시에 여러 번 불려도(StrictMode 이중 effect, 여러 화면) 익명 계정은 하나만 만들도록 진행 중인 로그인을 공유
+let signingIn: Promise<void> | null = null;
+export function ensureAnon(): Promise<void> {
+  signingIn ??= (async () => {
+    const a = auth();
+    await a.authStateReady();
+    if (!a.currentUser) await signInAnonymously(a);
+  })().catch((e) => {
+    signingIn = null; // 실패하면 다음 호출에서 다시 시도
+    throw e;
+  });
+  return signingIn;
 }
 
 // Cloud Function `backend` (functions/src/index.ts와 같은 리전)

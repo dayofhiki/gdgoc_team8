@@ -68,19 +68,20 @@ async function memberRef(db: Firestore, familyId: unknown, uid: string): Promise
 
 export async function runAction(db: Firestore, uid: string, action: string, b: Body): Promise<unknown> {
   switch (action) {
-    // 내 가족 id. 없으면 새로 만들고 나를 첫 구성원으로
+    // 내 가족 id. 없으면 새로 만들고 나를 첫 구성원으로.
+    // 트랜잭션: 같은 사람이 동시에 불러도 가족이 하나만 생김 (뒤 요청은 재시도하며 앞 요청의 가족을 봄)
     case "myFamily": {
       const user = db.doc(`users/${uid}`);
-      const cur = (await user.get()).get("familyId");
-      if (typeof cur === "string" && (await db.doc(`families/${cur}/members/${uid}`).get()).exists) return { familyId: cur };
-      const fam = db.collection("families").doc();
-      const now = FieldValue.serverTimestamp();
-      await db.batch()
-        .set(fam, { createdBy: uid, createdAt: now })
-        .set(fam.collection("members").doc(uid), { nickname: text(b.nickname, 20), shareResults: false, joinedAt: now })
-        .set(user, { familyId: fam.id }, { merge: true })
-        .commit();
-      return { familyId: fam.id };
+      return db.runTransaction(async (tx) => {
+        const cur = (await tx.get(user)).get("familyId");
+        if (typeof cur === "string" && (await tx.get(db.doc(`families/${cur}/members/${uid}`))).exists) return { familyId: cur };
+        const fam = db.collection("families").doc();
+        const now = FieldValue.serverTimestamp();
+        tx.set(fam, { createdBy: uid, createdAt: now })
+          .set(fam.collection("members").doc(uid), { nickname: text(b.nickname, 20), shareResults: false, joinedAt: now })
+          .set(user, { familyId: fam.id }, { merge: true });
+        return { familyId: fam.id };
+      });
     }
 
     // 가족 초대 링크(7일) 발급. 구성원만
