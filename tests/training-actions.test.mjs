@@ -135,6 +135,7 @@ test("card callback branches only from the attached number and requires opening 
   const { fallbackTrainingTurn } = await import("../src/lib/trainingFallback.ts");
   const scenario = SCENARIOS.find(item => item.topic === "card" && item.identity === "fraud");
   const s = session(SCENARIOS.indexOf(scenario));
+  s.turns = 3;
   const beat = fallbackTrainingTurn(s, scenario, "카드 신청한 적 없어요.");
   const { index, message } = add(s, beat.reply, beat.actions);
   const recent = recordChoice(s, scenario, "verify_sender", undefined, undefined, "recent_sender");
@@ -159,7 +160,7 @@ test("card callback branches only from the attached number and requires opening 
   assert.equal(evaluate(stopped, scenario, "uncertain").behavior.promises.find(p => p.id === "hold").practiced, true);
 });
 
-test("every authored fallback offers a grounded action by its scheduled third reply at latest", async () => {
+test("every authored fallback offers a grounded action at its scheduled reply", async () => {
   const { fallbackTrainingTurn } = await import("../src/lib/trainingFallback.ts");
   const { meaningfulRiskRequest } = await import("../src/lib/trainingDecision.ts");
   const { caseBranch, caseVariantCount } = await import("../src/lib/trainingCaseFacts.ts");

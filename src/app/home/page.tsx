@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
-import { ChevronRight, FlagIcon, LockIcon, SendIcon } from "@/components/Icons";
+import { ChevronRight, LockIcon, SendIcon } from "@/components/Icons";
 import { Screen } from "@/components/ui";
 import { randomTrainingTopic, type TrainingTopicId, topicDescriptor } from "@/lib/trainingCatalog";
 
@@ -84,19 +84,11 @@ export default function Home() {
               </span>
               <ChevronRight />
             </Link>
-            <Link href="/family-code/guide" className="list-row">
+            <Link href="/family-practice" className="list-row">
               <span className="list-row__icon"><LockIcon /></span>
               <span className="list-row__text">
-                <span className="list-row__title">우리 가족 암호 정하기</span>
-                <span className="list-row__desc">사칭 전화에 대비한 확인 질문</span>
-              </span>
-              <ChevronRight />
-            </Link>
-            <Link href="/family-practice" className="list-row">
-              <span className="list-row__icon"><FlagIcon /></span>
-              <span className="list-row__text">
-                <span className="list-row__title">우리 가족 연습 리포트</span>
-                <span className="list-row__desc">가족이 공유한 결과를 보고 함께 복습해요</span>
+                <span className="list-row__title">우리 가족 안전 공유</span>
+                <span className="list-row__desc">가족 암호와 공유한 연습 리포트를 한곳에서</span>
               </span>
               <ChevronRight />
             </Link>

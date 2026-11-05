@@ -1229,12 +1229,10 @@ p, h1, h2, h3 { margin: 0; }
 .family-practice { display: flex; flex-direction: column; gap: 14px; }
 .family-practice input[type="checkbox"] { width: 24px; height: 24px; flex: 0 0 24px; accent-color: var(--blue); }
 .family-practice .fb-subcard { background: #fff; border-radius: 20px; padding: 20px; gap: 14px; }
-.family-practice > .list-row { background: #fff; border-radius: 20px; padding: 12px 18px; }
 .family-report__hero { display: grid; gap: 10px; padding: 20px; border-radius: 20px; background: var(--blue-50); color: var(--g900); }
-.family-report__hero .chip { justify-self: start; background: #fff; }
 .family-report__hero h2 { font-size: 24px; line-height: 32px; }
-.family-report__hero p, .family-report__actions p { line-height: 1.6; }
-.family-practice__member h2, .family-report__actions h2 { font-size: 18px; overflow-wrap: anywhere; }
+.family-report__hero p, .family-hub__code p, .family-hub__report-heading p { line-height: 1.6; }
+.family-practice__member h2, .family-hub__code h2 { font-size: 18px; overflow-wrap: anywhere; }
 .family-practice__member h3 { margin-top: 10px; font-size: 15px; color: var(--g700); }
 .family-practice__member ul { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
 .family-practice__member li { padding: 10px 0 2px; border-top: 1px solid var(--g200); }
@@ -1242,8 +1240,13 @@ p, h1, h2, h3 { margin: 0; }
 .family-report__member-head span, .family-report__record time { color: var(--g700); font-size: 14px; }
 .family-report__badge { border-radius: 8px; padding: 4px 8px; background: var(--blue-50); color: var(--blue-dark); font-size: 13px; }
 .family-report__badge--review { background: var(--red-50); color: var(--red); }
-.family-report__link { display: inline-flex; min-height: 44px; align-items: center; color: var(--blue-dark); text-decoration: underline; }
-.family-report__actions { display: grid; gap: 10px; }
+.family-hub__code, .family-hub__report, .family-hub__report-heading { display: grid; gap: 12px; }
+.family-hub__report { scroll-margin-top: 12px; }
+.family-hub__report-heading { gap: 6px; padding: 10px 4px 0; }
+.family-hub__report-heading h2 { font-size: 21px; }
+.family-hub__report > .list-row { background: #fff; border-radius: 20px; padding: 12px 18px; }
+.family-code-instructions { gap: 12px; }
+.family-hub__code .family-code-instructions { padding: 0 12px 12px; }
 
 .rt-compose-zone { max-height: 60dvh; overflow-y: auto; }
 .rt-replies { display: grid; gap: 5px; }
@@ -1407,46 +1410,49 @@ p, h1, h2, h3 { margin: 0; }
 .figma-mode-item:focus-visible, .figma-font-control:focus-visible, .figma-font-option:focus-visible { outline: 3px solid #3182f6; outline-offset: 2px; }
 
 /* Chat: conversational scene, accessible quick actions, scaled text */
-.figma-chat { background: #f5f5f5; }
+.figma-chat {
+  background: #f5f5f5;
+  --chat-bubble-font: 17px;
+  --chat-font-increase: 0px;
+}
+.figma-chat--large { --chat-bubble-font: 21px; --chat-font-increase: 2px; }
+.figma-chat--xlarge { --chat-bubble-font: 24px; --chat-font-increase: 4px; }
 .figma-chat .rt-header { min-height: 69px; height: 69px; background: #f5f5f5; border-bottom: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; }
 .figma-chat .rt-nav-back { height: 48px; width: 48px; flex: 0 0 48px; }
-.figma-font-control { background: #8c97a4; border: none; border-radius: 999px; color: #fff; font-size: 14px; font-weight: 750; padding: 10px 14px; min-height: 39px; }
+.figma-font-control { background: #8c97a4; border: none; border-radius: 999px; color: #fff; font-size: calc(14px + var(--chat-font-increase)); font-weight: 750; padding: 10px 14px; min-height: 39px; }
 .figma-chat .rt-history { background: #f5f5f5; padding: 17px 22px 27px; gap: 12px; }
-.figma-chat-situation { color: #515e6c; font-weight: 700; font-size: 17px; line-height: 1.55; margin: 1px 0 14px; }
-.figma-chat-contact { display: flex; align-items: center; gap: 10px; color: #95a0ad; font-size: 14px; line-height: 1.5; margin-bottom: 2px; }
+.figma-chat-situation { color: #515e6c; font-weight: 700; font-size: calc(17px + var(--chat-font-increase)); line-height: 1.55; margin: 1px 0 14px; }
+.figma-chat-contact { display: flex; align-items: center; gap: 10px; color: #95a0ad; font-size: calc(14px + var(--chat-font-increase)); line-height: 1.5; margin-bottom: 2px; }
 .figma-chat-contact-icon { height: 37px; width: 37px; border-radius: 50%; display: grid; place-items: center; background: #e3e7eb; color: #8493a1; flex-shrink: 0; }
 .figma-chat .rt-msg-avatar { display: none; }
 .figma-chat .rt-message { padding-left: 45px; }
 .figma-chat .rt-message--mine { padding-left: 0; padding-right: 0; }
 .figma-chat .rt-bubble { border: none; background: #fff; border-radius: 16px; padding: 15px 17px; box-shadow: none; }
 .figma-chat .rt-message--mine .rt-bubble { background: #e7f2ff; }
-.figma-chat .rt-bubble p { font-size: 17px; line-height: 1.65; color: #191f28; }
-.figma-chat--large .rt-bubble p { font-size: 21px; }
-.figma-chat--xlarge .rt-bubble p { font-size: 24px; }
-.figma-chat--large .figma-chat-situation, .figma-chat--large .figma-chat-reply-heading { font-size: 19px; }
-.figma-chat--xlarge .figma-chat-situation, .figma-chat--xlarge .figma-chat-reply-heading { font-size: 21px; }
+.figma-chat .rt-bubble p { font-size: var(--chat-bubble-font); line-height: 1.65; color: #191f28; }
 .figma-chat .rt-day { display: none; }
-.figma-chat .rt-compose-zone { padding: 22px 16px calc(14px + env(safe-area-inset-bottom)); background: #fff; border: none; border-radius: 28px 28px 0 0; box-shadow: 0 -6px 20px rgba(25,31,40,.025); max-height: min(61dvh, 440px); overflow-y: auto; }
-.figma-chat-reply-heading { color: #3182f6; font-size: 17px; line-height: 1.55; font-weight: 800; padding: 1px 2px 11px; }
+.figma-chat .rt-compose-zone { padding: 22px 16px calc(14px + env(safe-area-inset-bottom)); background: #fff; border: none; border-radius: 28px 28px 0 0; box-shadow: 0 -6px 20px rgba(25,31,40,.025); max-height: min(61dvh, 440px); display: flex; flex-direction: column; overflow-y: auto; }
+.figma-chat-reply-heading { color: #3182f6; font-size: calc(17px + var(--chat-font-increase)); line-height: 1.55; font-weight: 800; padding: 1px 2px 11px; }
+.figma-chat-reply-area { min-height: 0; overflow-y: auto; padding: 2px; }
 .figma-chat .rt-replies { display: grid; gap: 10px; margin: 0; }
 .figma-chat .rt-replies > p { display: none; }
-.figma-chat .rt-replies .rt-choice { display: block; width: 100%; min-height: 53px; text-align: left; border: 1px solid #dce2e8; border-radius: 15px; background: white; font-size: 16px; font-weight: 750; line-height: 1.45; padding: 11px 33px 11px 16px; position: relative; color: #191f28; }
+.figma-chat .rt-replies .rt-choice { display: block; width: 100%; min-height: 53px; text-align: left; overflow-wrap: anywhere; border: 1px solid #dce2e8; border-radius: 15px; background: white; font-size: calc(16px + var(--chat-font-increase)); font-weight: 750; line-height: 1.45; padding: 11px 33px 11px 16px; position: relative; color: #191f28; }
 .figma-chat .rt-replies .rt-choice::after { content: "›"; font-size: 25px; color: #b0b8c1; position: absolute; right: 12px; top: 50%; transform: translateY(-55%); }
-.figma-chat .figma-chat-write { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 53px; padding: 11px 16px; border: 1px solid #dce2e8; border-radius: 15px; background: white; font-size: 16px; line-height: 1.45; font-weight: 750; color: #191f28; margin-top: 10px; text-align: left; }
+.figma-chat .figma-chat-write { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 53px; padding: 11px 16px; border: 1px solid #dce2e8; border-radius: 15px; background: white; font-size: calc(16px + var(--chat-font-increase)); line-height: 1.45; font-weight: 750; color: #191f28; margin-top: 10px; text-align: left; }
 .figma-chat .figma-chat-write > span:first-child { color: #3182f6; font-size: 23px; }
 .figma-chat .figma-write-arrow { margin-left: auto; font-size: 25px; color: #b0b8c1; }
-.figma-chat .rt-main-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-.figma-chat .rt-main-actions .rt-choice { border: 1px solid #b3bec9; background: white; border-radius: 15px; min-height: 54px; font-size: 16px; font-weight: 800; line-height: 1.4; padding: 10px 5px; }
+.figma-chat .rt-main-actions { display: grid; flex-shrink: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.figma-chat .rt-main-actions .rt-choice { border: 1px solid #b3bec9; background: white; border-radius: 15px; min-height: 54px; font-size: calc(16px + var(--chat-font-increase)); font-weight: 800; line-height: 1.4; padding: 10px 5px; }
 .figma-chat .rt-main-actions .rt-choice:last-child { background: #e7f2ff; border-color: #e7f2ff; }
-.figma-chat .rt-training-note { font-size: 11px; color: #9fa9b4; margin-top: 8px; }
+.figma-chat .rt-training-note { font-size: calc(11px + var(--chat-font-increase)); color: #647282; margin-top: 8px; }
 .figma-chat .rt-compose { border: 1px solid #dce2e8; border-radius: 15px; padding: 3px 6px 3px 10px; background: #fff; margin-bottom: 10px; }
-.figma-chat .rt-input { min-height: 42px; font-size: 17px; }
+.figma-chat .rt-input { min-height: 42px; font-size: calc(17px + var(--chat-font-increase)); }
 .figma-font-dialog { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .figma-font-dialog h2 { font-size: 22px; font-weight: 800; color: #191f28; text-align: center; line-height: 1.4; padding: 3px 0 15px; }
 .figma-font-option { display: flex; align-items: center; justify-content: space-between; padding: 15px 7px; min-height: 59px; font-size: 21px; font-weight: 800; color: #191f28; background: #fff; text-align: left; }
 .figma-font-option--selected { color: #3182f6; }
 .figma-font-option span { color: #3182f6; font-size: 25px; }
-.figma-font-dialog .btn { margin-top: 16px; }
+.figma-font-dialog .btn { margin-top: 16px; font-size: calc(16px + var(--chat-font-increase)); }
 
 /* A small independent phone, not a menu of answers */
 .rt-device-grid .rt-device-tile { border: none; border-radius: 13px; min-height: 100px; background: #e5f6ec; padding: 16px 14px; }
@@ -1501,3 +1507,36 @@ p, h1, h2, h3 { margin: 0; }
 .figma-quiz-more { background: transparent; color: #3182f6; font-size: 15px; text-align: center; font-weight: 750; padding: 9px; margin-bottom: 8px; }
 @media (max-width: 360px) { .figma-mode-item { gap: 9px; } .figma-mode-item-copy strong { font-size: 17px; } .figma-chat .rt-history { padding-left: 13px; padding-right: 13px; } }
 @media (prefers-reduced-motion: reduce) { .figma-flashcard, .figma-mode-item { transition: none !important; animation: none !important; } }
+
+
+/* The chat setting also applies to the phone and action panels opened from the conversation. */
+.figma-chat :is(.rt-system strong, .rt-message-request, .rt-device-option strong, .rt-intro-lead, .rt-intro-steps strong, .rt-compose-zone .btn, .rt-browser-content .btn, .rt-device .btn, .rt-intro .btn) {
+  font-size: calc(16px + var(--chat-font-increase));
+}
+.figma-chat :is(.rt-system span, .rt-device-grid .rt-device-tile strong, .rt-device-outcome p, .rt-finish-notice strong) {
+  font-size: calc(17px + var(--chat-font-increase));
+}
+.figma-chat :is(.rt-link-preview-copy strong, .rt-browser-content p, .rt-browser-field, .rt-intro-steps span, .rt-intro-check, .rt-device-transfer-summary p) {
+  font-size: calc(15px + var(--chat-font-increase));
+}
+.figma-chat :is(.rt-link-url, .rt-browser-bar strong, .rt-device-description, .rt-device-empty p, .rt-error, .rt-finish-notice p) {
+  font-size: calc(14px + var(--chat-font-increase));
+}
+.figma-chat :is(.rt-device-option small, .rt-intro-note, .rt-device-error) {
+  font-size: calc(13px + var(--chat-font-increase));
+}
+.figma-chat :is(.rt-link-preview-copy small, .rt-device-grid .rt-device-tile small, .rt-device-eyebrow, .rt-device-footnote, .rt-browser-foot) {
+  font-size: calc(12px + var(--chat-font-increase));
+}
+.figma-chat .rt-link-preview-copy .rt-link-preview-domain { font-size: calc(11px + var(--chat-font-increase)); }
+.figma-chat :is(.rt-browser-content h2, .rt-device-heading h2, .rt-device-transfer-summary strong) {
+  font-size: calc(20px + var(--chat-font-increase));
+}
+.figma-chat .rt-intro h2 { font-size: calc(24px + var(--chat-font-increase)); line-height: 1.35; }
+.figma-chat :is(.rt-intro .btn, .rt-device .btn, .rt-compose-zone .btn, .rt-browser-content .btn) {
+  height: auto; min-height: 52px; white-space: normal; line-height: 1.35; padding-block: 9px;
+}
+@media (max-height: 650px) {
+  .figma-chat .rt-compose-zone { padding-top: 12px; }
+  .figma-chat-reply-heading { padding-bottom: 7px; }
+}
