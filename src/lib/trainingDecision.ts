@@ -36,8 +36,10 @@ export function meaningfulRiskRequest(reply: string, proposals: Proposed[]): boo
 }
 
 export function bankQuestionNeedsSpecifics(userText: string): boolean {
-  return /(?:무슨|어떤|뭐|얼마|금액|거래|결제|내역|언제|어디)/.test(userText) &&
-    /(?:거래|결제|내역|무슨|어떤|뭐|얼마|언제|어디)/.test(userText);
+  // "제가 한 거래가 아닌데요"는 정보 질문이 아니라 부인이다.
+  // 이를 상세 조회 질문으로 오인하면 가장 중요한 위험 요청 단계가 밀린다.
+  return /(?:무슨|어떤|뭐|얼마|금액|내역|언제|어디)/.test(userText) &&
+    /(?:거래|결제|내역|상품|금액|뭐|어디|언제|얼마)/.test(userText);
 }
 
 /** 이미 설정된 가상 거래 정황을 설명했는지 확인. 사건 금액·종류를 만들어내지 않는다. */
