@@ -6,8 +6,8 @@ import { BottomCTA, Header, Screen } from "@/components/ui";
 import { TRAINING_TOPICS, type TrainingTopicId } from "@/lib/trainingCatalog";
 
 /**
- * 주제만 공개한다. 같은 주제에서 실제 연락인지 사칭인지는
- * 서버가 매번 무작위로 정하므로 사용자가 진입 화면에서 추측할 수 없다.
+ * 상황별 연습은 사용자가 특정 주제를 선택하는 전용 경로다.
+ * 대화 진행 및 결과 평가의 초점은 실제로 선택한 안전 행동에 둔다.
  */
 export default function SelectTrainingTopic() {
   const router = useRouter();
