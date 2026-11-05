@@ -302,3 +302,40 @@ test("sender-suggested independent safety routes are not handed out as inline an
   assert.match(route, /a\.kind === "phone" && a\.origin === "preexisting"/);
   assert.match(route, /buildActions\(inlineActions, state\.turns\)/);
 });
+
+
+test("phone onboarding is explicit at start, optional on later runs and does not reveal a correct route", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  assert.match(ui, /localStorage\.getItem\(INTRO_HIDE_KEY\)/);
+  assert.match(ui, /localStorage\.setItem\(INTRO_HIDE_KEY, "1"\)/);
+  assert.match(ui, /type="checkbox" checked=\{skipIntroNextTime\}/);
+  assert.match(ui, /다음부터 이 안내 보지 않기/);
+  assert.match(ui, /오른쪽 위 <strong>휴대전화 아이콘<\/strong>/);
+  assert.match(ui, /대화 중간에도 직접 기능을 선택해 보세요/);
+  assert.match(ui, /기능을 사용해도 훈련이 바로 끝나지 않아요/);
+  assert.match(ui, /if \(introOpen\) return/);
+  assert.doesNotMatch(ui, /휴대전화 아이콘.*사칭범/);
+});
+
+test("feedback and truth screens put memorable keywords first, preserving optional evidence", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(ui, /fb-impact-hero/);
+  assert.match(ui, /fb-keyword--good/);
+  assert.match(ui, /fb-keyword--improve/);
+  assert.match(ui, /잘한 행동/);
+  assert.match(ui, /다음에 기억할 행동/);
+  assert.match(ui, /<details className="fb-detail-panel">/);
+  assert.match(ui, /feedback\.receipts\.map/);
+  assert.match(ui, /feedback\.good\.map/);
+  assert.match(ui, /feedback\.improve\.map/);
+  assert.match(ui, /fb-truth-word--fraud/);
+  assert.match(ui, /어떻게 확인했나요/);
+  assert.match(ui, /fb-promise-tile/);
+  assert.match(ui, /가족 확인 질문/);
+  assert.match(ui, /shareFamilyPromises/);
+  assert.match(ui, /result\.coverage === "early"/);
+  assert.match(css, /@media \(max-width: 365px\)/);
+});
