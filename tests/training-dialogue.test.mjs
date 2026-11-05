@@ -164,7 +164,15 @@ test("consecutive near-duplicate replies are detected without keyword lists", ()
     audit:signal({conversationComplete:false,hasPendingRequest:true}),
     reply:"원래 번호로 연락할게.",nextTurn:4,
   });
-  assert.equal(pending.closed,false);
+  assert.equal(pending.closed,true);
+  assert.ok(pending.issues.includes("stalled_request_stopped"));
+  const stillAnsweringQuestion=decide({
+    memory:mem1.memory,
+    primary:signal({conversationComplete:false,hasPendingRequest:true}),
+    audit:signal({conversationComplete:false,hasPendingRequest:true}),
+    reply:"원래 번호로 연락할게.",nextTurn:4, userText:"그런데 왜 고장 났어?",
+  });
+  assert.equal(stillAnsweringQuestion.closed,false);
 });
 
 test("hard turn limit closes even when an active request remains", () => {
@@ -407,4 +415,34 @@ test("server stops resolved dialogue without another AI generation and keeps fin
   assert.match(api, /state\.endReason = "resolved"/);
   const messageBranch = api.slice(api.indexOf('if (body.action === "message")'), api.indexOf('if (body.action === "choice")'));
   assert.ok(messageBranch.indexOf("shouldResolveOnLearnerReply(state, text)") < messageBranch.indexOf("await generateResponse(state, text)"));
+});
+
+
+test("an unchanged payment demand ends after repeated non-progress, not after the first request", () => {
+  const demand = "엄마 수리비 80만 원만 보내줄 수 있어?";
+  const pendingSignal = signal({
+    stage: "request", learnerMove: "decline", speakerMove: "ask",
+    hasPendingRequest: true, conversationComplete: false,
+  });
+  const first = decide({
+    nextTurn: 2, reply: demand, actions: buildActions([proposed("transfer", "자녀")],2),
+    memory: INITIAL_DIALOGUE, primary: pendingSignal, audit: pendingSignal, userText:"지금은 어려워",
+  });
+  assert.equal(first.closed, false);
+  const repeat1 = decide({
+    nextTurn: 3, reply: demand, actions: buildActions([proposed("transfer", "자녀")],3),
+    memory: { ...first.memory, lastReply: demand }, primary:pendingSignal, audit:pendingSignal,userText:"그러니까 지금은 어려워",
+  });
+  assert.equal(repeat1.closed,false);
+  const repeat2 = decide({
+    nextTurn: 4, reply: demand, actions: buildActions([proposed("transfer", "자녀")],4),
+    memory: repeat1.memory, primary:pendingSignal, audit:pendingSignal,userText:"거듭 부탁해도 안 돼",
+  });
+  assert.equal(repeat2.closed,true);
+  assert.ok(repeat2.issues.includes("stalled_request_stopped"));
+  const openQuestion = decide({
+    nextTurn: 4, reply: demand, actions: buildActions([proposed("transfer", "자녀")],4),
+    memory: repeat1.memory, primary:pendingSignal, audit:pendingSignal,userText:"그런데 왜 갑자기 그 돈이 필요해?",
+  });
+  assert.equal(openQuestion.closed,false);
 });
