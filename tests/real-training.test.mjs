@@ -470,7 +470,8 @@ test("existing action IDs still allow requested money transfers and terminate af
 test("closed verified resolution keeps its explanation visible before the user opens behavior feedback", async () => {
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
-  assert.match(ui, /next\.endReason === "resolved"/);
+  assert.doesNotMatch(ui, /setTimeout\(\(\) => void finish\(/);
+  assert.match(ui, /위의 행동 기록을 충분히 읽으신 뒤/);
   assert.doesNotMatch(ui, /session\.endReason === "resolved" && session\.verified/);
   assert.match(ui, /void finish\(\)/);
   assert.match(ui, /내 행동 피드백 보기/);
@@ -565,7 +566,7 @@ test("action-first interface avoids identity-guessing quiz and prioritizes pract
   const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(chat, /setPhase\("judge"\)|phase === "judge"|role="radiogroup" aria-label="상대방 정체 판단"/);
   assert.match(chat, /guess: "uncertain"/);
-  assert.match(chat, /이번 대화에서 선택한 행동을 함께 돌아볼게요/);
+  assert.match(chat, /이번 대화가 마무리됐어요/);
   assert.match(chat, /내 행동 피드백 보기/);
   assert.match(chat, /안전 약속 확인하기/);
   assert.match(chat, /이번 가상 연락의 설정 살펴보기/);
