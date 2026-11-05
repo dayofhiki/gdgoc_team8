@@ -91,7 +91,10 @@ export default function TrainingPhonePanel({ topic, initialScreen, initialTransf
     setError("");
     try {
       // 실제 발신자 메시지의 봉인된 actionId만 사용한다.
-      await onTransfer(chosenTransfer);
+      const response = await onTransfer(chosenTransfer);
+      if (!response) throw new Error("모의 송금 결과를 확인하지 못했어요.");
+      setNotice(response);
+      setScreen("outcome");
     } catch (e) {
       setError(e instanceof Error ? e.message : "모의 송금을 처리하지 못했어요.");
     } finally {
