@@ -294,7 +294,7 @@ export function acceptableOpening(opening: string): boolean {
   const text = opening.trim();
   return text.length >= 10 && text.length <= 130 &&
     !/(?:https?:\/\/|www\.|(?:\d[\s.-]?){8,})/i.test(text) &&
-    !/(?:송금|이체|입금|계좌|링크|앱에서|고객센터|대표번호|카드\s*뒷면|인증번호|비밀번호|개인정보)/.test(text) &&
+    !/(?:송금|이체|입금|계좌\s*번호|링크|앱에서|고객센터|대표번호|카드\s*뒷면|인증번호|비밀번호|개인정보)/.test(text) &&
     !/(?:전화(?:해|하세요|주세요|하면|걸어)|연락(?:해|주세요|하세요)|돈\s*보내)/.test(text);
 }
 
