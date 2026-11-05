@@ -12,6 +12,7 @@ import { detectPii } from "../../../../supabase/functions/_shared/pii";
 import type { Choice, Guess, PhoneMethod, TrainingState } from "@/lib/realTraining";
 import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/lib/trainingTurnContext";
 import { shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";
+import { TRAINING_TOPICS, isTrainingTopicId } from "@/lib/trainingCatalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ function unseal(token: unknown): TrainingState {
     (state.caseVariant !== undefined && (!Number.isInteger(state.caseVariant) ||
       state.caseVariant < 0 || state.caseVariant >= CASE_VARIANT_COUNT)) ||
     !["none", "confirmed", "failed"].includes(state.verification) || typeof state.closed !== "boolean" ||
-    (state.endReason !== undefined && !["natural", "turn_limit", "action"].includes(state.endReason)) ||
+    (state.endReason !== undefined && !["natural", "turn_limit", "action", "resolved"].includes(state.endReason)) ||
     (state.dialogue !== undefined && (!state.dialogue || typeof state.dialogue !== "object" ||
       typeof state.dialogue.lastReply !== "string" || typeof state.dialogue.lastSummary !== "string" ||
       state.dialogue.lastReply.length > 320 || state.dialogue.lastSummary.length > 160 ||
@@ -257,7 +258,13 @@ export async function POST(req: NextRequest) {
     getKey();
     if (!trainingProviders().length) throw new Error("AI_NOT_CONFIGURED");
     if (body.action === "start") {
-      const index = randomInt(SCENARIOS.length);
+      if (body.topic !== undefined && !isTrainingTopicId(body.topic)) {
+        return apiError("지원하지 않는 훈련 상황입니다.", 400);
+      }
+      // 주제는 공개 정보이며 정상/사칭 여부는 서버가 각 시작마다 독립 무작위 선택.
+      const topicIndex = body.topic === undefined ? randomInt(TRAINING_TOPICS.length) :
+        TRAINING_TOPICS.findIndex(t => t.id === body.topic);
+      const index = topicIndex * 2 + randomInt(2);
       const scenario = SCENARIOS[index];
       const caseVariant = randomInt(CASE_VARIANT_COUNT);
       const opening = await generateOpening(scenario, caseVariant);
@@ -267,7 +274,7 @@ export async function POST(req: NextRequest) {
         events: [], verification: "none", closed: false, dialogue: INITIAL_DIALOGUE,
       };
       return apiOk({
-        token: seal(state), title: scenario.title, messages: state.messages,
+        token: seal(state), title: scenario.title, topic: scenario.topic, messages: state.messages,
         turns: 0, maxTurns: MAX_TURNS, verified: false, closed: false, endReason: null,
       });
     }
@@ -287,7 +294,7 @@ export async function POST(req: NextRequest) {
         };
         const ended = recordChoice(withMessage, scenario, "stop").state;
         return apiOk({
-          token: seal(ended), messages: ended.messages, turns: ended.turns,
+          token: seal(ended), topic: scenario.topic, messages: ended.messages, turns: ended.turns,
           maxTurns: MAX_TURNS, verified: ended.verification !== "none",
           closed: ended.closed, endReason: ended.endReason ?? null,
         });
@@ -327,7 +334,7 @@ export async function POST(req: NextRequest) {
         state.messages.push({ actor: "system", text: "앞서 직접 확인한 내용과 이번 요청이 일치하지 않아 대화를 마무리했어요." });
       }
       return apiOk({
-        token: seal(state), messages: state.messages, turns: state.turns,
+        token: seal(state), topic: scenario.topic, messages: state.messages, turns: state.turns,
         maxTurns: MAX_TURNS, verified: state.verification !== "none",
         closed: state.closed, endReason: state.endReason ?? null,
       });
@@ -342,7 +349,7 @@ export async function POST(req: NextRequest) {
       const method = body.method as PhoneMethod | undefined;
       const result = recordChoice(state, scenario, body.choice as Choice, sourceIndex, actionId, method);
       return apiOk({
-        token: seal(result.state), messages: result.state.messages, turns: result.state.turns,
+        token: seal(result.state), topic: scenario.topic, messages: result.state.messages, turns: result.state.turns,
         maxTurns: MAX_TURNS, verified: result.state.verification !== "none",
         closed: result.state.closed, endReason: result.state.endReason ?? null,
       });
