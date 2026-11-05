@@ -22,14 +22,6 @@ const OPTIONS = [
     path: "/roleplay/select",
     featured: false,
   },
-  {
-    title: "사례로 배우기",
-    subtitle: "대화를 보면서 대응 방법을 익힙니다",
-    desc: "진행되는 사례 속에서 주의할 행동과 안전한 대처를 살펴보세요.",
-    image: "/images/fish-clipboard.png",
-    path: "/roleplay/case",
-    featured: false,
-  },
 ] as const;
 
 export default function RoleplayMode() {
