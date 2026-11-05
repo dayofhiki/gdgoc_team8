@@ -67,7 +67,7 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     keyword: "가족에게 먼저 물어봤어요",
     text: "혼자서 판단하지 않고 가족에게 상황을 공유했어요.",
   });
-  if (stopped) good.push({
+  if (stopped && offeredRisk) good.push({
     keyword: "요청에 바로 응하지 않고 멈췄어요",
     text: "상대의 요구에 바로 응하지 않고 대화를 중단했어요.",
   });
@@ -130,7 +130,8 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
         tone: "good",
       } : e.choice === "stop" ? {
         label: "대화 중단",
-        detail: "요청에 즉시 응하지 않고 대화를 멈췄어요.", tone: "good",
+        detail: offeredRisk ? "요청에 즉시 응하지 않고 대화를 멈췄어요." : "상대에게 더 응하지 않고 대화를 끝냈어요.",
+        tone: offeredRisk ? "good" : "neutral",
       } : e.choice === "comply" ? {
         label: "모의 송금",
         detail: e.verifiedBefore ? "독립 확인 후 송금을 선택했어요." : "별도 확인 전에 송금을 선택했어요.",
@@ -180,10 +181,12 @@ export function buildBehaviorFeedback(state: TrainingState, scenario: Scenario):
     tone = followedSender || openedLink ? "caution" : "good";
     headline = "상대의 말보다 직접 확인을 선택하셨어요";
     explanation = "문자와 별개의 경로에서 확인한 내용은 다음 대응을 결정하는 근거가 돼요.";
-  } else if (stopped) {
-    tone = "good";
-    headline = "급한 요청 앞에서 멈추셨어요";
-    explanation = noKnownCompany ? "모집처를 확인하기 어렵더라도 선입금을 거절하고 대화를 끝낼 수 있어요." : "바로 응하지 않고 대화를 중단했어요. 확인이 필요하면 별도의 공식 경로에서 이어갈 수 있어요.";
+  } else if (stopped && !followedSender && !openedLink) {
+    tone = offeredRisk ? "good" : "neutral";
+    headline = offeredRisk ? "급한 요청 앞에서 멈추셨어요" : "이번 대화는 여기서 마쳤어요";
+    explanation = !offeredRisk ? "구체적인 요청이 나오기 전에 대화를 끝냈어요. 다시 연습할 때는 어떤 용건인지 물어보고 대응을 선택해 보세요."
+      : noKnownCompany ? "모집처를 확인하기 어렵더라도 선입금을 거절하고 대화를 끝낼 수 있어요."
+      : "바로 응하지 않고 대화를 중단했어요. 확인이 필요하면 별도의 공식 경로에서 이어갈 수 있어요.";
   } else if (consulted) {
     tone = "good";
     headline = "혼자 판단하지 않고 도움을 요청하셨어요";

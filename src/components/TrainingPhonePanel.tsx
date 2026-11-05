@@ -14,6 +14,7 @@ export type PhoneTransferRequest = { sourceIndex: number; action: Action };
 type Props = {
   topic: Topic;
   initialScreen: "home" | "phone";
+  initialTransfer?: PhoneTransferRequest | null;
   onClose: () => void;
   onAction: (choice: ActionChoice, method: PhoneMethod) => Promise<string | undefined>;
   transferRequests: PhoneTransferRequest[];
@@ -45,10 +46,10 @@ export function TrainingPhoneIcon() {
  * 모의 휴대전화. 첫 화면에서 정답이나 신원 확인 동작을 직접 노출하지 않는다.
  * 기능을 연 뒤 실제 연락처/번호/앱을 고른 행동만 서버에 기록한다.
  */
-export default function TrainingPhonePanel({ topic, initialScreen, onClose, onAction, transferRequests, onTransfer, senderPhoneRequests, onSenderCall, onStop, busy }: Props) {
-  const [screen, setScreen] = useState<Screen>(initialScreen);
+export default function TrainingPhonePanel({ topic, initialScreen, initialTransfer, onClose, onAction, transferRequests, onTransfer, senderPhoneRequests, onSenderCall, onStop, busy }: Props) {
+  const [screen, setScreen] = useState<Screen>(initialTransfer ? "transfer_confirm" : initialScreen);
   const [notice, setNotice] = useState("");
-  const [chosenTransfer, setChosenTransfer] = useState<PhoneTransferRequest | null>(null);
+  const [chosenTransfer, setChosenTransfer] = useState<PhoneTransferRequest | null>(initialTransfer ?? null);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const locked = busy || working;
@@ -164,7 +165,7 @@ export default function TrainingPhonePanel({ topic, initialScreen, onClose, onAc
               () => void senderPhoneCall(request),
             ))}
             {!isPersonalTopic(topic)
-              ? option("official", "기관 번호 검색", "전화 앱의 연락처 검색", () => void act("verify", "official_directory"))
+              ? option("official", "기관 번호를 찾아 전화", "직접 찾은 연락처로 전화", () => void act("verify", "official_directory"))
               : option("family", "기존 가족·지인 연락처", "평소 저장해 둔 연락처로 전화", () => void act("family_contact", "saved_family"))}
           </div>
         )}

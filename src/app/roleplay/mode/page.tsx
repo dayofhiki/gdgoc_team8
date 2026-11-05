@@ -9,7 +9,7 @@ const OPTIONS = [
   {
     title: "실전 훈련",
     subtitle: "어떤 연락이 올지 모릅니다",
-    desc: "예고 없이 도착한 문자에 스스로 대응해 보세요.",
+    desc: "답장 예시를 누르거나 직접 쓰고, 전화·앱으로 대응해 보세요.",
     image: "/images/icon-chat.png",
     path: "/roleplay/chat",
     featured: true,

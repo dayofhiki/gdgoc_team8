@@ -315,9 +315,9 @@ test("phone onboarding is explicit at start, optional on later runs and does not
   assert.match(ui, /localStorage\.setItem\(INTRO_HIDE_KEY, "1"\)/);
   assert.match(ui, /type="checkbox" checked=\{skipIntroNextTime\}/);
   assert.match(ui, /다음부터 이 안내 보지 않기/);
-  assert.match(ui, /오른쪽 위 <strong>휴대전화 아이콘<\/strong>/);
-  assert.match(ui, /대화 중간에도 직접 기능을 선택해 보세요/);
-  assert.match(ui, /확인 후 문자로 돌아올 수 있어요/);
+  assert.match(ui, /<strong>직접 쓰기<\/strong>/);
+  assert.match(ui, /화면 아래에서 연락처, 전화, 앱을 사용할 수 있어요/);
+  assert.match(ui, /누르면 바로 보내요/);
   assert.match(ui, /if \(introOpen\) return/);
   assert.doesNotMatch(ui, /휴대전화 아이콘.*사칭범/);
 });
@@ -363,7 +363,9 @@ test("mock phone workspace replaces duplicate messages tile with transfer, requi
   assert.match(ui, /!\["transfer", "phone", "app"\]\.includes\(action\.kind\)/);
   assert.match(ui, /action\.kind === "link"/);
   assert.match(ui, /rt-message-request/);
-  assert.match(ui, /연락처·전화·앱·송금을 사용할 수 있어요/);
+  assert.match(ui, /모의 송금 열기/);
+  assert.match(ui, /openActions\("home", \{ sourceIndex: i, action \}\)/);
+  assert.match(panel, /initialTransfer \? "transfer_confirm" : initialScreen/);
 });
 
 test("transfers from mock phone are permitted only for a genuine bound request and record a risky action", async () => {
@@ -677,4 +679,18 @@ test("a bank app lookup is inconclusive but the independent callback can resolve
   assert.equal(official.state.closed, true);
   assert.match(official.notice, /대표번호/);
   assert.equal(evaluate(official.state, scenario, "uncertain").checked, true);
+});
+
+test("reply examples keep hidden facts out of the conversation and leave prevention actions to the learner", async () => {
+  const { trainingReplyExamples } = await import("../src/lib/trainingReplyExamples.ts");
+  const invite = [{ actor: "them", text: "전해 드릴 소식이 있어요." }];
+  assert.ok(trainingReplyExamples("invitation", invite).every(text => !text.includes("결혼")));
+  assert.ok(trainingReplyExamples("invitation", [...invite, { actor: "them", text: "결혼하게 됐어요." }]).some(text => text.includes("결혼")));
+  const request = [{ actor: "them", text: "상품대금을 먼저 입금해 주세요.", actions: [{ kind: "transfer", origin: "sender" }] }];
+  const examples = trainingReplyExamples("team_mission", request);
+  assert.equal(examples.length, 2);
+  assert.ok(examples.includes("잠깐 생각해 볼게요."));
+  assert.ok(!trainingReplyExamples("team_mission", [...request, { actor: "me", text: examples[0] }]).includes(examples[0]));
+  const stoppedEarly = recordChoice(state(1), SCENARIOS[1], "stop").state;
+  assert.equal(evaluate(stoppedEarly, SCENARIOS[1], "uncertain").behavior.tone, "neutral");
 });

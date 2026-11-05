@@ -13,6 +13,7 @@ import type { BehaviorFeedback } from "@/lib/trainingFeedback";
 import type { Choice, PhoneMethod } from "@/lib/realTraining";
 import { topicDescriptor, type TrainingTopicId } from "@/lib/trainingCatalog";
 import { shouldCuePhonePanel } from "@/lib/trainingPhoneCue";
+import { trainingReplyExamples } from "@/lib/trainingReplyExamples";
 import TrainingPhonePanel, { TrainingPhoneIcon, type PhoneTransferRequest } from "@/components/TrainingPhonePanel";
 
 type Message = { actor: "them" | "me" | "system"; text: string; actions?: Action[] };
@@ -111,6 +112,10 @@ export default function RealTraining() {
   const [input, setInput] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [phoneStart, setPhoneStart] = useState<"home" | "phone">("home");
+  const [initialTransfer, setInitialTransfer] = useState<PhoneTransferRequest | null>(null);
+  const [confirmStop, setConfirmStop] = useState(false);
+  const [writeReply, setWriteReply] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [confirmData, setConfirmData] = useState<{ action: Action; index: number } | null>(null);
   const [phoneHint, setPhoneHint] = useState(false);
   const [introOpen, setIntroOpen] = useState(false);
@@ -147,6 +152,9 @@ export default function RealTraining() {
     setPreviewActionId(null);
     setActionsOpen(false);
     setPhoneStart("home");
+    setInitialTransfer(null);
+    setConfirmStop(false);
+    setWriteReply(false);
     setPhoneHint(false);
     setIntroOpen(false);
     setSkipIntroNextTime(false);
@@ -193,7 +201,7 @@ export default function RealTraining() {
     if (phase === "chat" && historyRef.current) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
-  }, [phase, session?.messages.length, pendingMessage, typingVisible, busy]);
+  }, [phase, session?.messages.length, pendingMessage, typingVisible, busy, writeReply]);
 
   useEffect(() => {
     if (pendingMessage === null) {
@@ -231,20 +239,21 @@ export default function RealTraining() {
     // 필요해지는 순간(행동 요청 등장 또는 사용자의 확인 의사)에만 기존 단발성 강조가 나온다.
   }
 
-  function openActions(screen: "home" | "phone" = "home") {
+  function openActions(screen: "home" | "phone" = "home", transfer: PhoneTransferRequest | null = null) {
     if (introOpen) return;
     setPhoneHint(false);
     phoneHintShown.current = true;
     setPhoneStart(screen);
+    setInitialTransfer(transfer);
     setActionsOpen(true);
   }
 
-  async function send() {
-    const text = input.trim();
+  async function send(replyText = input) {
+    const text = replyText.trim();
     if (!session || !text || busy || session.closed || ending || session.turns >= session.maxTurns) return;
     // 사용자 말풍선은 서버가 답하기 전에 즉시 표시한다.
     setPendingMessage(text);
-    setInput("");
+    if (writeReply) setInput("");
     setBusy(true);
     setError("");
     const sentAt = Date.now();
@@ -269,6 +278,7 @@ export default function RealTraining() {
       // 네트워크 실패 시 보낸 것처럼 남겨 두지 않고 입력창에 복구한다.
       setPendingMessage(null);
       setInput(text);
+      setWriteReply(true);
       setError(err instanceof Error ? err.message : "대화에 실패했습니다. 다시 시도해 주세요.");
     } finally {
       setBusy(false);
@@ -289,6 +299,7 @@ export default function RealTraining() {
       setSession({ ...next, title: session.title, topic: session.topic });
       if ((!method && !fromPhonePanel) || next.closed) setActionsOpen(false);
       setConfirmData(null);
+      setConfirmStop(false);
       if (choice === "open_link" && sourceIndex !== undefined && actionId) {
         setOpenedLinks((prev) => prev.includes(actionId) ? prev : [...prev, actionId]);
         setPreviewIndex(sourceIndex);
@@ -560,6 +571,7 @@ export default function RealTraining() {
   const transferRequests: PhoneTransferRequest[] = panelActions.filter(({ action }) => action.kind === "transfer");
   const senderPhoneRequests: PhoneTransferRequest[] = panelActions.filter(({ action }) =>
     action.kind === "phone" && action.origin === "sender");
+  const examples = session && !session.closed ? trainingReplyExamples(phoneTopic, session.messages) : [];
   const activeLink = previewIndex !== null ? session?.messages[previewIndex]?.actions?.find(a => a.id === previewActionId)?.linkPreview : undefined;
 
   return (
@@ -605,6 +617,12 @@ export default function RealTraining() {
                       <span aria-hidden="true">☎</span> 첨부 연락처 보기 <span aria-hidden="true">›</span>
                     </button>
                   )}
+                  {m.actor === "them" && !session?.closed && (m.actions ?? []).filter(action => action.kind === "transfer").map(action => (
+                    <button key={action.id} type="button" className="rt-message-request rt-transfer-entry"
+                      onClick={() => openActions("home", { sourceIndex: i, action })} disabled={busy}>
+                      <span aria-hidden="true">₩</span> 모의 송금 열기 <span aria-hidden="true">›</span>
+                    </button>
+                  ))}
                   {m.actor === "them" && !session?.closed && (m.actions ?? []).filter(action =>
                     !["transfer", "phone", "app"].includes(action.kind)
                   ).map((action) =>
@@ -660,16 +678,35 @@ export default function RealTraining() {
             onClick={() => void finish()}>
             {busy ? "대응 분석 중…" : "내 행동 피드백 보기"}
           </button>
-        ) : (
-          <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-            <input type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="메시지 입력"
-              maxLength={300} value={input} disabled={busy || !session || session.closed || session.turns >= session.maxTurns}
-              onChange={(event) => setInput(event.target.value)} />
-            <button type="submit" className="rt-send" aria-label="메시지 전송"
-              disabled={busy || !session || !input.trim() || session.closed}>
-              <span aria-hidden="true">↑</span>
-            </button>
-          </form>
+        ) : session && !session.closed && (
+          <>
+            {writeReply ? (
+              <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+                <input ref={inputRef} type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="답장 쓰기"
+                  maxLength={300} value={input} disabled={busy} onChange={(event) => setInput(event.target.value)} />
+                <button type="submit" className="rt-send" aria-label="메시지 전송" disabled={busy || !input.trim()}>
+                  <span aria-hidden="true">↑</span>
+                </button>
+              </form>
+            ) : (
+              <div className="rt-replies" role="group" aria-label="답장 예시">
+                {examples.length > 0 && <p>답장 예시 <span>누르면 바로 보내요</span></p>}
+                {examples.map(text => (
+                  <button key={text} type="button" className="rt-choice" disabled={busy}
+                    onClick={() => void send(text)}>{text}</button>
+                ))}
+              </div>
+            )}
+            <button type="button" className="rt-write-toggle" aria-expanded={writeReply}
+              disabled={busy} onClick={() => {
+                setWriteReply(!writeReply);
+                if (!writeReply) requestAnimationFrame(() => inputRef.current?.focus());
+              }}>{writeReply ? "답장 예시 보기" : "직접 쓰기"}</button>
+            <div className="rt-main-actions" role="group" aria-label="문자 밖에서 할 수 있는 행동">
+              <button type="button" className="rt-choice" disabled={busy} onClick={() => openActions()}>전화·앱 열기</button>
+              <button type="button" className="rt-choice" disabled={busy} onClick={() => setConfirmStop(true)}>대화 끝내기</button>
+            </div>
+          </>
         )}
         <div className="rt-training-note">모의 훈련 · 실제 송금·통화·정보 전송 없음</div>
       </div>
@@ -678,15 +715,14 @@ export default function RealTraining() {
         <BottomSheet onClose={closeIntro}>
           <div className="rt-intro" aria-labelledby="rt-intro-title">
             <div className="rt-intro-icon"><TrainingPhoneIcon /></div>
-            <h2 id="rt-intro-title">문자 외의 기능도 사용해 보세요</h2>
+            <h2 id="rt-intro-title">문자를 받고 어떻게 할지 골라 보세요</h2>
             <p className="rt-intro-lead">
-              오른쪽 위 <strong>휴대전화 아이콘</strong>을 누르면
-              연락처·전화·앱·송금을 사용할 수 있어요.
+              답장 예시를 누르면 바로 보내요. <strong>직접 쓰기</strong>를 누르면 원하는 말을 보낼 수 있어요.
             </p>
             <div className="rt-intro-steps">
-              <div><strong>① 대화하기</strong><span>상대방의 말에 자유롭게 답해요.</span></div>
-              <div><strong>② 휴대전화 사용</strong><span>필요하다고 느낄 때, 대화 중간에도 직접 기능을 선택해 보세요.</span></div>
-              <div><strong>③ 상황에 맞게 대응하기</strong><span>확인 후 문자로 돌아올 수 있어요. 송금이나 종료처럼 훈련을 마치는 행동도 있어요.</span></div>
+              <div><strong>① 대화하기</strong><span>답장을 고르거나 직접 쓸 수 있어요.</span></div>
+              <div><strong>② 전화·앱 열기</strong><span>화면 아래에서 연락처, 전화, 앱을 사용할 수 있어요.</span></div>
+              <div><strong>③ 대화 끝내기</strong><span>그만 대응하고 싶을 때 화면 아래에서 대화를 끝낼 수 있어요.</span></div>
             </div>
             <p className="rt-intro-note">어떤 연락에도 필요한 행동을 직접 선택해 보세요. 실제 통화나 송금은 일어나지 않아요.</p>
             <label className="rt-intro-check">
@@ -704,6 +740,7 @@ export default function RealTraining() {
         <TrainingPhonePanel
           topic={phoneTopic}
           initialScreen={phoneStart}
+          initialTransfer={initialTransfer}
           busy={busy}
           onClose={() => setActionsOpen(false)}
           onAction={(choice, method) => perform(choice, undefined, undefined, method)}
@@ -715,6 +752,17 @@ export default function RealTraining() {
         />
       )}
 
+      {confirmStop && (
+        <BottomSheet onClose={busy ? undefined : () => setConfirmStop(false)}>
+          <div className="rt-browser-content">
+            <h2>이 대화를 끝낼까요?</h2>
+            <p>지금까지 선택한 행동을 바탕으로 훈련 결과를 보여드려요.</p>
+            {error && <p role="alert">{error}</p>}
+            <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void perform("stop")}>대화 끝내고 결과 보기</button>
+            <button type="button" className="btn btn--gray" disabled={busy} onClick={() => setConfirmStop(false)}>대화 계속하기</button>
+          </div>
+        </BottomSheet>
+      )}
       {ending && (
         <div className={ending.stage === "review" ? "rt-transition rt-transition--visible" : "rt-action-receipt"} role="status" aria-live="polite">
           <div className="rt-transition__symbol" aria-hidden="true">{ending.choice === "verify" || ending.choice === "family_contact" ? "✓" : ending.choice === "stop" ? "✕" : "↗"}</div>
