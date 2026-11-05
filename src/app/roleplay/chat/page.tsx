@@ -20,8 +20,7 @@ type OfferKind = "transfer" | "share" | "link" | "call" | "official_app" | "offi
 type LinkPreview = { url: string; domain: string; title: string; description: string };
 type Message = { actor: "them" | "me" | "system"; text: string; actions?: Action[] };
 type Choice = "verify" | "family_contact" | "verify_sender" | "verify_chat" | "comply" | "share" | "stop" | "open_link";
-type Guess = "legitimate" | "fraud" | "uncertain";
-type Phase = "chat" | "judge" | "result";
+type Phase = "chat" | "result";
 type Ending = { choice: "verify" | "family_contact" | "stop" | "comply" | "share"; stage: "receipt" | "review" };
 type Session = {
   token: string;
@@ -121,7 +120,6 @@ export default function RealTraining() {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [previewActionId, setPreviewActionId] = useState<string | null>(null);
   const [openedLinks, setOpenedLinks] = useState<string[]>([]);
-  const [guess, setGuess] = useState<Guess>("uncertain");
   const [result, setResult] = useState<Result | null>(null);
   const [reviewPage, setReviewPage] = useState<"feedback" | "truth">("feedback");
   const [shareNotice, setShareNotice] = useState("");
@@ -136,7 +134,6 @@ export default function RealTraining() {
     setError("");
     setInput("");
     setSession(null);
-    setGuess("uncertain");
     setResult(null);
     setReviewPage("feedback");
     setShareNotice("");
@@ -212,7 +209,6 @@ export default function RealTraining() {
     }
     const timeout = window.setTimeout(() => {
       setEnding(null);
-      setPhase("judge");
     }, 1250);
     return () => window.clearTimeout(timeout);
   }, [ending]);
@@ -264,10 +260,7 @@ export default function RealTraining() {
         phoneHintShown.current = true;
         setPhoneHint(true);
       }
-      if (next.closed) {
-        // 대화가 저절로 끝나면 입력창 자리의 버튼을 눌러 결과로 넘어간다.
-        if (next.endReason !== "natural" && next.endReason !== "turn_limit" && next.endReason !== "resolved") setPhase("judge");
-      }
+      // 종료된 대화는 채팅을 읽고 바로 행동 피드백으로 이동한다. 신원 맞히기 단계는 두지 않는다.
     } catch (err) {
       // 네트워크 실패 시 보낸 것처럼 남겨 두지 않고 입력창에 복구한다.
       setPendingMessage(null);
@@ -289,7 +282,7 @@ export default function RealTraining() {
         ...(actionId ? { actionId } : {}),
         ...(method ? { method } : {}),
       });
-      setSession({ ...next, title: session.title });
+      setSession({ ...next, title: session.title, topic: session.topic });
       if (!method && !fromPhonePanel || next.closed) setActionsOpen(false);
       if (choice === "open_link" && sourceIndex !== undefined && actionId) {
         setOpenedLinks((prev) => prev.includes(actionId) ? prev : [...prev, actionId]);
@@ -302,9 +295,7 @@ export default function RealTraining() {
           // 확인 결과를 문자에서 읽고 사용자가 직접 피드백으로 이동하도록 둔다.
         } else if (next.closed && (choice === "verify" || choice === "family_contact" || choice === "stop" || choice === "comply" || choice === "share")) {
           setEnding({ choice, stage: "receipt" });
-        } else if (next.closed || next.turns >= next.maxTurns) {
-          setPhase("judge");
-        }
+        } // 종료된 경우 행동을 읽은 뒤 아래 피드백 버튼으로 이동한다.
       }
       if (method || fromPhonePanel) {
         return [...next.messages].reverse().find(m => m.actor === "system")?.text ??
@@ -333,7 +324,8 @@ export default function RealTraining() {
     setBusy(true);
     setError("");
     try {
-      const answer = await request({ action: "finish", token: session.token, guess });
+      // 구형 API는 guess 필드를 요구하지만, UI에서는 신원 맞히기를 평가 단계로 강요하지 않는다.
+      const answer = await request({ action: "finish", token: session.token, guess: "uncertain" });
       if (!answer.result) throw new Error("훈련 결과를 불러오지 못했습니다.");
       setResult(answer.result);
       setReviewPage("feedback");
@@ -343,7 +335,7 @@ export default function RealTraining() {
         kind: "training",
         title: (session.title ?? "").slice(0, 60),
         safe: !r.dangerousAction,
-        detail: { identity: r.identity, guess, checked: r.checked, linkOpened: r.linkOpened, followedSenderNumber: r.followedSenderNumber, coverage: r.coverage },
+        detail: { identity: r.identity, guess: "uncertain", checked: r.checked, linkOpened: r.linkOpened, followedSenderNumber: r.followedSenderNumber, coverage: r.coverage },
       });
       void familyShareUrl(location.origin).then(setShareUrl);
     } catch (err) {
@@ -470,7 +462,7 @@ export default function RealTraining() {
                 ? <p className="fb-coverage-note">초반 종료 · 이후 요청 대응은 아직 평가하지 않았어요.</p>
                 : result.coverage === "conversation_only"
                   ? <p className="fb-coverage-note">요청 전 대화 종료 · 위험 요청 대응은 아직 평가하지 않았어요.</p>
-                  : <p className="fb-coverage-note">상대의 정체보다 내가 선택한 행동을 봤어요.</p>}
+                  : <p className="fb-coverage-note">대화에서 실제로 선택한 행동을 기준으로 살펴봤어요.</p>}
             </section>
 
             <section className="fb-compact-section" aria-labelledby="fb-good">
@@ -517,39 +509,8 @@ export default function RealTraining() {
           </div>
         </section>
         <BottomCTA>
-          <button className="btn btn--primary" onClick={() => setReviewPage("truth")}>정체와 안전 약속 확인하기</button>
+          <button className="btn btn--primary" onClick={() => setReviewPage("truth")}>안전 약속 확인하기</button>
         </BottomCTA>
-      </Screen>
-    );
-  }
-
-  if (phase === "judge") {
-    return (
-      <Screen>
-        <Header title="실전 대응 훈련" back={() => setPhase("chat")} />
-        <section className="screen__body">
-          <div className="stack" style={{ marginTop: 28, gap: 12 }}>
-            <span className="chip">마지막 생각 정리</span>
-            <h2 className="title">이번 연락을 어떻게 느끼셨나요?</h2>
-            <p className="desc">정체를 몰라도 괜찮아요. 중요한 것은 대화 중 어떤 행동을 선택했는지예요.</p>
-          </div>
-          <div className="stack" style={{ marginTop: 34, gap: 12 }} role="radiogroup" aria-label="상대방 정체 판단">
-            {([
-              { value: "legitimate", label: "실제 가족·기관이라고 생각해요" },
-              { value: "fraud", label: "사칭범이라고 생각해요" },
-              { value: "uncertain", label: "아직 판단하기 어려워요" },
-            ] as { value: Guess; label: string }[]).map((entry) => (
-              <button type="button" key={entry.value} role="radio" aria-checked={guess === entry.value}
-                className={guess === entry.value ? "option option--selected" : "option"}
-                onClick={() => setGuess(entry.value)}>
-                <span className="option__text"><span className="option__title">{entry.label}</span></span>
-                <span aria-hidden="true">{guess === entry.value ? "✓" : "○"}</span>
-              </button>
-            ))}
-          </div>
-          {error && <p role="alert" style={{ color: "var(--red)", marginTop: 14 }}>{error}</p>}
-        </section>
-        <BottomCTA><button className="btn btn--primary" disabled={busy} onClick={() => void finish()}>{busy ? "대응 분석 중…" : "내 대응 살펴보기"}</button></BottomCTA>
       </Screen>
     );
   }
@@ -657,12 +618,8 @@ export default function RealTraining() {
         {error && <p className="rt-error" role="alert">{error}</p>}
         {session?.closed && !ending ? (
           <button type="button" className="btn btn--primary" disabled={busy}
-            onClick={() => {
-              if (session.endReason === "resolved" && session.verified) void finish();
-              else setPhase("judge");
-            }}>
-            {busy ? "대응 분석 중…" : session.endReason === "resolved" && session.verified
-              ? "내 대응 피드백 보기" : "내 대응 결과 확인하기"}
+            onClick={() => void finish()}>
+            {busy ? "대응 분석 중…" : "내 행동 피드백 보기"}
           </button>
         ) : (
           <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
@@ -692,7 +649,7 @@ export default function RealTraining() {
               <div><strong>② 휴대전화 사용</strong><span>필요하다고 느낄 때, 대화 중간에도 직접 기능을 선택해 보세요.</span></div>
               <div><strong>③ 다시 돌아오기</strong><span>기능을 사용해도 훈련이 바로 끝나지 않아요.</span></div>
             </div>
-            <p className="rt-intro-note">어떤 연락이든 직접 판단해 보세요. 실제 통화나 송금은 일어나지 않아요.</p>
+            <p className="rt-intro-note">어떤 연락에도 필요한 행동을 직접 선택해 보세요. 실제 통화나 송금은 일어나지 않아요.</p>
             <label className="rt-intro-check">
               <input type="checkbox" checked={skipIntroNextTime}
                 onChange={e => setSkipIntroNextTime(e.target.checked)} />
@@ -727,7 +684,7 @@ export default function RealTraining() {
             ending.choice === "comply" ? "송금 완료" : "정보 전송 완료"}</strong>
           {ending.stage === "review" && (
             <>
-              <p>지금까지의 선택을 돌아보고 상대의 정체를 확인해 볼까요?</p>
+              <p>이번 대화에서 선택한 행동을 함께 돌아볼게요.</p>
               <span className="rt-transition__loading" aria-hidden="true" />
             </>
           )}
