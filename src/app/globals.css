@@ -1096,3 +1096,86 @@ p, h1, h2, h3 { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .rt-header-more--hint { animation: none; background: #edf5ff; box-shadow: inset 0 0 0 1px #dbeafb; }
 }
+
+
+/* 문자 훈련 시작 안내: 기능 발견을 돕되 사칭 정답은 암시하지 않는다 */
+.rt-intro { display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - 100px); overflow-y: auto; }
+.rt-intro-icon { display: grid; place-items: center; width: 45px; height: 45px; border-radius: 13px; background: #edf4fd; color: #426f9d; }
+.rt-intro h2 { font-size: 23px; line-height: 1.3; letter-spacing: -.6px; font-weight: 780; color: #23384f; }
+.rt-intro-lead { font-size: 16px; line-height: 1.55; color: #506277; }
+.rt-intro-lead strong { color: #285d98; }
+.rt-intro-steps { display: flex; flex-direction: column; gap: 0; padding: 2px 15px; border: 1px solid #e3eaf2; background: #f8fbff; border-radius: 15px; }
+.rt-intro-steps > div { display: flex; flex-direction: column; gap: 3px; padding: 12px 0; }
+.rt-intro-steps > div + div { border-top: 1px solid #e6ebf3; }
+.rt-intro-steps strong { font-size: 16px; color: #324b65; }
+.rt-intro-steps span { font-size: 15px; line-height: 1.5; color: #637589; }
+.rt-intro-note { font-size: 13px; color: #718094; line-height: 1.5; }
+.rt-intro-check { min-height: 44px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-weight: 600; color: #48596e; }
+.rt-intro-check input { width: 21px; height: 21px; flex-shrink: 0; accent-color: #367bd2; cursor: pointer; }
+.rt-intro > .btn { width: 100%; min-height: 52px; font-size: 16px; }
+.rt-intro-check:focus-within { border-radius: 8px; outline: 2px solid #89b8f3; outline-offset: 2px; }
+
+/* 결과 피드백: 한눈에 보이는 큰 키워드, 이유는 요청 시 펼치기 */
+.fb-summary-flow { display: flex; flex-direction: column; gap: 17px; padding-top: 21px; padding-bottom: 26px; }
+.fb-eyebrow { font-size: 13px; font-weight: 750; letter-spacing: .01em; color: #697d93; }
+.fb-impact-hero { display: flex; flex-direction: column; gap: 10px; padding: 23px 20px; border: 1px solid #e1e8f1; border-radius: 19px; background: #f5f8fc; }
+.fb-impact-hero--good { background: #eff6ff; border-color: #dce9fa; }
+.fb-impact-hero--caution { background: #fff8f3; border-color: #f0e2d7; }
+.fb-impact-hero--neutral { background: #f5f8fb; }
+.fb-impact-hero h2 { font-size: clamp(23px, 6vw, 29px); line-height: 1.33; letter-spacing: -.9px; font-weight: 800; color: #24394f; overflow-wrap: anywhere; }
+.fb-coverage-note { font-size: 14px; line-height: 1.5; font-weight: 600; color: #62778d; }
+.fb-compact-section { display: flex; flex-direction: column; gap: 12px; padding: 20px 17px; border: 1px solid #e6ebf1; border-radius: 17px; background: #fff; }
+.fb-compact-heading { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 770; color: #375b7d; letter-spacing: -.3px; }
+.fb-compact-heading--amber { color: #946325; }
+.fb-keyword-grid { display: flex; flex-wrap: wrap; gap: 9px; }
+.fb-keyword { display: flex; align-items: center; min-height: 48px; padding: 10px 15px; border-radius: 13px; font-size: 19px; line-height: 1.3; font-weight: 780; letter-spacing: -.45px; overflow-wrap: anywhere; }
+.fb-keyword--good { color: #276498; background: #e9f3ff; border: 1px solid #d8e8fa; }
+.fb-keyword--improve { color: #8c551b; background: #fff4e8; border: 1px solid #f4e5d6; }
+.fb-keyword-empty { font-size: 15px; line-height: 1.5; color: #677a8d; }
+.fb-detail-panel, .fb-inline-disclosure { border-radius: 13px; border: 1px solid #e6ebf1; background: #fff; overflow: hidden; }
+.fb-detail-panel > summary, .fb-inline-disclosure > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 17px; font-size: 15px; font-weight: 700; line-height: 1.45; color: #52677c; }
+.fb-detail-panel > summary::-webkit-details-marker, .fb-inline-disclosure > summary::-webkit-details-marker { display: none; }
+.fb-detail-panel > summary::after, .fb-inline-disclosure > summary::after { content: "⌄"; font-size: 20px; line-height: 1; color: #8697a8; }
+.fb-detail-panel[open] > summary::after, .fb-inline-disclosure[open] > summary::after { transform: rotate(180deg); }
+.fb-detail-panel > summary:focus-visible, .fb-inline-disclosure > summary:focus-visible { outline: 3px solid #9bc3f6; outline-offset: -3px; }
+.fb-detail-content { display: flex; flex-direction: column; gap: 13px; border-top: 1px solid #e6ebf1; padding: 16px 18px 19px; }
+.fb-detail-content h4 { font-size: 16px; font-weight: 750; color: #314b66; }
+.fb-detail-content .fb-list { gap: 12px; margin-bottom: 4px; }
+.fb-truth-summary { display: flex; flex-direction: column; gap: 10px; padding: 23px 20px; border-radius: 19px; border: 1px solid #e3eaf1; background: #f5f8fc; }
+.fb-truth-word { font-size: clamp(27px, 8vw, 35px); font-weight: 820; letter-spacing: -1px; line-height: 1.2; }
+.fb-truth-word--fraud { color: #ab5051; }
+.fb-truth-word--real { color: #296e9e; }
+.fb-truth-purpose { font-size: 16px; line-height: 1.5; font-weight: 650; color: #43576c; }
+.fb-truth-summary .fb-inline-disclosure { margin-top: 6px; background: rgba(255,255,255,.85); }
+.fb-inline-disclosure > p { padding: 0 16px 14px; font-size: 14px; color: #63778b; line-height: 1.6; }
+.fb-inline-disclosure > .fb-list, .fb-inline-disclosure > .fb-subcard { margin: 0 15px 16px; }
+.fb-priority { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px; background: #edf5ff; border-radius: 16px; }
+.fb-priority h3 { font-size: 21px; line-height: 1.42; letter-spacing: -.6px; font-weight: 800; color: #2c6095; }
+.fb-priority p { font-size: 13px; line-height: 1.5; color: #647b91; }
+.fb-promise-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.fb-promise-tile { display: flex; flex-direction: column; gap: 9px; min-width: 0; min-height: 106px; padding: 13px 10px; border-radius: 13px; background: #f5f8fb; }
+.fb-promise-number { font-size: 12px; color: #8595a5; font-weight: 700; }
+.fb-promise-tile strong { font-size: 16px; line-height: 1.35; font-weight: 780; color: #344e68; overflow-wrap: anywhere; }
+.fb-promise-status { margin-top: auto; font-size: 12px; font-weight: 650; color: #85919e; }
+.fb-promise-status--done { color: #3e79b1; }
+.fb-compact-section > .btn { width: 100%; margin-top: 2px; min-height: 48px; }
+@media (max-width: 365px) {
+  .fb-promise-grid { gap: 6px; }
+  .fb-promise-tile { padding: 11px 8px; }
+  .fb-promise-tile strong { font-size: 14px; }
+  .fb-keyword { font-size: 17px; }
+  .rt-intro h2 { font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fb-detail-panel > summary::after, .fb-inline-disclosure > summary::after { transition: none; }
+}
+
+
+/* 모의 휴대전화 송금 화면: 행동을 먼저 찾고, 대상/요청을 확인한 다음 의도적으로 실행 */
+.rt-device-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 11px; padding: 17px; border: 1px solid #e6ebf2; border-radius: 14px; background: #f8fafc; }
+.rt-device-empty strong { color: #3b5269; font-size: 17px; }
+.rt-device-empty p { color: #718399; font-size: 14px; line-height: 1.55; }
+.rt-device-empty .btn { width: 100%; }
+.rt-device-transfer-summary { display: flex; flex-direction: column; gap: 9px; border: 1px solid #e0e8f1; background: #f6f9fd; border-radius: 15px; padding: 17px; }
+.rt-device-transfer-summary strong { font-size: 22px; line-height: 1.35; letter-spacing: -.5px; color: #294863; overflow-wrap: anywhere; }
+.rt-device-transfer-summary p { font-size: 15px; line-height: 1.5; color: #61748a; overflow-wrap: anywhere; }

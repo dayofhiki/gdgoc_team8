@@ -286,7 +286,8 @@ test("phone panel cue is non-accusatory, appears once after interaction and resp
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
-  assert.match(ui, /next\.turns >= 2/);
+  assert.match(ui, /shouldCuePhonePanel\(text, latestActorReply\)/);
+  assert.doesNotMatch(ui, /next\.turns >= 2/);
   assert.match(ui, /phoneHintShown\.current = true/);
   assert.match(ui, /setPhoneHint\(false\)/);
   assert.match(css, /\.rt-header-more--hint/);
@@ -301,4 +302,128 @@ test("sender-suggested independent safety routes are not handed out as inline an
   assert.match(route, /const inlineActions = grounded\.filter\(a => a\.kind !== "app"/);
   assert.match(route, /a\.kind === "phone" && a\.origin === "preexisting"/);
   assert.match(route, /buildActions\(inlineActions, state\.turns\)/);
+});
+
+
+test("phone onboarding is explicit at start, optional on later runs and does not reveal a correct route", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  assert.match(ui, /localStorage\.getItem\(INTRO_HIDE_KEY\)/);
+  assert.match(ui, /localStorage\.setItem\(INTRO_HIDE_KEY, "1"\)/);
+  assert.match(ui, /type="checkbox" checked=\{skipIntroNextTime\}/);
+  assert.match(ui, /다음부터 이 안내 보지 않기/);
+  assert.match(ui, /오른쪽 위 <strong>휴대전화 아이콘<\/strong>/);
+  assert.match(ui, /대화 중간에도 직접 기능을 선택해 보세요/);
+  assert.match(ui, /기능을 사용해도 훈련이 바로 끝나지 않아요/);
+  assert.match(ui, /if \(introOpen\) return/);
+  assert.doesNotMatch(ui, /휴대전화 아이콘.*사칭범/);
+});
+
+test("feedback and truth screens put memorable keywords first, preserving optional evidence", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(ui, /fb-impact-hero/);
+  assert.match(ui, /fb-keyword--good/);
+  assert.match(ui, /fb-keyword--improve/);
+  assert.match(ui, /잘한 행동/);
+  assert.match(ui, /다음에 기억할 행동/);
+  assert.match(ui, /<details className="fb-detail-panel">/);
+  assert.match(ui, /feedback\.receipts\.map/);
+  assert.match(ui, /feedback\.good\.map/);
+  assert.match(ui, /feedback\.improve\.map/);
+  assert.match(ui, /fb-truth-word--fraud/);
+  assert.match(ui, /어떻게 확인했나요/);
+  assert.match(ui, /fb-promise-tile/);
+  assert.match(ui, /가족 확인 질문/);
+  assert.match(ui, /shareFamilyPromises/);
+  assert.match(ui, /result\.coverage === "early"/);
+  assert.match(css, /@media \(max-width: 365px\)/);
+});
+
+
+test("mock phone workspace replaces duplicate messages tile with transfer, requiring a sealed actor request", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("../src/components/TrainingPhonePanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /tile\("transfer", "송금"/);
+  assert.doesNotMatch(panel, /tile\("messages"/);
+  assert.match(panel, /transferRequests\.length/);
+  assert.match(panel, /선택할 송금 요청이 없어요/);
+  assert.match(panel, /screen === "transfer_confirm"/);
+  assert.match(panel, /onTransfer\(chosenTransfer\)/);
+  assert.match(panel, /실제 돈은 이동하지 않습니다/);
+  assert.match(panel, /senderPhoneRequests\.map/);
+  assert.match(ui, /transferRequests=\{transferRequests\}/);
+  assert.match(ui, /onTransfer=\{\(\{ sourceIndex, action \}\) => perform\("comply", sourceIndex, action\.id, undefined, true\)\}/);
+  assert.match(ui, /onSenderCall=\{\(\{ sourceIndex, action \}\) => perform\("verify_sender", sourceIndex, action\.id, undefined, true\)\}/);
+  assert.match(ui, /!\["transfer", "phone", "app"\]\.includes\(action\.kind\)/);
+  assert.match(ui, /action\.kind === "link"/);
+  assert.match(ui, /rt-message-request/);
+  assert.match(ui, /연락처·전화·앱·송금을 사용할 수 있어요/);
+});
+
+test("transfers from mock phone are permitted only for a genuine bound request and record a risky action", async () => {
+  const { buildActions } = await import("../src/lib/trainingActions.ts");
+  const scenario = SCENARIOS[1];
+  const s = state(1);
+  const action = buildActions([{
+    kind: "transfer", origin: "sender", target: "자녀", task: "수리비 보내기",
+    previewTitle: "", previewDescription: "",
+  }], 0)[0];
+  s.messages.push({ actor: "them", text: "수리비 보내줄래?", actions: [action] });
+  const source = s.messages.length - 1;
+  assert.throws(() => recordChoice(s, scenario, "comply"));
+  assert.throws(() => recordChoice(s, scenario, "comply", source, "forged"));
+  assert.throws(() => recordChoice(s, scenario, "comply", 0, action.id));
+  const paid = recordChoice(s, scenario, "comply", source, action.id).state;
+  assert.equal(paid.closed, true);
+  assert.equal(paid.events.at(-1).sourceIndex, source);
+  assert.equal(paid.events.at(-1).actionId, action.id);
+  assert.equal(evaluate(paid, scenario, "uncertain").dangerousAction, true);
+});
+
+test("sender-provided phone numbers remain actionable in the phone panel without being mistaken for verification", async () => {
+  const { buildActions } = await import("../src/lib/trainingActions.ts");
+  const scenario = SCENARIOS[5];
+  const s = state(5);
+  const action = buildActions([{
+    kind: "phone", origin: "sender", target: "안내 번호", task: "직접 전화",
+    previewTitle: "", previewDescription: "",
+  }], 0)[0];
+  s.messages.push({ actor: "them", text: "제가 알려 드린 번호로 전화해 주세요.", actions: [action] });
+  const source = s.messages.length - 1;
+  assert.throws(() => recordChoice(s, scenario, "verify_sender", source, "wrong"));
+  const called = recordChoice(s, scenario, "verify_sender", source, action.id).state;
+  assert.equal(called.closed, false);
+  assert.equal(called.verification, "none");
+  assert.equal(evaluate(called, scenario, "uncertain").checked, false);
+});
+
+
+test("phone cue appears when the learner needs a tool, not automatically after a fixed turn count", async () => {
+  const { shouldCuePhonePanel } = await import("../src/lib/trainingPhoneCue.ts");
+  assert.equal(shouldCuePhonePanel("안녕하세요", { text: "오늘 날씨는 좋네요." }), false);
+  assert.equal(shouldCuePhonePanel("알겠어요", { text: "어머니, 안녕히 주무세요." }), false);
+  assert.equal(shouldCuePhonePanel("기존 번호로 확인해볼게요", { text: "응, 알겠어." }), true);
+  assert.equal(shouldCuePhonePanel("은행 앱에서 확인할래요", { text: "그러세요." }), true);
+  assert.equal(shouldCuePhonePanel("어떤 전화번호로 연락할까요?", { text: "그럼요." }), true);
+  assert.equal(shouldCuePhonePanel("잘 모르겠어요", { text: "수리비 조금만 송금해 줄 수 있어?" }), true);
+  assert.equal(shouldCuePhonePanel("네", { text: "아래 링크를 눌러 주세요." }), true);
+  assert.equal(shouldCuePhonePanel("알겠습니다", { text: "배송지 입력을 부탁드려요.", actions: [{kind: "provide_data"}] }), true);
+  assert.equal(shouldCuePhonePanel("네", { text: "통화할 필요 없어요", actions: [] }), false);
+  assert.equal(shouldCuePhonePanel("보류할게요", { text: "지금 잠시 기다려주세요." }), false);
+});
+
+test("the phone cue has no identity input, no spoiler text and stays a single subtle prompt", async () => {
+  const { readFileSync } = await import("node:fs");
+  const implementation = readFileSync(new URL("../src/lib/trainingPhoneCue.ts", import.meta.url), "utf8");
+  const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(ui, /!phoneHintShown\.current && !next\.closed/);
+  assert.match(ui, /phoneHintShown\.current = true/);
+  assert.match(ui, /shouldCuePhonePanel\(text, latestActorReply\)/);
+  assert.doesNotMatch(implementation, /identity|scenario\.identity|truthLabel/);
+  assert.match(css, /rt-phone-hint 1\.9s ease-in-out 1/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
 });
