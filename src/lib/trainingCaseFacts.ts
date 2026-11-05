@@ -139,7 +139,7 @@ const BRANCHES: readonly (readonly CaseBranch[])[] = [
     {
       "opening": "안녕하세요. 배송이 보류되어 재예약 안내를 드립니다.",
       "context": "배송 보류 건 때문에 예약을 다시 잡아야 한다고 안내합니다.",
-      "request": "문자로 첨부된 재배송 신청 링크에서 날짜를 다시 골라 주세요.",
+      "request": "문자로 첨부된 재배송 신청 링크를 열어서 날짜를 다시 골라 주세요.",
       "kind": "link",
       "target": "배송 재예약",
       "task": "재배송 링크 열기",
