@@ -7,6 +7,7 @@ import { CASE_VARIANT_COUNT, caseBranch } from "../src/lib/trainingCaseFacts.ts"
 import { TRAINING_TOPICS } from "../src/lib/trainingCatalog.ts";
 import { SCENARIOS } from "../src/lib/realTraining.ts";
 import { fallbackTrainingTurn } from "../src/lib/trainingFallback.ts";
+import { meaningfulRiskRequest } from "../src/lib/trainingDecision.ts";
 
 test("OX uses 50 unique source-authored questions and a balanced ten-question session", () => {
   assert.equal(QUIZ.length, 50);
@@ -78,6 +79,7 @@ test("all eleven chat topics have three different anchored real-life risk branch
       assert.ok(turn.reply.includes(branch.request), scenario.topic + "/" + variant);
       assert.equal(turn.actions[0]?.kind, branch.kind, scenario.topic + "/" + variant);
       assert.equal(turn.actions[0]?.origin, "sender");
+      assert.ok(meaningfulRiskRequest(turn.reply, turn.actions, scenario.topic), scenario.topic + "/" + variant);
     }
   }
 });
