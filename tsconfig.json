@@ -24,9 +24,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@shared/*": [
-        "./supabase/functions/_shared/*"
       ]
     },
     "allowJs": true,

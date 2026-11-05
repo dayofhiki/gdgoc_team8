@@ -5,7 +5,7 @@
  * 화면 흐름이 정해지면 삭제할 예정.
  */
 import { useEffect, useState, type CSSProperties } from "react";
-import type { Difficulty, Message, Mission, Outcome, Stage } from "@shared/types";
+import type { Difficulty, Message, Mission, Outcome, Stage } from "@/server/types";
 
 type View = "setup" | "chat" | "result";
 type Hist = Pick<Message, "role" | "text" | "stage">;

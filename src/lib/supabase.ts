@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { ApiError } from "@shared/types";
+import type { ApiError } from "@/server/types";
 
 let client: SupabaseClient | null = null;
 

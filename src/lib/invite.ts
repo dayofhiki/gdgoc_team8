@@ -5,7 +5,7 @@
  * - 가족 암호 질문은 family_questions에 저장 (답은 저장하지 않음).
  * Supabase 설정(.env.local)이 없거나 연결이 안 되면 null/"offline"을 돌려주고, 화면은 기존(토큰 없는) 방식으로 동작합니다.
  */
-import type { InviteJoinResponse } from "@shared/types";
+import type { InviteJoinResponse } from "@/server/types";
 import { callFn, configured, ensureAnon, sb } from "./supabase";
 
 const KEY_INVITE = "mikki:invite:v2"; // v1 캐시는 가족 없는 초대라 버림

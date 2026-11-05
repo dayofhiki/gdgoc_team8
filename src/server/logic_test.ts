@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { classify, generateReply } from "./ai.ts";
 import { detectPii, hasPii, maskPii } from "./pii.ts";
-import { decideNext, MAX_TURNS } from "../chat-turn/decide.ts";
+import { decideNext, MAX_TURNS } from "./decide.ts";
 import type { Mission } from "./types.ts";
 
 test("pii", () => {
