@@ -535,7 +535,7 @@ test("entry flow separates unannounced real-life practice from focused scenario 
   assert.match(mode, /\/roleplay\/select/);
   assert.match(chat, /new URLSearchParams\(window\.location\.search\)\.get\("topic"\)/);
   assert.match(route, /if \(body\.topic !== undefined && !isTrainingTopicId\(body\.topic\)\)/);
-  assert.match(route, /topicIndex \* 2 \+ randomInt\(2\)/);
+  assert.match(route, /topicIndex \* 2 \+ 1/);
   assert.match(route, /topic: scenario\.topic/);
 });
 
@@ -580,4 +580,80 @@ test("back navigation respects the selected mode while preserving the no-identit
   assert.match(ui, /new URLSearchParams\(window\.location\.search\)\.has\("topic"\) \? "\/roleplay\/select" : "\/roleplay\/mode"/);
   assert.match(ui, /onClick=\{\(\) => void finish\(\)\}/);
   assert.doesNotMatch(ui, /setPhase\("judge"\)/);
+});
+
+
+test("risk-focused training avoids routine safe notices and samples one wrong-action scenario for each topic", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  const { SCENARIO_DECISIONS } = await import("../src/lib/trainingDecision.ts");
+  assert.deepEqual(Object.keys(SCENARIO_DECISIONS).sort(), TRAINING_TOPICS.map(t => t.id).sort());
+  assert.match(route, /const index = topicIndex \* 2 \+ 1/);
+  assert.doesNotMatch(route, /const index = topicIndex \* 2 \+ randomInt\(2\)/);
+  for (const [i, topic] of TRAINING_TOPICS.entries()) {
+    assert.equal(SCENARIOS[i*2+1].topic, topic.id);
+    assert.equal(SCENARIOS[i*2+1].identity, "fraud");
+    assert.ok(SCENARIO_DECISIONS[topic.id].length > 45);
+  }
+});
+
+test("bank transaction facts are fictional and specific enough to answer 'what transaction?'", async () => {
+  const { CASE_VARIANTS, caseDetail } = await import("../src/lib/trainingCaseFacts.ts");
+  const { bankAnswerIsConcrete, bankQuestionNeedsSpecifics, replyQualityIssue,
+    meaningfulRiskRequest, riskDecisionDue } = await import("../src/lib/trainingDecision.ts");
+  const bank = SCENARIOS[5];
+  assert.equal(bank.topic, "bank");
+  assert.equal(bank.identity, "fraud");
+  for (let i = 0; i < CASE_VARIANTS[2].length; i++) {
+    assert.match(caseDetail(bank, i), /(?:모바일 상품권|정기결제|간편결제)/);
+    assert.match(caseDetail(bank, i), /\d+만 원/);
+    assert.doesNotMatch(caseDetail(bank, i), /(?:010[- ]\d{4}|https?:\/\/)/);
+  }
+  assert.equal(bankQuestionNeedsSpecifics("무슨 거래인데요?"), true);
+  assert.equal(bankQuestionNeedsSpecifics("어떤 결제예요?"), true);
+  assert.equal(bankQuestionNeedsSpecifics("그게 왜 그런가요?"), false);
+  assert.equal(bankAnswerIsConcrete("본인이 진행하신 거래가 맞는지 확인 부탁드립니다."), false);
+  assert.equal(bankAnswerIsConcrete("모바일 상품권 48만 원 결제 시도 관련입니다."), true);
+  const s = state(5);
+  const introIssue = replyQualityIssue(bank, s, "무슨 거래인데요?",
+    "이상 거래 건입니다. 직접 확인 부탁드립니다.", []);
+  assert.match(introIssue, /거래 유형과 금액/);
+  assert.equal(replyQualityIssue(bank, s, "무슨 거래인데요?",
+    "모바일 상품권 48만 원 결제 시도가 있었다는 연락입니다.", []), undefined);
+  s.turns = 1;
+  assert.equal(riskDecisionDue(s, bank, "제가 한 거래가 아닌데요."), true);
+  assert.match(replyQualityIssue(bank, s, "제가 한 거래가 아닌데요.",
+    "본인 거래가 맞는지 확인 부탁드립니다.", []), /잘못된 요청/);
+  const request = "피해 확인을 위해 계좌 잔액과 계좌번호 끝 4자리를 알려주실 수 있을까요?";
+  const proposals = [{ kind: "provide_data", origin: "sender", target: "계좌 정보", task: "정보 제출",
+    previewTitle: "", previewDescription: "" }];
+  assert.equal(meaningfulRiskRequest(request, proposals), true);
+  assert.equal(replyQualityIssue(bank, s, "제가 한 거래가 아닌데요.", request, proposals), undefined);
+  assert.equal(meaningfulRiskRequest(request, []), false);
+  assert.equal(meaningfulRiskRequest("본인 확인 부탁드립니다.", proposals), false);
+  assert.equal(riskDecisionDue({ ...s, messages: [...s.messages, { actor: "them", text: request }] },
+    bank, "네"), false);
+});
+
+test("phone affordance is gently highlighted when actor requests confirmation without a structured action", async () => {
+  const { shouldCuePhonePanel } = await import("../src/lib/trainingPhoneCue.ts");
+  const samples = [
+    "본인이 직접 진행하신 거래가 맞는지 확인 부탁드립니다.",
+    "계좌 이용 여부를 확인해 주세요.",
+    "거래 내용을 확인 부탁드립니다.",
+    "사용 중인 계좌 잔액과 끝 4자리를 알려주실 수 있을까요?",
+  ];
+  for (const reply of samples) {
+    assert.equal(shouldCuePhonePanel("무슨 거래인가요?", { text: reply, actions: [] }), true, reply);
+  }
+  assert.equal(shouldCuePhonePanel("안녕하세요", { text: "고객님께 연락드렸습니다.", actions: [] }), false);
+  assert.equal(shouldCuePhonePanel("네", { text: "잠시만 기다려 주세요.", actions: [] }), false);
+});
+
+test("AI cannot silently replace an actionable fraud choice with an official app reminder", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
+  assert.match(route, /replyQualityIssue\(scenario, state, text, reply, first\.value\.actions\)/);
+  assert.match(route, /INCOMPLETE_TRAINING_DECISION/);
+  assert.match(route, /SCENARIO_DECISIONS\[scenario\.topic\]/);
 });
