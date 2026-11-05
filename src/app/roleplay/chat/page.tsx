@@ -80,6 +80,7 @@ function contactTitle(title?: string): string {
 // 결과 화면에서 가족 질문 화면으로 나갔다 돌아올 때 결과를 복원한다.
 // 복원 표시(?review=1)는 그 방문 기록 항목에만 남으므로, 새 훈련에는 옛 결과가 뜨지 않는다.
 const REVIEW_KEY = "mikki:training-review";
+const INTRO_HIDE_KEY = "mikki:training-phone-intro-hidden-v1";
 
 function saveReview(result: Result) {
   try {
@@ -114,6 +115,9 @@ export default function RealTraining() {
   const [input, setInput] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [phoneHint, setPhoneHint] = useState(false);
+  const [introOpen, setIntroOpen] = useState(false);
+  const [skipIntroNextTime, setSkipIntroNextTime] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const phoneHintShown = useRef(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [previewActionId, setPreviewActionId] = useState<string | null>(null);
@@ -145,11 +149,20 @@ export default function RealTraining() {
     setPreviewActionId(null);
     setActionsOpen(false);
     setPhoneHint(false);
+    setIntroOpen(false);
+    setSkipIntroNextTime(false);
+    setDetailsOpen(false);
     phoneHintShown.current = false;
     setBusy(true);
     try {
       const initial = await request({ action: "start" });
       setSession(initial);
+      // 새로운 훈련 시작 시에만 확인한다. 결과 화면으로 돌아올 때는 띄우지 않는다.
+      try {
+        setIntroOpen(localStorage.getItem(INTRO_HIDE_KEY) !== "1");
+      } catch {
+        setIntroOpen(true);
+      }
       setPhase("chat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "훈련을 시작하지 못했습니다.");
@@ -210,7 +223,20 @@ export default function RealTraining() {
     return () => window.clearTimeout(timeout);
   }, [phoneHint]);
 
+  function closeIntro() {
+    if (skipIntroNextTime) {
+      try { localStorage.setItem(INTRO_HIDE_KEY, "1"); } catch { /* 현재 훈련에서만 적용 */ }
+    }
+    setIntroOpen(false);
+    // 안내를 닫을 때 상단 아이콘을 한 차례만 은은하게 강조한다.
+    if (!phoneHintShown.current) {
+      phoneHintShown.current = true;
+      setPhoneHint(true);
+    }
+  }
+
   function openActions() {
+    if (introOpen) return;
     setPhoneHint(false);
     phoneHintShown.current = true;
     setActionsOpen(true);
@@ -642,6 +668,32 @@ export default function RealTraining() {
         <div className="rt-training-note">모의 훈련 · 실제 송금·통화·정보 전송 없음</div>
       </div>
 
+      {introOpen && session && (
+        <BottomSheet onClose={closeIntro}>
+          <div className="rt-intro" aria-labelledby="rt-intro-title">
+            <div className="rt-intro-icon"><TrainingPhoneIcon /></div>
+            <h2 id="rt-intro-title">문자 외의 기능도 사용해 보세요</h2>
+            <p className="rt-intro-lead">
+              오른쪽 위 <strong>휴대전화 아이콘</strong>을 누르면
+              연락처·전화·앱을 사용할 수 있어요.
+            </p>
+            <div className="rt-intro-steps">
+              <div><strong>① 대화하기</strong><span>상대방의 말에 자유롭게 답해요.</span></div>
+              <div><strong>② 휴대전화 사용</strong><span>필요하다고 느낄 때, 대화 중간에도 직접 기능을 선택해 보세요.</span></div>
+              <div><strong>③ 다시 돌아오기</strong><span>기능을 사용해도 훈련이 바로 끝나지 않아요.</span></div>
+            </div>
+            <p className="rt-intro-note">어떤 연락이든 직접 판단해 보세요. 실제 통화나 송금은 일어나지 않아요.</p>
+            <label className="rt-intro-check">
+              <input type="checkbox" checked={skipIntroNextTime}
+                onChange={e => setSkipIntroNextTime(e.target.checked)} />
+              <span>다음부터 이 안내 보지 않기</span>
+            </label>
+            <button type="button" className="btn btn--primary" onClick={closeIntro}>
+              알겠어요, 훈련 시작하기
+            </button>
+          </div>
+        </BottomSheet>
+      )}
       {actionsOpen && session && (
         <TrainingPhonePanel
           topic={phoneTopic}
