@@ -1,5 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { useBackNavigation } from "@/lib/backNavigation";
 import type { ReactNode } from "react";
 import { BackIcon, CloseIcon, InfoIcon } from "./Icons";
 
@@ -16,16 +16,11 @@ type HeaderProps = {
   onClose?: () => void;
 };
 export function Header({ title, small, back = true, onClose }: HeaderProps) {
-  const router = useRouter();
-  const goBack = () => {
-    if (typeof back === "function") return back();
-    if (typeof back === "string") return router.replace(back);
-    router.back();
-  };
+  const goBack = useBackNavigation(typeof back === "string" ? back : undefined);
   return (
     <header className="header">
       {back ? (
-        <button className="icon-btn" aria-label="뒤로 가기" onClick={goBack}>
+        <button className="icon-btn" aria-label="뒤로 가기" onClick={typeof back === "function" ? back : goBack}>
           <BackIcon />
         </button>
       ) : (

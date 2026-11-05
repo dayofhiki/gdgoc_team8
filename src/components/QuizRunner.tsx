@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useBackNavigation } from "@/lib/backNavigation";
 import { useRouter } from "next/navigation";
 import { DEFAULT_REMEMBER, loadQuizProgress, pickQuiz, saveQuizProgress, type OX, type QuizItem } from "@/lib/quiz";
 
@@ -14,9 +15,11 @@ type Props = {
 };
 
 type Answer = { id: string; picked: OX; correct: boolean };
+type QuizReview = { ids: string[]; answers: Answer[]; hints: string[] };
 
 export default function QuizRunner({ ids, from }: Props) {
   const router = useRouter();
+  const leaveQuiz = useBackNavigation(from ? "/" : "/practice");
   const [started, setStarted] = useState(false);
   const [items, setItems] = useState(() => pickQuiz(ids, 0));
   const [idx, setIdx] = useState(0);
@@ -29,14 +32,27 @@ export default function QuizRunner({ ids, from }: Props) {
   const q = items[idx];
   const total = items.length;
 
+  const saved = useRef(false);
+
   // 초기 렌더는 고정 시드, 마운트 후 무작위·취약점 복습 출제.
   useEffect(() => {
+    const review = window.history.state?.mikkiQuizReview as QuizReview | undefined;
+    if (review?.answers.length) {
+      saved.current = true;
+      setItems(pickQuiz(review.ids));
+      setAnswers(review.answers);
+      setHintUsed(new Set(review.hints));
+      setIdx(review.answers.length - 1);
+      setPicked(review.answers.at(-1)!.picked);
+      setStarted(true);
+      setDone(true);
+      return;
+    }
     const progress = loadQuizProgress();
     setItems(pickQuiz(ids, undefined, progress.wrongIds, progress.recentIds));
   }, [ids?.join(",")]);
 
   // 결과 화면에 도달하면 한 번만 기록 (StrictMode의 effect 2회 실행에도 1건)
-  const saved = useRef(false);
   useEffect(() => {
     if (!done || saved.current) return;
     saved.current = true;
@@ -52,7 +68,11 @@ export default function QuizRunner({ ids, from }: Props) {
   const choose = (v: OX) => {
     if (picked) return;
     setPicked(v);
-    setAnswers((a) => [...a, { id: q.id, picked: v, correct: v === q.answer }]);
+    setAnswers(previous => {
+      const nextAnswers = [...previous];
+      nextAnswers[idx] = { id: q.id, picked: v, correct: v === q.answer };
+      return nextAnswers;
+    });
   };
   const next = () => {
     if (idx + 1 >= total) {
@@ -60,7 +80,21 @@ export default function QuizRunner({ ids, from }: Props) {
       return;
     }
     setIdx(idx + 1);
-    setPicked(null);
+    setPicked(answers[idx + 1]?.picked ?? null);
+  };
+  const goBack = () => {
+    if (done) { setDone(false); return; }
+    if (picked && !saved.current) { setPicked(null); return; }
+    if (idx === 0) { setStarted(false); return; }
+    setIdx(idx - 1);
+    setPicked(answers[idx - 1]?.picked ?? null);
+  };
+  const openFamilyCode = () => {
+    window.history.replaceState({
+      ...window.history.state,
+      mikkiQuizReview: { ids: items.map(item => item.id), answers, hints: [...hintUsed] } satisfies QuizReview,
+    }, "");
+    router.push(SHARED_FAMILY_CODE_PATH);
   };
   const openHint = () => {
     setHintOpen(true);
@@ -82,7 +116,7 @@ export default function QuizRunner({ ids, from }: Props) {
   if (!started) {
     return (
       <Screen>
-        <Header title="OX 퀴즈" back={() => router.push(from ? "/" : "/home")} />
+        <Header title="OX 퀴즈" back={leaveQuiz} />
         <section className="screen__body">
           <div className="stack" style={{ marginTop: 32, gap: 12 }}>
             <span className="chip">보이스피싱 대처 퀴즈</span>
@@ -112,7 +146,7 @@ export default function QuizRunner({ ids, from }: Props) {
     };
     return (
       <Screen>
-        <Header back={() => router.push(from ? "/" : "/home")} />
+        <Header back={goBack} />
         <section className="screen__body figma-quiz-result">
           <div className="figma-quiz-hero">
             <h2>OX 퀴즈를<br />모두 풀었어요!</h2>
@@ -133,7 +167,7 @@ export default function QuizRunner({ ids, from }: Props) {
         <BottomCTA row>
           {from ? (
             <>
-              <button className="btn btn--gray" onClick={() => router.push(SHARED_FAMILY_CODE_PATH)}>가족 암호 보기</button>
+              <button className="btn btn--gray" onClick={openFamilyCode}>가족 암호 보기</button>
               <button className="btn btn--primary" onClick={() => router.push("/")}>끝내기</button>
             </>
           ) : (
@@ -167,7 +201,7 @@ export default function QuizRunner({ ids, from }: Props) {
 
   return (
     <Screen variant={variant}>
-      <Header title="OX 퀴즈" back={() => router.push(from ? "/" : "/home")} />
+      <Header title="OX 퀴즈" back={goBack} />
       <div style={{ padding: "20px 9px 0" }}>
         <Progress value={idx + 1} total={total} />
       </div>

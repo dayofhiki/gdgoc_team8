@@ -19,7 +19,7 @@ function Review() {
 
   return (
     <Screen>
-      <Header back={() => router.replace("/home")} />
+      <Header back="/roleplay/case" />
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 20, gap: 8 }}>
           <h2 className="title">{title}</h2>

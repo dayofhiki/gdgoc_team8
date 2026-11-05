@@ -7,7 +7,7 @@ import { BottomCTA, Header, Screen } from "@/components/ui";
 export default function FamilyCodeGuide() {
   return (
     <Screen>
-      <Header title="가족 암호 정하기" small />
+      <Header title="가족 암호 정하기" small back="/family-practice" />
       <section className="screen__body screen__body--two">
         <div className="stack" style={{ marginTop: 28, gap: 8 }}>
           <h2 className="title">{"우리 가족만 아는\n암호를 정해요"}</h2>

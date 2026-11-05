@@ -112,7 +112,7 @@ export default function SharedFamilyCode() {
   if (uid === null) {
     return (
       <Screen>
-        <Header title="미끼주의보 로그인" back="/home" />
+        <Header title="미끼주의보 로그인" back="/family-practice" />
         <form id="family-code-login" className="screen__body" onSubmit={login}>
           <div className="stack" style={{ marginTop: 32, gap: 16 }}>
             <h2 className="title">가족 암호를 보려면 로그인해 주세요</h2>
@@ -149,7 +149,7 @@ export default function SharedFamilyCode() {
 
   return (
     <Screen>
-      <Header title="가족 암호 보기" back="/home" />
+      <Header title="가족 암호 보기" back="/family-practice" />
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 28, gap: 16 }}>
           <h2 className="title" aria-live="polite">{title}</h2>

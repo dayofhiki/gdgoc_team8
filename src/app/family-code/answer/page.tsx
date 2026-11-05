@@ -23,7 +23,7 @@ export default function FamilyCodeAnswer() {
 
   return (
     <Screen>
-      <Header title="가족 암호 정하기" small />
+      <Header title="가족 암호 정하기" small back="/family-code/question" />
       <div style={{ paddingTop: 4 }}>
         <Progress value={2} total={3} label={false} />
       </div>

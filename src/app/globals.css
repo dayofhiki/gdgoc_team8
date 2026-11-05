@@ -1241,7 +1241,6 @@ p, h1, h2, h3 { margin: 0; }
 .family-report__badge { border-radius: 8px; padding: 4px 8px; background: var(--blue-50); color: var(--blue-dark); font-size: 13px; }
 .family-report__badge--review { background: var(--red-50); color: var(--red); }
 .family-hub__code, .family-hub__report, .family-hub__report-heading { display: grid; gap: 12px; }
-.family-hub__report { scroll-margin-top: 12px; }
 .family-hub__report-heading { gap: 6px; padding: 10px 4px 0; }
 .family-hub__report-heading h2 { font-size: 21px; }
 .family-hub__report > .list-row { background: #fff; border-radius: 20px; padding: 12px 18px; }

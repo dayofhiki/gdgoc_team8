@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "@/components/Icons";
 import { BottomCTA, Header, Screen } from "@/components/ui";
@@ -13,9 +13,16 @@ const OPTIONS = [
 export default function RoleplayMode() {
   const router = useRouter();
   const [selected, setSelected] = useState<(typeof OPTIONS)[number]["path"]>("/roleplay/chat");
+  useEffect(() => {
+    if (window.history.state?.mikkiMode === "/roleplay/select") setSelected("/roleplay/select");
+  }, []);
+  const start = () => {
+    window.history.replaceState({ ...window.history.state, mikkiMode: selected }, "");
+    router.push(selected);
+  };
   return (
     <Screen>
-      <Header title="AI 상황극" back={() => router.replace("/roleplay")} />
+      <Header title="AI 상황극" back="/roleplay" />
       <section className="screen__body figma-mode">
         <div className="figma-mode-heading">
           <span className="figma-kicker">가족·지인 사칭 미션</span>
@@ -38,7 +45,7 @@ export default function RoleplayMode() {
         <p className="figma-mode-disclaimer">ⓘ 모든 대화는 가상입니다. 실제 송금·통화·개인정보 전송은 일어나지 않아요.</p>
       </section>
       <BottomCTA>
-        <button type="button" className="btn btn--primary" onClick={() => router.push(selected)}>
+        <button type="button" className="btn btn--primary" onClick={start}>
           {selected === "/roleplay/chat" ? "채팅으로 시작하기" : "상황 고르기"}
         </button>
       </BottomCTA>
