@@ -1,48 +1,109 @@
 import type { TrainingTopicId } from "./trainingCatalog.ts";
 
-const questions: Record<TrainingTopicId, [string, string]> = {
-  family: ["무슨 일이야?", "왜 다른 번호로 문자했어?"],
-  delivery: ["어떤 택배인가요?", "배송에 무슨 문제가 있나요?"],
-  bank: ["어떤 결제인가요?", "가맹점과 금액을 알려주세요."],
-  invitation: ["무슨 소식이에요?", "결혼식은 언제예요?"],
-  obituary: ["어떤 소식인가요?", "누가 전해 달라고 했나요?"],
-  traffic: ["어떤 고지인가요?", "언제 어디에서 위반했다고 나오나요?"],
-  loan: ["어떤 대출인가요?", "대출 조건을 알려주세요."],
-  job: ["어떤 일인가요?", "근무 조건은 어떻게 되나요?"],
-  health: ["어떤 검진 안내인가요?", "예약 관련 연락인가요?"],
-  card: ["카드를 신청한 적이 없어요.", "어떤 카드인가요?"],
-  team_mission: ["어떤 일인가요?", "정산은 어떻게 하나요?"],
-};
-
-const topicClues: Record<TrainingTopicId, RegExp> = {
-  family: /엄마|아빠|폰|휴대|다른 번호/,
-  delivery: /택배|배송/,
-  bank: /결제|거래|승인/,
-  invitation: /결혼|청첩장/,
-  obituary: /부고|별세|빈소/,
-  traffic: /교통|위반|과태료|범칙금/,
-  loan: /대출|금리/,
-  job: /일자리|업무|근무|채용/,
-  health: /검진|예약/,
-  card: /카드/,
-  team_mission: /후기|부업/,
-};
-
 type ChatLine = { actor: string; text: string; actions?: { kind: string; origin: string }[] };
 
+// 예시는 훈련의 정답이 아니라, 직전 문자에 현실적으로 답할 수 있는 말이다.
+// 출처와 진위는 알 수 없으므로 확인 완료·송금·동의처럼 행동을 가장하는 문구는 넣지 않는다.
+const openingReplies: Record<TrainingTopicId, string[]> = {
+  family: ["응, 무슨 일이야?", "휴대전화는 어떻게 된 거야?", "지금 어디에 있어?"],
+  delivery: ["어떤 택배인가요?", "배송에 무슨 문제가 있나요?", "어느 택배사인가요?"],
+  bank: ["어떤 거래에 관한 안내인가요?", "언제 발생한 일인가요?", "무슨 문제가 생겼나요?"],
+  invitation: ["누구 결혼식이에요?", "결혼식은 언제예요?", "식장은 어디인가요?"],
+  obituary: ["누구의 부고인가요?", "빈소는 어디인가요?", "언제 돌아가셨나요?"],
+  traffic: ["어떤 위반에 관한 안내인가요?", "언제 발생한 건인가요?", "무슨 고지인가요?"],
+  loan: ["어떤 대출 상품인가요?", "금리와 조건이 어떻게 되나요?", "어떤 내용으로 연락하셨나요?"],
+  job: ["어떤 일을 하는 건가요?", "근무 시간은 어떻게 되나요?", "급여 조건은 어떻게 되나요?"],
+  health: ["어떤 검진에 관한 안내인가요?", "예약과 관련된 연락인가요?", "어느 기관에서 연락하셨나요?"],
+  card: ["무슨 카드 배송인가요?", "어느 카드사에서 보냈나요?", "신청한 적이 없는데 무슨 일인가요?"],
+  team_mission: ["어떤 일을 하는 건가요?", "급여는 어떻게 받나요?", "근무 조건은 어떻게 되나요?"],
+};
+
+const informalTopics = new Set<TrainingTopicId>(["family"]);
+const requestedMoney = /송금|이체|입금|선입금|보증금|수수료|계좌로|돈을?\s*보내|금액을?\s*보내|수리비/;
+const requestedLink = /링크|URL|사이트|주소를?\s*(?:눌러|클릭|접속|열어)|청첩장\s*(?:확인|보기)|부고장\s*(?:확인|보기)/i;
+const requestedData = /인증번호|비밀번호|주민등록|계좌번호|카드번호|개인정보|생년월일|잔액|신분증|보안카드/;
+const requestedInstall = /원격\s*(?:제어|지원)|앱\s*(?:설치|깔)|프로그램\s*설치|설치해/;
+const requestedPhone = /전화\s*(?:걸어|주세|주세요|해\s*주세요)|통화\s*(?:해|부탁)|연락\s*(?:주세|주세요)/;
+const isRequest = /(?:해\s*주세요|해주세요|주십시오|보내\s*주세요|보내주세요|부탁|하셔야|필요|해야|가능|확인해|눌러|열어|접속|입력|입금|송금|이체|설치|수리비)/;
+const normalized = (value: string) => value.replace(/[\s.,!?~…·"'“”‘’()]/g, "").toLowerCase();
+
 export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine[]): string[] {
-  const sent = new Set(messages.filter(message => message.actor === "me").map(message => message.text.trim()));
-  const incoming = messages.filter(message => message.actor === "them");
-  const topicMentioned = incoming.some(message => topicClues[topic].test(message.text));
-  const hasRequest = incoming.some(message => message.actions?.some(
-    action => action.origin === "sender" && ["transfer", "link", "phone", "provide_data"].includes(action.kind),
-  ));
-  const choices = hasRequest
-    ? topic === "family"
-      ? ["왜 지금 해야 해?", "잠깐 생각해 볼게.", "다른 방법은 없어?"]
-      : ["왜 이 절차가 필요한가요?", "잠깐 생각해 볼게요.", "다른 방법도 있나요?"]
-    : [...(topicMentioned ? questions[topic] : []), ...(topic === "family"
-      ? ["지금 나한테 필요한 게 뭐야?", "어떻게 된 건지 더 말해 줘."]
-      : ["제게 어떤 용건으로 연락하셨나요?", "제가 해야 할 일이 있나요?"])];
-  return choices.filter(text => !sent.has(text)).slice(0, 2);
+  const last = messages.at(-1);
+  // 전화/앱 사용 직후에는 직전 발신자 문장을 다시 기준으로 예시를 추천하지 않는다.
+  if (!last || last.actor !== "them" || !last.text.trim()) return [];
+  const line = last.text;
+  const informal = informalTopics.has(topic);
+  const sent = new Set(messages.filter(m => m.actor === "me").map(m => normalized(m.text)));
+  const kinds = new Set((last.actions ?? []).filter(a => a.origin === "sender").map(a => a.kind));
+  const requested = isRequest.test(line);
+  const candidates: { text: string; weight: number }[] = [];
+  const add = (weight: number, ...texts: string[]) => {
+    texts.forEach((text, i) => candidates.push({ text, weight: weight - i }));
+  };
+
+  // 위험 요청이 있는 마지막 문자에는 그 요청 자체를 묻는 답장을 우선한다.
+  // '보냈어요/확인했어요'처럼 훈련 앱에서 실행하지 않은 행동은 추천하지 않는다.
+  if (kinds.has("transfer") || requested && requestedMoney.test(line)) {
+    if (informal) add(110, "갑자기 돈이 왜 필요해?", "얼마가 필요한데?");
+    else add(110, "왜 돈을 보내야 하나요?", "어떤 비용인지 설명해 주세요.");
+  }
+  if (kinds.has("provide_data") || requested && requestedData.test(line)) {
+    add(108, "그 정보가 왜 필요한가요?", "어디에 사용하는 정보인가요?");
+  }
+  if (kinds.has("link") || requested && requestedLink.test(line)) {
+    if (informal) add(105, "그 링크는 뭐야?", "거기서 뭘 확인하라는 거야?");
+    else add(105, "링크에서 무엇을 확인하나요?", "문자로 내용을 설명해 주실 수 있나요?");
+  }
+  if (requested && requestedInstall.test(line)) {
+    add(107, "왜 앱을 설치해야 하나요?", "설치하지 않으면 어떻게 되나요?");
+  }
+  if (kinds.has("phone") || requestedPhone.test(line)) {
+    if (informal) add(102, "왜 전화해야 하는데?", "여기서 설명해 줄 수 있어?");
+    else add(102, "전화로 무엇을 확인하나요?", "여기서 설명해 주실 수 있나요?");
+  }
+
+  // 현재 문자가 구체적인 질문을 던졌다면, 주제별 첫인사 문구보다 질문에 대한 반응을 택한다.
+  if (/지금.{0,14}(?:연락|통화|시간|괜찮|가능)|(?:연락|통화).{0,12}(?:가능|되|할\s*수)/.test(line)) {
+    add(90, informal ? "응, 무슨 일이야?" : "네, 어떤 용건인가요?",
+      informal ? "지금 무슨 일인데?" : "어떤 내용으로 연락하셨나요?");
+  }
+  if (/신청하셨|신청한\s*적|주문하셨|예약하셨|본인이.{0,15}(?:맞|하신)|맞으신가요/.test(line)) {
+    add(88, informal ? "무슨 얘기야?" : "어떤 건에 대한 말씀인가요?",
+      informal ? "무슨 일인지 설명해 줘." : "구체적으로 설명해 주시겠어요?");
+  }
+  if (/언제|며칠|날짜|몇\s*시|시간/.test(line) && /\?|까요|세요|니\??$/.test(line)) {
+    add(70, informal ? "무슨 일 때문인데?" : "무슨 일정에 관한 내용인가요?");
+  }
+
+  // 후속 발화에서 나온 사실에 반응한다. 연락 종류의 고정 질문을 매 턴 반복하지 않는다.
+  if (topic === "obituary") {
+    if (/돌아가셨|별세|장례|빈소|부고/.test(line) && !requestedLink.test(line)) {
+      add(80, "삼가 고인의 명복을 빕니다.", "빈소는 어디인가요?");
+    }
+  } else if (topic === "invitation" && /결혼|예식|식장/.test(line)) {
+    add(65, "결혼식은 언제예요?", "어디에서 하나요?");
+  } else if (topic === "family" && /폰|휴대전화|액정|수리/.test(line)) {
+    add(65, "많이 고장 났어?", "어디서 수리하려고?");
+  } else if (topic === "bank" && /결제|거래|승인|보안/.test(line)) {
+    add(65, "어떤 결제인가요?", "금액이 얼마인가요?");
+  } else if (topic === "delivery" && /배송|주소|반송/.test(line)) {
+    add(65, "어느 택배사인가요?", "어떤 물건인가요?");
+  } else if (topic === "card" && /카드|배송|반송/.test(line)) {
+    add(65, "어느 카드사인가요?", "신청한 적이 없는데 무슨 일인가요?");
+  } else if (topic === "team_mission" && /후기|정산|업무|부업/.test(line)) {
+    add(65, "어떤 일을 해야 하나요?", "돈은 어떻게 정산되나요?");
+  }
+
+  // 첫 연락의 중립적인 정보 질문은 마지막 문자에 직접 맞는 답이 없을 때만 사용한다.
+  openingReplies[topic].forEach((text, i) => add(30 - i, text));
+  const unique = new Set<string>();
+  return candidates.sort((a, b) => b.weight - a.weight)
+    .map(candidate => candidate.text)
+    .filter(text => {
+      const key = normalized(text);
+      if (sent.has(key) || unique.has(key)) return false;
+      unique.add(key);
+      return true;
+    })
+    .slice(0, 2);
 }
