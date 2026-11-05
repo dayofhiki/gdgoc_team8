@@ -24,7 +24,7 @@ function actualRequestInText(input: string): boolean {
   const linkRequest =
     /(?:링크|사이트|웹주소|페이지).{0,30}(?:눌러|클릭|접속|열어|들어가|입력해|확인해|변경해)/.test(t);
   const infoRequest =
-    /(?:인증번호|비밀번호|개인정보|주민번호|계좌번호|주소|성함).{0,30}(?:알려|보내|입력|전송|제출|작성해)/.test(t);
+    /(?:인증번호|비밀번호|개인정보|주민번호|계좌번호|계좌잔액|잔액|주소|성함).{0,44}(?:알려|보내|입력|전송|제출|작성해|답장해|적어)/.test(t);
   const negated = /(?:보내지마|보내지마세요|누르지마|누르지마세요|입력하지마|입력하지마세요|송금하지마|하지마세요|안보내도돼)/.test(t);
   return !negated && (moneyRequest || linkRequest || infoRequest);
 }
