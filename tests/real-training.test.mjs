@@ -32,17 +32,19 @@ test("explicit asks become appropriate inline actions; chatter does not", () => 
   assert.equal(classifyOffer("배송 안내가 필요하신가요?", "link"), undefined);
   assert.equal(classifyOffer("이체해 주세요.", "link"), undefined);
 });
-test("trusted verification ends the conversation and gives the correct evidence", () => {
+test("trusted verification records evidence without skipping the remaining conversation", () => {
   const genuineRequest = withOffer(state(0), "official_call", "카드 뒷면 대표번호로 전화해 주세요.");
   const legit = recordChoice(genuineRequest.state, SCENARIOS[0], "verify", genuineRequest.source).state;
   assert.equal(legit.verification, "confirmed");
-  assert.equal(legit.closed, true);
+  assert.equal(legit.closed, false);
   assert.equal(evaluate(legit, SCENARIOS[0], "legitimate").checked, true);
-  assert.throws(() => recordChoice(legit, SCENARIOS[0], "stop"));
+  const finished = recordChoice(legit, SCENARIOS[0], "stop").state;
+  assert.equal(finished.closed, true);
+  assert.equal(finished.events.length, 2);
   const fraudRequest = withOffer(state(1), "official_app", "은행 공식 앱에서 확인해 주세요.");
   const fraud = recordChoice(fraudRequest.state, SCENARIOS[1], "verify", fraudRequest.source).state;
   assert.equal(fraud.verification, "failed");
-  assert.equal(fraud.closed, true);
+  assert.equal(fraud.closed, false);
 });
 test("stopping a genuine conversation is safe, but not an accurate fraud identification", () => {
   const stopped = recordChoice(state(0), SCENARIOS[0], "stop").state;
@@ -145,18 +147,20 @@ test("links carry reserved non-resolving addresses and message-preview metadata"
   assert.equal(evaluate(opened, SCENARIOS[3], "uncertain").linkOpened, true);
 });
 
-test("global menu offers learner-initiated verification separately from sender proposals", () => {
+test("phone workspace verifies via a chosen source, never via a direct menu shortcut", () => {
   const request = withOffer(state(4), "transfer", "송금해 주세요.");
   assert.throws(() => recordChoice(request.state, SCENARIOS[4], "verify", request.source));
-  const independent = recordChoice(request.state, SCENARIOS[4], "verify").state;
+  assert.throws(() => recordChoice(request.state, SCENARIOS[4], "verify"));
+  const independent = recordChoice(request.state, SCENARIOS[4], "verify", undefined, undefined, "official_directory").state;
   assert.equal(independent.verification, "confirmed");
-  assert.equal(independent.closed, true);
-  const familyBank = recordChoice(state(4), SCENARIOS[4], "family_contact").state;
-  assert.equal(familyBank.closed, true);
+  assert.equal(independent.closed, false);
+  assert.equal(independent.events[0].method, "official_directory");
+  const familyBank = recordChoice(state(4), SCENARIOS[4], "family_contact", undefined, undefined, "saved_family").state;
+  assert.equal(familyBank.closed, false);
   assert.equal(familyBank.verification, "none");
   assert.equal(evaluate(familyBank, SCENARIOS[4], "uncertain").checked, false);
   assert.ok(evaluate(familyBank, SCENARIOS[4], "uncertain").highlights.good.some(p => p.keyword === "가족 상담"));
-  const familyVerified = recordChoice(state(0), SCENARIOS[0], "family_contact").state;
+  const familyVerified = recordChoice(state(0), SCENARIOS[0], "family_contact", undefined, undefined, "saved_family").state;
   assert.equal(familyVerified.verification, "confirmed");
   assert.equal(evaluate(familyVerified, SCENARIOS[0], "legitimate").checked, true);
 });
@@ -171,7 +175,7 @@ test("delivery address change prompts expose official-app action, even if Gemini
 
   const { state: s, source } = withOffer(state(2), "official_app", screenshotReply);
   const verified = recordChoice(s, SCENARIOS[2], "verify", source).state;
-  assert.equal(verified.closed, true);
+  assert.equal(verified.closed, false);
   assert.equal(verified.verification, "confirmed");
 });
 test("mentioning official apps in a warning or unrelated sentence does not create an action", () => {
@@ -181,13 +185,17 @@ test("mentioning official apps in a warning or unrelated sentence does not creat
 });
 
 
-test("v3 learner can initiate trusted verification without any sender-proposed action", () => {
+test("phone choices allow verification for every scenario without automatically ending the training", () => {
   for (const scenario of SCENARIOS) {
     const s = state(SCENARIOS.indexOf(scenario));
-    const checked = recordChoice(s, scenario, "verify").state;
-    assert.equal(checked.closed, true);
+    const family = scenario.id.startsWith("0-");
+    const choice = family ? "family_contact" : "verify";
+    const method = family ? "saved_family" : "official_directory";
+    const checked = recordChoice(s, scenario, choice, undefined, undefined, method).state;
+    assert.equal(checked.closed, false);
     assert.equal(checked.events.length, 1);
-    assert.equal(checked.events[0].choice, "verify");
+    assert.equal(checked.events[0].choice, choice);
+    assert.equal(checked.events[0].method, method);
     assert.equal(checked.verification, scenario.identity === "legitimate" ? "confirmed" : "failed");
     assert.equal(evaluate(checked, scenario, "uncertain").checked, true);
   }
@@ -199,10 +207,54 @@ test("v3 learner-initiated verification does not accept a forged partial inline 
   assert.throws(() => recordChoice(s, SCENARIOS[1], "verify", undefined, "forged"));
 });
 
-test("v3 chat UI exposes verification without the sender giving away the answer", async () => {
+test("phone workspace presents neutral functions, not a ready-made verification answer", async () => {
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
-  assert.match(ui, /onClick=\{\(\) => void perform\("verify"\)\}/);
-  assert.match(ui, /다른 경로로 직접 확인하기/);
-  assert.match(ui, /기존 연락처나 공식 앱으로 확인/);
+  const panel = readFileSync(new URL("../src/components/TrainingPhonePanel.tsx", import.meta.url), "utf8");
+  assert.match(ui, /<TrainingPhonePanel/);
+  assert.match(ui, /rt-header-more--hint/);
+  assert.doesNotMatch(ui, /onClick=\{\(\) => void perform\("verify"\)\}/);
+  assert.match(panel, /저장된 가족 연락처/);
+  assert.match(panel, /최근 문자 발신 번호/);
+  assert.match(panel, /은행 앱/);
+  assert.match(panel, /택배 앱/);
+  assert.match(panel, /문자로 돌아가기/);
+  assert.doesNotMatch(panel, /다른 경로로 직접 확인하기/);
+});
+
+
+test("phone workspace cannot invent a verified route or repeat a one-tap shortcut", () => {
+  for (const index of [0, 1]) {
+    assert.throws(() => recordChoice(state(index), SCENARIOS[index], "verify", undefined, undefined, "bank_app"));
+    assert.throws(() => recordChoice(state(index), SCENARIOS[index], "verify", undefined, undefined, "official_directory"));
+  }
+  for (const index of [2, 3]) {
+    assert.throws(() => recordChoice(state(index), SCENARIOS[index], "verify", undefined, undefined, "bank_app"));
+  }
+  for (const index of [4, 5]) {
+    assert.throws(() => recordChoice(state(index), SCENARIOS[index], "verify", undefined, undefined, "delivery_app"));
+  }
+  const s = state(4);
+  assert.throws(() => recordChoice(s, SCENARIOS[4], "verify_sender", undefined, undefined, "bank_app"));
+  assert.throws(() => recordChoice(s, SCENARIOS[4], "family_contact", undefined, undefined, "recent_sender"));
+  const dialled = recordChoice(s, SCENARIOS[4], "verify_sender", undefined, undefined, "recent_sender").state;
+  assert.equal(dialled.verification, "none");
+  assert.equal(dialled.closed, false);
+  assert.equal(evaluate(dialled, SCENARIOS[4], "uncertain").checked, false);
+  assert.throws(() => recordChoice(dialled, SCENARIOS[4], "verify_sender", undefined, undefined, "recent_sender"));
+  const checked = recordChoice(dialled, SCENARIOS[4], "verify", undefined, undefined, "bank_app").state;
+  assert.equal(checked.verification, "confirmed");
+  assert.equal(checked.closed, false);
+  assert.equal(checked.events.length, 2);
+  assert.equal(recordChoice(checked, SCENARIOS[4], "stop").state.closed, true);
+});
+
+test("phone actions require actual source choices but never an AI-provided suggestion", () => {
+  const s = state(3);
+  assert.throws(() => recordChoice(s, SCENARIOS[3], "verify"));
+  assert.throws(() => recordChoice(s, SCENARIOS[3], "verify", undefined, undefined, "saved_family"));
+  const installed = recordChoice(s, SCENARIOS[3], "verify", undefined, undefined, "delivery_app").state;
+  assert.equal(installed.verification, "failed");
+  assert.equal(installed.closed, false);
+  assert.ok(installed.messages.at(-1).text.includes("공식 앱"));
 });
