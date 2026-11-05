@@ -73,23 +73,27 @@ test("case records have verifiable sources and offer meaningful rewind actions",
   }
 });
 
-test("all eleven chat topics have three different anchored real-life risk branches", () => {
+test("eleven topics contain forty-four genuinely different case premises and bounded pacing", () => {
   assert.equal(TRAINING_TOPICS.length, 11);
-  assert.equal(CASE_VARIANT_COUNT, 3);
+  assert.equal(CASE_VARIANT_COUNT, 4);
+  const all = [];
   for (const scenario of SCENARIOS.filter(s => s.identity === "fraud")) {
     const branches = Array.from({ length: CASE_VARIANT_COUNT }, (_, n) => caseBranch(scenario, n));
-    assert.equal(new Set(branches.map(b => b.opening)).size, 3, scenario.topic);
-    assert.equal(new Set(branches.map(b => b.request)).size, 3, scenario.topic);
+    assert.equal(new Set(branches.map(b => b.incident)).size, 4, scenario.topic);
+    assert.equal(new Set(branches.map(b => b.opening)).size, 4, scenario.topic);
+    assert.equal(new Set(branches.map(b => b.request)).size, 4, scenario.topic);
     assert.ok(branches.every(b => b.context.length > 12 && b.request.length > 15), scenario.topic);
-    if (scenario.topic === "card") assert.ok(branches.every(b => b.kind === "phone"));
+    assert.ok(branches.every(b => b.facts.length > 30 && b.sourceUrl.startsWith("https://")));
+    assert.ok(branches.every(b => [0, 1, 2].includes(b.requestAfterTurns)), scenario.topic);
+    assert.ok(branches.some(b => b.requestAfterTurns === 0) && branches.some(b => b.requestAfterTurns === 2), scenario.topic);
     if (scenario.topic === "team_mission") assert.ok(branches.every(b => b.kind === "transfer"));
-    if (!["card","team_mission"].includes(scenario.topic)) {
+    if (scenario.topic !== "team_mission") {
       assert.ok(new Set(branches.map(b => b.kind)).size >= 2, scenario.topic);
     }
     for (const [variant, branch] of branches.entries()) {
       const state = {
         version: 1, scenario: Number(scenario.id.split("-")[0]) * 2 + 1,
-        caseVariant: variant, createdAt: Date.now(), turns: 1,
+        caseVariant: variant, createdAt: Date.now(), turns: branch.requestAfterTurns,
         messages: [{ actor: "them", text: branch.opening }],
         events: [], verification: "none", closed: false,
       };
@@ -98,14 +102,19 @@ test("all eleven chat topics have three different anchored real-life risk branch
       assert.equal(turn.actions[0]?.kind, branch.kind, scenario.topic + "/" + variant);
       assert.equal(turn.actions[0]?.origin, "sender");
       assert.ok(meaningfulRiskRequest(turn.reply, turn.actions, scenario.topic), scenario.topic + "/" + variant);
+      assert.ok(branch.alternateOpening.length >= 10);
+      all.push(branch.id);
     }
   }
+  assert.equal(all.length, 44);
+  assert.equal(new Set(all).size, 44);
 });
 
 test("the chat API fixes a branch in the sealed state and prevents action drift", () => {
   const api = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   const decision = readFileSync(new URL("../src/lib/trainingDecision.ts", import.meta.url), "utf8");
   assert.match(api, /caseVariant = nextCaseVariant/);
+  assert.match(api, /recentByTopic\[scenario\.topic\]/);
   assert.match(api, /version: 1, scenario: index, caseVariant/);
   assert.match(api, /caseBranch\(scenario, state\.caseVariant \?\? 0\)/);
   assert.match(decision, /expected\.kind/);
