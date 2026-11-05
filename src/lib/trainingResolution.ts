@@ -9,6 +9,7 @@
  * 실제 확인 행위 자체는 조기에 훈련을 건너뛰는 수단이 되어서는 안 된다.
  */
 import type { Message, Scenario, TrainingState, Choice } from "./realTraining.ts";
+import { isPersonalTopic } from "./trainingCatalog.ts";
 
 const requestKinds = new Set(["transfer", "link", "provide_data"]);
 const legacyRequests = new Set(["transfer", "share", "link"]);
@@ -56,7 +57,7 @@ export function shouldResolveAfterIndependentCheck(
   verification: TrainingState["verification"],
 ): boolean {
   const independent = choice === "verify" ||
-    (choice === "family_contact" && scenario.id.startsWith("0-"));
+    (choice === "family_contact" && isPersonalTopic(scenario.topic));
   return independent && verification === "failed" && hasConcreteRequest(state.messages);
 }
 
