@@ -16,6 +16,8 @@ type Props = {
   onAction: (choice: ActionChoice, method: PhoneMethod) => Promise<string | undefined>;
   transferRequests: PhoneTransferRequest[];
   onTransfer: (request: PhoneTransferRequest) => Promise<string | undefined>;
+  senderPhoneRequests: PhoneTransferRequest[];
+  onSenderCall: (request: PhoneTransferRequest) => Promise<string | undefined>;
   onStop: () => void;
   busy: boolean;
 };
@@ -41,7 +43,7 @@ export function TrainingPhoneIcon() {
  * 모의 휴대전화. 첫 화면에서 정답이나 신원 확인 동작을 직접 노출하지 않는다.
  * 기능을 연 뒤 실제 연락처/번호/앱을 고른 행동만 서버에 기록한다.
  */
-export default function TrainingPhonePanel({ topic, onClose, onAction, transferRequests, onTransfer, onStop, busy }: Props) {
+export default function TrainingPhonePanel({ topic, onClose, onAction, transferRequests, onTransfer, senderPhoneRequests, onSenderCall, onStop, busy }: Props) {
   const [screen, setScreen] = useState<Screen>("home");
   const [notice, setNotice] = useState("");
   const [chosenTransfer, setChosenTransfer] = useState<PhoneTransferRequest | null>(null);
@@ -60,6 +62,22 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
       setScreen("outcome");
     } catch (e) {
       setError(e instanceof Error ? e.message : "동작을 처리하지 못했어요.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function senderPhoneCall(request: PhoneTransferRequest) {
+    if (locked) return;
+    setWorking(true);
+    setError("");
+    try {
+      const response = await onSenderCall(request);
+      if (!response) throw new Error("전화 결과를 확인하지 못했어요.");
+      setNotice(response);
+      setScreen("outcome");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "모의 통화를 처리하지 못했어요.");
     } finally {
       setWorking(false);
     }
@@ -137,6 +155,12 @@ export default function TrainingPhonePanel({ topic, onClose, onAction, transferR
         {screen === "phone" && (
           <div className="rt-device-options">
             {option("recent", "최근 문자 발신 번호", "지금 문자를 보낸 쪽으로 전화", () => void act("verify_sender", "recent_sender"))}
+            {senderPhoneRequests.map(request => option(
+              "sender:" + request.sourceIndex + ":" + request.action.id,
+              "문자에서 안내한 연락처",
+              request.action.target || request.action.task || "상대가 문자로 제시한 연락 방법",
+              () => void senderPhoneCall(request),
+            ))}
             {topic !== "family"
               ? option("official", "기관 번호 검색", "전화 앱의 연락처 검색", () => void act("verify", "official_directory"))
               : option("family", "기존 가족 연락처", "저장된 연락처로 전화", () => void act("family_contact", "saved_family"))}
