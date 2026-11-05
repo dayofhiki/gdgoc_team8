@@ -45,9 +45,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [familyAnswer, setFamilyAnswer] = useState("");
 
   useEffect(() => {
-    setNick(read(KEY_NICK));
+    const nick = read(KEY_NICK);
+    setNick(nick);
     setQ(read(KEY_QUESTION));
     setReady(true);
+    // 이미 별명이 있는데 가족 목록엔 빈칸인 경우(초대 링크로 먼저 들어온 사람)도 앱을 열 때 맞춤
+    void syncFamilyNickname(nick);
   }, []);
 
   const setNickname = useCallback((v: string) => {
