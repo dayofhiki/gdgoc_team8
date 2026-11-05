@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAppState } from "@/components/AppState";
 import FamilyCodeCard from "@/components/FamilyCodeCard";
 import ShareMessageSheet from "@/components/ShareMessageSheet";
-import { BottomCTA, Screen } from "@/components/ui";
+import { BottomCTA, Header, Screen } from "@/components/ui";
 import { prepareFamilyCodeLink } from "@/lib/familyCode";
 import { getInviteToken, saveFamilyQuestion } from "@/lib/invite";
 import { shareWithDevice } from "@/lib/share";
@@ -50,6 +50,7 @@ export default function FamilyCodeDone() {
 
   return (
     <Screen>
+      <Header back="/family-code/answer" />
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 72, gap: 8 }}>
           <h2 className="title title--xl">{"우리 가족 암호가\n정해졌어요!"}</h2>

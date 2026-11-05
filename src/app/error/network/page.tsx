@@ -1,10 +1,10 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { useBackNavigation } from "@/lib/backNavigation";
 import { BottomCTA, Header, Screen } from "@/components/ui";
 
 /** 오류 · 연결 불안정 (AI 호출 실패 시 이동할 화면) */
 export default function NetworkError() {
-  const router = useRouter();
+  const goBack = useBackNavigation("/home");
   return (
     <Screen>
       <Header />
@@ -20,7 +20,7 @@ export default function NetworkError() {
         </div>
       </section>
       <BottomCTA>
-        <button className="btn btn--primary" onClick={() => router.back()}>다시 시도하기</button>
+        <button className="btn btn--primary" onClick={goBack}>다시 시도하기</button>
       </BottomCTA>
     </Screen>
   );

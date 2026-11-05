@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
-import { BottomCTA, Progress, Screen } from "@/components/ui";
+import { BottomCTA, Header, Progress, Screen } from "@/components/ui";
 
 const TOTAL = 4;
 
@@ -23,7 +23,7 @@ export default function Onboarding() {
 
   return (
     <Screen variant="sky">
-      <div style={{ height: 30 }} />
+      <Header back={step > 1 ? () => setStep(step - 1) : false} />
       <Progress value={step} total={TOTAL} />
 
       <section className="screen__body" key={step} style={{ animation: "fade .3s ease" }}>

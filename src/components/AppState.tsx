@@ -1,5 +1,7 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { rememberFlowEntry } from "@/lib/backNavigation";
 import { syncFamilyNickname } from "@/lib/invite";
 
 /**
@@ -39,6 +41,8 @@ function write(key: string, v: string) {
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  useEffect(() => { rememberFlowEntry(); }, [pathname]);
   const [ready, setReady] = useState(false);
   const [nickname, setNick] = useState("");
   const [familyQuestion, setQ] = useState("");

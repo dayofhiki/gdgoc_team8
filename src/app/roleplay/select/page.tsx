@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BottomCTA, Header, Screen } from "@/components/ui";
-import { TRAINING_TOPICS, type TrainingTopicId } from "@/lib/trainingCatalog";
+import { TRAINING_TOPICS, isTrainingTopicId, type TrainingTopicId } from "@/lib/trainingCatalog";
 
 /**
  * 상황별 연습은 사용자가 특정 주제를 선택하는 전용 경로다.
@@ -12,10 +12,19 @@ import { TRAINING_TOPICS, type TrainingTopicId } from "@/lib/trainingCatalog";
 export default function SelectTrainingTopic() {
   const router = useRouter();
   const [selected, setSelected] = useState<TrainingTopicId | null>(null);
+  useEffect(() => {
+    const previous: unknown = window.history.state?.mikkiTopic;
+    if (isTrainingTopicId(previous)) setSelected(previous);
+  }, []);
+  const start = () => {
+    if (!selected) return;
+    window.history.replaceState({ ...window.history.state, mikkiTopic: selected }, "");
+    router.push("/roleplay/chat?topic=" + encodeURIComponent(selected));
+  };
   const categories = ["가족·지인", "생활 문자", "금융", "공공기관"];
   return (
     <Screen>
-      <Header title="상황별 연습" back={() => router.replace("/roleplay/mode")} />
+      <Header title="상황별 연습" back="/roleplay/mode" />
       <section className="screen__body rt-select-page">
         <div className="rt-select-heading">
           <span className="chip">상황별 연습 · {TRAINING_TOPICS.length}가지 상황</span>
@@ -50,7 +59,7 @@ export default function SelectTrainingTopic() {
       </section>
       <BottomCTA>
         <button type="button" className="btn btn--primary" disabled={!selected}
-          onClick={() => selected && router.push("/roleplay/chat?topic=" + encodeURIComponent(selected))}>
+          onClick={start}>
           {selected ? TRAINING_TOPICS.find(t => t.id === selected)?.title + " 연습 시작" : "연습할 상황을 선택해 주세요"}
         </button>
       </BottomCTA>

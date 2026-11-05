@@ -13,7 +13,7 @@ function Done() {
 
   return (
     <Screen>
-      <Header back={() => router.replace("/home")} />
+      <Header back="/roleplay/phone" />
       <section className="screen__body">
         <div className="stack" style={{ marginTop: 20, gap: 8 }}>
           <h2 className="title">{"전화 화면 미리보기를\n마치셨어요!"}</h2>

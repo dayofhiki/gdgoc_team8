@@ -35,7 +35,7 @@ export default function PhonePractice() {
 
   return (
     <Screen>
-      <Header title="전화 체험 미리보기" onClose={() => router.push("/home")} />
+      <Header title="전화 체험 미리보기" back="/roleplay/mode" onClose={() => router.push("/home")} />
       <section className="screen__body">
         <div className="phone">
           <img

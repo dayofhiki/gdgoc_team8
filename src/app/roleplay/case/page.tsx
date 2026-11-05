@@ -40,7 +40,7 @@ export default function CaseStudyPage() {
   };
   const goBack = () => {
     if (phase === "debrief") { setPhase("outcome"); return; }
-    if (phase === "outcome") { showList(); return; }
+    if (phase === "outcome") { setPhase("scene"); setChoice(null); return; }
     if (step > 0) { setStep(step - 1); return; }
     showList();
   };

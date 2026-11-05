@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useBackNavigation } from "@/lib/backNavigation";
 import { useRouter } from "next/navigation";
 import { AlertIcon, BackIcon, CheckIcon, ChevronRight, PersonIcon, ShieldIcon } from "@/components/Icons";
 import { BottomCTA, BottomSheet, Dialog, Header, Screen } from "@/components/ui";
@@ -128,6 +129,7 @@ export default function RealTraining() {
   const started = useRef(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const [liveEntry, setLiveEntry] = useState(false);
+  const leaveTraining = useBackNavigation(liveEntry ? "/roleplay/mode" : "/roleplay/select");
   const [phase, setPhase] = useState<Phase>("chat");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -371,6 +373,7 @@ export default function RealTraining() {
 
   const finish = useCallback(async () => {
     if (!session?.closed || finishInFlight.current) return;
+    if (result) { setPhase("result"); return; }
     finishInFlight.current = true;
     autoReviewed.current = session.token;
     setBusy(true);
@@ -395,7 +398,7 @@ export default function RealTraining() {
       finishInFlight.current = false;
       setBusy(false);
     }
-  }, [session]);
+  }, [session, result]);
 
   async function shareFamilyPractice(includeResult: boolean) {
     if (!result) return;
@@ -430,7 +433,7 @@ export default function RealTraining() {
     const learning = promise?.title ?? result.behavior.focus;
     return (
       <Screen>
-        <Header back={() => setMemoryStage("details")} onClose={() => router.replace("/home")} />
+        <Header back={() => session ? setPhase("chat") : leaveTraining()} onClose={leaveTraining} />
         <section className="screen__body figma-flashcard-page">
           <p className="figma-flashcard-instruction">카드를 눌러 뒤집어보세요</p>
           <button type="button" className={"figma-flashcard " + (memoryStage === "flipped" ? "figma-flashcard--turned" : "figma-flashcard--front")}
@@ -548,7 +551,7 @@ export default function RealTraining() {
     const lastReceipt = feedback.hasConfirmedAction ? feedback.receipts.at(-1) : undefined;
     return (
       <Screen>
-        <Header title="내 대응 돌아보기" back={() => router.replace("/home")} />
+        <Header title="내 대응 돌아보기" back={() => setMemoryStage("card")} />
         <section className="screen__body">
           <div className="fb-summary-flow">
             <section className={"fb-impact-hero fb-impact-hero--" + feedback.tone} aria-labelledby="fb-headline">
@@ -636,7 +639,7 @@ export default function RealTraining() {
   return (
     <main className={"screen rt-screen figma-chat figma-chat--" + fontSize}>
       <header className="rt-header figma-chat-header">
-        <button type="button" className="rt-nav-back" onClick={() => router.replace(liveEntry ? "/roleplay/mode" : "/roleplay/select")} aria-label="뒤로 가기">
+        <button type="button" className="rt-nav-back" onClick={leaveTraining} aria-label="뒤로 가기">
           <BackIcon />
         </button>
         <button type="button" className="figma-font-control" onClick={() => setFontMenuOpen(true)}>글자 크게 보기</button>

@@ -1,11 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useBackNavigation } from "@/lib/backNavigation";
 import { BottomCTA, Screen } from "@/components/ui";
 
 /** 오류 · 초대 링크 만료/잘못됨 */
 export default function LinkError() {
-  const router = useRouter();
+  const goBack = useBackNavigation("/invite");
   return (
     <Screen>
       <section className="screen__body">
@@ -20,7 +20,7 @@ export default function LinkError() {
         </div>
       </section>
       <BottomCTA>
-        <button className="btn btn--primary" onClick={() => router.back()}>새 링크로 다시 들어가기</button>
+        <button className="btn btn--primary" onClick={goBack}>새 링크로 다시 들어가기</button>
         <Link href="/" className="btn btn--secondary">처음 화면으로</Link>
       </BottomCTA>
     </Screen>
