@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_REMEMBER, pickQuiz, type OX } from "@/lib/quiz";
+import { DEFAULT_REMEMBER, loadQuizProgress, pickQuiz, saveQuizProgress, type OX } from "@/lib/quiz";
 import { DEFAULT_NICKNAME, useAppState } from "@/components/AppState";
 import { saveRecord } from "@/lib/records";
 import { BottomCTA, Dialog, Header, Progress, Screen } from "./ui";
@@ -19,7 +19,7 @@ export default function QuizRunner({ ids, from }: Props) {
   const { nickname } = useAppState();
   const displayName = nickname || DEFAULT_NICKNAME;
   const [started, setStarted] = useState(false);
-  const items = useMemo(() => pickQuiz(ids), [ids]);
+  const [items, setItems] = useState(() => pickQuiz(ids, 0));
   const [idx, setIdx] = useState(0);
   const [picked, setPicked] = useState<OX | null>(null);
   const [answers, setAnswers] = useState<Answer[]>([]);
@@ -30,18 +30,25 @@ export default function QuizRunner({ ids, from }: Props) {
   const q = items[idx];
   const total = items.length;
 
+  // 초기 렌더는 고정 시드, 마운트 후 무작위·취약점 복습 출제.
+  useEffect(() => {
+    const progress = loadQuizProgress();
+    setItems(pickQuiz(ids, undefined, progress.wrongIds, progress.recentIds));
+  }, [ids?.join(",")]);
+
   // 결과 화면에 도달하면 한 번만 기록 (StrictMode의 effect 2회 실행에도 1건)
   const saved = useRef(false);
   useEffect(() => {
     if (!done || saved.current) return;
     saved.current = true;
+    if (!from) saveQuizProgress(answers, items);
     void saveRecord({
       kind: from ? "challenge" : "quiz",
       score: answers.filter((a) => a.correct).length,
       total: answers.length,
       detail: { wrong: answers.filter((a) => !a.correct).map((a) => a.id), hints: hintUsed.size },
     });
-  }, [done, from, answers, hintUsed]);
+  }, [done, from, answers, hintUsed, items]);
 
   const choose = (v: OX) => {
     if (picked) return;
@@ -91,6 +98,18 @@ export default function QuizRunner({ ids, from }: Props) {
       const q = wrong.map((w) => w.id).join(",");
       router.push(`/quiz?ids=${q}`);
     };
+    const nextSet = () => {
+      const progress = loadQuizProgress();
+      setItems(pickQuiz(undefined, undefined, progress.wrongIds, progress.recentIds));
+      setStarted(false);
+      setIdx(0);
+      setPicked(null);
+      setAnswers([]);
+      setHintOpen(false);
+      setHintUsed(new Set());
+      setDone(false);
+      saved.current = false;
+    };
     return (
       <Screen>
         <Header back={() => router.push(from ? "/" : "/home")} />
@@ -114,15 +133,18 @@ export default function QuizRunner({ ids, from }: Props) {
           </div>
         </section>
         <BottomCTA row>
-          <button className="btn btn--gray" onClick={() => router.push(from ? "/quiz/recommend?guest=1" : "/quiz/recommend")}>
-            가족 암호 추천 보기
-          </button>
-          {wrong.length > 0 ? (
-            <button className="btn btn--primary" onClick={retry}>틀린 문제 다시 풀기</button>
+          {from ? (
+            <>
+              <button className="btn btn--gray" onClick={() => router.push("/quiz/recommend?guest=1")}>가족 암호 보기</button>
+              <button className="btn btn--primary" onClick={() => router.push("/")}>끝내기</button>
+            </>
           ) : (
-            <button className="btn btn--primary" onClick={() => router.push(from ? "/" : "/roleplay")}>
-              {from ? "나도 연습해 보기" : "AI 상황극 하러 가기"}
-            </button>
+            <>
+              <button className="btn btn--gray" onClick={wrong.length ? retry : () => router.push("/home")}>
+                {wrong.length ? "틀린 문제 복습" : "홈으로"}
+              </button>
+              <button className="btn btn--primary" onClick={nextSet}>새 문제 10개</button>
+            </>
           )}
         </BottomCTA>
       </Screen>

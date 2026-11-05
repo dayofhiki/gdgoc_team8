@@ -214,7 +214,7 @@ test("phone workspace presents neutral functions, not a ready-made verification 
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   const panel = readFileSync(new URL("../src/components/TrainingPhonePanel.tsx", import.meta.url), "utf8");
   assert.match(ui, /<TrainingPhonePanel/);
-  assert.match(ui, /rt-header-more--hint/);
+  assert.match(ui, /rt-phone-button--hint/);
   assert.doesNotMatch(ui, /onClick=\{\(\) => void perform\("verify"\)\}/);
   assert.match(panel, /저장된 가족 연락처/);
   assert.match(panel, /최근 문자 발신 번호/);
@@ -293,7 +293,7 @@ test("phone panel cue is non-accusatory, appears once after interaction and resp
   assert.doesNotMatch(ui, /next\.turns >= 2/);
   assert.match(ui, /phoneHintShown\.current = true/);
   assert.match(ui, /setPhoneHint\(false\)/);
-  assert.match(css, /\.rt-header-more--hint/);
+  assert.match(css, /\.rt-phone-button--hint/);
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(ui, /coverage === "early"/);
 });
@@ -470,7 +470,8 @@ test("existing action IDs still allow requested money transfers and terminate af
 test("closed verified resolution keeps its explanation visible before the user opens behavior feedback", async () => {
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
-  assert.match(ui, /next\.endReason === "resolved"/);
+  assert.doesNotMatch(ui, /setTimeout\(\(\) => void finish\(/);
+  assert.match(ui, /위의 행동 기록을 충분히 읽으신 뒤/);
   assert.doesNotMatch(ui, /session\.endReason === "resolved" && session\.verified/);
   assert.match(ui, /void finish\(\)/);
   assert.match(ui, /내 행동 피드백 보기/);
@@ -525,12 +526,14 @@ test("entry flow separates unannounced real-life practice from focused scenario 
   const { readFileSync } = await import("node:fs");
   const selector = readFileSync(new URL("../src/app/roleplay/select/page.tsx", import.meta.url), "utf8");
   const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  const home = readFileSync(new URL("../src/app/home/page.tsx", import.meta.url), "utf8");
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
   assert.match(mode, /실전 훈련/);
   assert.match(mode, /어떤 연락이 올지 모릅니다/);
   assert.match(mode, /상황별 연습/);
-  assert.match(mode, /사례로 배우기/);
+  assert.doesNotMatch(mode, /사례로 배우기/);
+  assert.match(home, /사례로 배우기/);
   assert.match(mode, /path: "\/roleplay\/chat"/);
   assert.match(mode, /path: "\/roleplay\/select"/);
   assert.match(selector, /상황별 연습/);
@@ -539,6 +542,9 @@ test("entry flow separates unannounced real-life practice from focused scenario 
   assert.match(selector, /\/roleplay\/chat\?topic=/);
   assert.match(mode, /\/roleplay\/select/);
   assert.match(chat, /new URLSearchParams\(window\.location\.search\)\.get\("topic"\)/);
+  assert.match(chat, /router\.replace\("\/home"\)\}>홈으로<\/button>/);
+  assert.match(chat, /다음 실전 훈련/);
+  assert.match(chat, /다른 상황 고르기/);
   assert.match(route, /if \(body\.topic !== undefined && !isTrainingTopicId\(body\.topic\)\)/);
   assert.match(route, /topicIndex \* 2 \+ 1/);
   assert.match(route, /topic: scenario\.topic/);
@@ -565,14 +571,15 @@ test("action-first interface avoids identity-guessing quiz and prioritizes pract
   const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(chat, /setPhase\("judge"\)|phase === "judge"|role="radiogroup" aria-label="상대방 정체 판단"/);
   assert.match(chat, /guess: "uncertain"/);
-  assert.match(chat, /이번 대화에서 선택한 행동을 함께 돌아볼게요/);
+  assert.match(chat, /이번 대화가 마무리됐어요/);
   assert.match(chat, /내 행동 피드백 보기/);
   assert.match(chat, /안전 약속 확인하기/);
   assert.match(chat, /이번 가상 연락의 설정 살펴보기/);
   assert.ok(chat.indexOf("다음 연락에서도 기억할 행동") < chat.indexOf("이번 가상 연락의 설정 살펴보기"));
   assert.doesNotMatch(chat, /정체와 안전 약속 확인하기|정체를 몰라도 괜찮아요/);
   assert.doesNotMatch(home, /진짜 가족일까요/);
-  assert.match(home, /어떤 문자가 올지/);
+  assert.match(home, /추천 훈련 시작하기/);
+  assert.match(home, /href="\/practice"/);
   assert.doesNotMatch(intro, /진짜 연락과 사칭 시도가 섞여/);
   assert.match(intro, /어떤 연락이 오더라도 안전하게 대응하는 연습/);
   assert.match(mode, /안전하게 행동하는 연습/);
@@ -582,7 +589,9 @@ test("action-first interface avoids identity-guessing quiz and prioritizes pract
 test("back navigation respects the selected mode while preserving the no-identity-quiz flow", async () => {
   const { readFileSync } = await import("node:fs");
   const ui = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
-  assert.match(ui, /new URLSearchParams\(window\.location\.search\)\.has\("topic"\) \? "\/roleplay\/select" : "\/roleplay\/mode"/);
+  assert.match(ui, /liveEntry \? "\/roleplay\/mode" : "\/roleplay\/select"/);
+  assert.match(ui, /start\(randomTrainingTopic\(result.topic\).id\)/);
+  assert.doesNotMatch(ui, /aria-label="내 휴대전화 기능 열기"/);
   assert.match(ui, /onClick=\{\(\) => void finish\(\)\}/);
   assert.doesNotMatch(ui, /setPhase\("judge"\)/);
 });
@@ -693,4 +702,9 @@ test("reply examples keep hidden facts out of the conversation and leave prevent
   assert.ok(!trainingReplyExamples("team_mission", [...request, { actor: "me", text: examples[0] }]).includes(examples[0]));
   const stoppedEarly = recordChoice(state(1), SCENARIOS[1], "stop").state;
   assert.equal(evaluate(stoppedEarly, SCENARIOS[1], "uncertain").behavior.tone, "neutral");
+});
+
+test("random training continues in a different topic", async () => {
+  const { randomTrainingTopic } = await import("../src/lib/trainingCatalog.ts");
+  for (const topic of TRAINING_TOPICS) assert.notEqual(randomTrainingTopic(topic.id).id, topic.id);
 });

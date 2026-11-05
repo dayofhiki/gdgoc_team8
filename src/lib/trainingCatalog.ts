@@ -46,3 +46,8 @@ export function appSupportsTopic(app: TrainingApp, topic: TrainingTopicId): bool
   const topics: readonly TrainingTopicId[] = TRAINING_APPS.find(item => item.id === app)?.topics ?? [];
   return topics.includes(topic);
 }
+
+export function randomTrainingTopic(previous?: TrainingTopicId) {
+  const available = TRAINING_TOPICS.filter(topic => topic.id !== previous);
+  return available[Math.floor(Math.random() * available.length)];
+}
