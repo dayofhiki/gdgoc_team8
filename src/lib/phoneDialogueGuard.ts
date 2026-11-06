@@ -30,14 +30,3 @@ export function reviewPhoneTurn(
   return modelTurnCount >= 2 ? "missing_decision" : "none";
 }
 
-/** Model receives an internal educational cue, not a simulated user response. */
-export function decisionProgressionCue(scenario: PhoneCase): string {
-  return [
-    "[교육용 시나리오 진행 메시지. 사용자의 발화가 아닙니다. 이 메시지를 읽거나 언급하지 마세요.]",
-    "앞의 대화에서 훈련의 판단 지점이 제시되지 않았습니다.",
-    "이번 통화의 이미 정해진 행동 판단 지점으로 바로 진행해 주세요.",
-    "판단 지점: " + scenario.request,
-    "추가로 기다리게 하지 말고, 안전 확인 완료·문제 해결·무혐의라는 결론을 내리지 마세요.",
-    "이 판단 지점이 실제 대사에 나타나기 전에는 통화를 종료하지 마세요.",
-  ].join("\n");
-}
