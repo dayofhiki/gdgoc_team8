@@ -147,7 +147,19 @@ export default function GeminiLivePhonePractice() {
           return [...(!startsTurn && prev.at(-1)?.actor === "caller" ? prev.slice(0, -1) : prev), line].slice(-16);
         });
         const phoneCase = findPhoneCase(sessionRef.current?.caseId ?? "");
-        if (phoneCase && heardPhoneRequest(phoneCase, caption)) observedRisk.current = true;
+        if (phoneCase && heardPhoneRequest(phoneCase, caption)) {
+          observedRisk.current = true;
+          live.current?.setCallerMayHangUp(true);
+        }
+      },
+      onModelTurnComplete: () => {
+        // A spoken farewell before the scenario's key decision does not count
+        // as completed training and cannot trigger automatic hangup.
+      },
+      onPrematureCallerHangup: () => {
+        if (id === currentRun.current) {
+          setStatus("통화 상대가 종료를 언급했지만 중요한 요청은 확인되지 않았어요.");
+        }
       },
       onUserText: text => {
         if (id !== currentRun.current) return;
