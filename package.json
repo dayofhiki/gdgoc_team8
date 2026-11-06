@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "tsc --noEmit",
-    "test:training": "node --experimental-strip-types --no-warnings --test tests/real-training.test.mjs tests/training-actions.test.mjs tests/training-dialogue.test.mjs tests/training-feedback.test.mjs tests/training-reply-examples.test.mjs tests/learning-system.test.mjs",
+    "test:training": "node --experimental-strip-types --no-warnings --test tests/real-training.test.mjs tests/training-actions.test.mjs tests/training-dialogue.test.mjs tests/training-feedback.test.mjs tests/training-reply-examples.test.mjs tests/learning-system.test.mjs tests/phone-training.test.mjs",
     "test:backend": "node --experimental-strip-types --no-warnings --test src/server/logic_test.ts src/server/llm_test.ts",
     "test:firebase": "npx -y firebase-tools@14 emulators:exec --only firestore --project demo-test \"npm --prefix functions test\""
   },
