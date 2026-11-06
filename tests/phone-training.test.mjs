@@ -211,7 +211,7 @@ test("Live fraudster persona challenges a first rejection and signals genuine di
   assert.match(client, /wire\.toolCall/);
   assert.match(client, /toolResponse:/);
   assert.match(client, /functionResponses:/);
-  assert.match(client, /callerSaidTheyHungUp\(this\.modelTurnText\)/);
+  assert.match(client, /callerSaidTheyHungUp\(finishedText\)/);
   assert.match(client, /private requestCallerHangup\(/);
   assert.match(client, /private finishCallerHangup\(/);
   assert.match(client, /this\.callbacks\.onCallerHangup\(\)/);
