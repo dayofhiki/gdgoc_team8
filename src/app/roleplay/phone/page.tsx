@@ -90,7 +90,7 @@ export default function GeminiLivePhonePractice() {
     if (phase !== "feedback" || !session?.feedback || savedRef.current) return;
     savedRef.current = true;
     void saveRecord({
-      kind: "training", title: "Gemini Live 전화 대응 훈련",
+      kind: "training", title: "AI 피싱범 전화 대응 훈련",
       safe: session.feedback.status === "good",
       detail: { mode: "phone_live", coverage: session.feedback.coverage,
         postActionCount: session.feedback.actions.length - 1 },
@@ -155,7 +155,7 @@ export default function GeminiLivePhonePractice() {
       setMicAvailable(client.hasMicrophone());
       const boot = await api({ action: "start", recentCases: previousCases() });
       if (!boot.liveToken || !boot.liveEndpoint || !boot.liveSetup)
-        throw Error("Gemini Live 음성 연결 정보를 받지 못했어요.");
+        throw Error("AI 피싱범 음성 연결 정보를 받지 못했어요.");
       rememberCase(boot.caseId);
       updateSession(boot);
       await client.connect(boot as LiveBoot);
@@ -172,7 +172,7 @@ export default function GeminiLivePhonePractice() {
       if (id === currentRun.current) {
         live.current = null;
         setPhase("incoming");
-        setError(e instanceof Error ? e.message : "Gemini Live 연결을 시작하지 못했어요.");
+        setError(e instanceof Error ? e.message : "AI 피싱범과의 통화를 시작하지 못했어요.");
       }
     } finally { if (id === currentRun.current) { busyRef.current = false; setBusy(false); } }
   }
@@ -265,20 +265,20 @@ export default function GeminiLivePhonePractice() {
     <Screen>
       <Header title="AI 전화 대응 훈련" back={false} />
       <section className="screen__body pv-intro">
-        <span className="pv-topline">GEMINI LIVE · VOICE TRAINING</span>
+        
         <div className="pv-intro-icon"><img src="/images/icon-phone.png" alt="" width={88} height={88}/></div>
         <h2>낯선 전화가 걸려왔어요</h2>
-        <p>실제 사람처럼 들리고 말하는 AI와 통화하세요. 전화를 끊은 뒤에도 안전한 확인 행동을 직접 연습합니다.</p>
+        <p>AI 피싱범과 실제처럼 통화해 보세요. 전화를 끊은 뒤에도 안전한 확인 행동을 직접 연습합니다.</p>
         <div className="pv-howto">
           <strong>이번 훈련 진행</strong>
-          <span>① Gemini Live와 실시간으로 통화하기</span>
+          <span>① AI 피싱범과 실시간으로 통화하기</span>
           <span>② 통화를 끊고 가상 휴대전화로 사후 행동하기</span>
           <span>③ 통화와 그 뒤 행동을 함께 돌아보기</span>
         </div>
         <p className="pv-note">가상의 통화이며 실제 금융 거래나 전화 연결은 이루어지지 않습니다. 마이크 음성은 실시간 대화 처리를 위해 Google에 전송됩니다. 실제 개인정보나 인증번호는 말하지 마세요. 음성·대화 원문은 연습 기록에 저장하지 않습니다.</p>
         {error && <p className="pv-error" role="alert">{error}</p>}
         <button type="button" className="pv-accept" disabled={busy} onClick={() => void acceptCall()}>
-          {busy ? "Gemini Live 연결 중…" : "전화 받기"} <span aria-hidden="true">☎</span>
+          {busy ? "통화 연결 중…" : "전화 받기"} <span aria-hidden="true">☎</span>
         </button>
         <button type="button" className="pv-secondary" onClick={() => router.replace("/home")}>홈으로</button>
       </section>
@@ -289,7 +289,7 @@ export default function GeminiLivePhonePractice() {
     <main className="screen pv-call-screen">
       <header className="pv-call-header pv-live-header">
         <span aria-hidden="true" />
-        <span>Gemini Live · 모의 통화 중</span>
+        <span>AI 피싱범 · 모의 통화 중</span>
         <button type="button" onClick={toggleSound} aria-pressed={!soundOn}>
           {soundOn ? "소리 끄기" : "소리 켜기"}
         </button>
@@ -321,7 +321,7 @@ export default function GeminiLivePhonePractice() {
             {!micAvailable ? "마이크 사용 불가" : micOn ? "마이크 켜짐 · 끄기" : "마이크 꺼짐 · 켜기"}
           </button>
         </div>
-        {!micAvailable && <p className="pv-note">마이크를 사용할 수 없어 글로 답변해도 Gemini의 실제 음성으로 응답합니다.</p>}
+        {!micAvailable && <p className="pv-note">마이크를 사용할 수 없어 글로 답변해도 AI 피싱범의 음성으로 응답합니다.</p>}
         <form className="pv-typed-answer" onSubmit={e => { e.preventDefault(); sendLiveText(); }}>
           <input type="text" value={typing} maxLength={160} aria-label="모의 통화에서 말할 내용"
             placeholder="말하기가 어려우면 글로 답변" onChange={e => setTyping(e.target.value)} />
