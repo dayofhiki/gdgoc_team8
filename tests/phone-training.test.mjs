@@ -1,102 +1,120 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { PHONE_CASES, MAX_PHONE_TURNS, evaluatePhoneCase, findPhoneCase, pickPhoneCase } from "../src/lib/phoneTraining.ts";
+import { PHONE_CASES, MAX_PHONE_TURNS, MAX_POST_ACTIONS, evaluatePhoneCase,
+  findPhoneCase, allowedPhoneAction, phoneActionOutcome, pickPhoneCase } from "../src/lib/phoneTraining.ts";
 
-function state(scenario, decision, riskPresented = true) {
+function completed(scenario, postActions, requestObserved = true) {
   return {
-    version: 1, scenario, createdAt: Date.now(), turns: riskPresented ? 2 : 0,
-    riskPresented, closed: true, decision,
-    messages: [{ actor: "caller", text: findPhoneCase(scenario).opening }],
+    version: 2, scenario, createdAt: Date.now(), phase: "finished",
+    endedAt: Date.now(), postActions, requestObserved,
   };
 }
 
-test("voice training contains multiple grounded phone-only scenarios including genuine calls", () => {
+test("Gemini Live telephone training retains diverse fraud and legitimate call premises", () => {
   assert.equal(PHONE_CASES.length, 7);
   assert.equal(new Set(PHONE_CASES.map(c => c.id)).size, 7);
   assert.ok(PHONE_CASES.filter(c => c.kind === "fraud").length >= 4);
   assert.ok(PHONE_CASES.filter(c => c.kind === "legitimate").length >= 2);
-  assert.ok(PHONE_CASES.every(c => c.opening.length > 20 && c.request.length > 15 && c.safeAction.length > 15));
+  assert.ok(PHONE_CASES.every(c => c.opening.length > 20 && c.request.length > 15));
   assert.ok(PHONE_CASES.every(c => !/https?:\/\/|(?:\+?82|0)10\d{7,8}/.test(c.opening + c.request)));
-  assert.ok(PHONE_CASES.every(c => !/교육용|가상|피싱|연습입니다/.test(c.opening)));
-  assert.equal(MAX_PHONE_TURNS, 4);
+  assert.equal(MAX_PHONE_TURNS, 5);
+  assert.equal(MAX_POST_ACTIONS, 6);
 });
 
-test("recent calls are excluded without exposing whether a scenario is a scam", () => {
+test("scenarios rotate excluding recent experiences", () => {
   const recent = ["card_return", "account_protect", "normal_delivery"];
-  for (let n = 0; n < 20; n++) {
-    assert.ok(!recent.includes(pickPhoneCase(recent, () => n / 20).id));
-  }
-  assert.ok(PHONE_CASES.some(c => c.id === pickPhoneCase([], () => 0).id));
+  for (let n = 0; n < 20; n++) assert.ok(!recent.includes(pickPhoneCase(recent, () => n / 20).id));
 });
 
-test("action scoring distinguishes independent official checks from caller-supplied numbers", () => {
-  const safe = evaluatePhoneCase(state("card_return", "official"));
-  const trapped = evaluatePhoneCase(state("card_return", "sender"));
-  assert.equal(safe.status, "good");
-  assert.equal(trapped.status, "caution");
-  assert.match(trapped.detail, /직접 찾은 공식 번호/);
-  assert.equal(safe.identity, "fraud");
-  assert.equal(safe.coverage, "request_reached");
+test("call hangup cannot produce a final result without an intentional post-call action", () => {
+  assert.throws(() => evaluatePhoneCase({ ...completed("card_return", []), phase: "after_call" }), /INVALID_PHONE_RESULT/);
+  assert.throws(() => evaluatePhoneCase(completed("card_return", [])), /INVALID_PHONE_RESULT/);
 });
 
-test("auth codes are treated as login/transaction authorization, not instant-money magic", () => {
-  const result = evaluatePhoneCase(state("payment_auth", "comply"));
+test("independent verification after disconnect earns stronger feedback than hanging up without checking", () => {
+  const confirmed = evaluatePhoneCase(completed("card_return", ["official_call"]));
+  const ignored = evaluatePhoneCase(completed("card_return", ["no_action"]));
+  assert.equal(confirmed.status, "good");
+  assert.equal(ignored.status, "incomplete");
+  assert.match(confirmed.headline, /직접 확인/);
+  assert.equal(confirmed.actions.length, 2);
+  assert.equal(confirmed.actions[0].label, "통화를 끊음");
+  assert.equal(confirmed.actions[1].safe, true);
+});
+
+test("caller-provided number stays risky even when user subsequently independently checks", () => {
+  const result = evaluatePhoneCase(completed("card_return", ["caller_number", "official_call"]));
   assert.equal(result.status, "caution");
-  assert.match(result.detail, /로그인·인증/);
-  assert.match(result.lesson, /로그인|거래 승인/);
+  assert.equal(result.actions[1].safe, false);
+  assert.equal(result.actions[2].safe, true);
 });
 
-test("stopping before hearing the request never earns full safe-action credit", () => {
-  const early = evaluatePhoneCase(state("family_emergency", "hangup", false));
-  assert.equal(early.status, "incomplete");
-  assert.equal(early.coverage, "before_request");
-  const late = evaluatePhoneCase(state("family_emergency", "hangup", true));
-  assert.equal(late.status, "good");
+test("a wrong action and an independent check receive distinct feedback", () => {
+  const risky = evaluatePhoneCase(completed("payment_auth", ["follow_request"]));
+  assert.equal(risky.status, "caution");
+  assert.match(risky.lesson, /로그인|거래 승인/);
+  assert.match(phoneActionOutcome(findPhoneCase("payment_auth"), "follow_request"), /실제 코드/);
+  const safe = evaluatePhoneCase(completed("payment_auth", ["official_app"]));
+  assert.equal(safe.status, "good");
 });
 
-test("caller-supplied callback number is never treated as independent verification", () => {
-  const normal = evaluatePhoneCase(state("normal_delivery", "sender"));
-  const fake = evaluatePhoneCase(state("card_return", "sender"));
-  assert.equal(normal.status, "caution");
-  assert.equal(fake.status, "caution");
-  assert.match(normal.detail, /직접 찾은 공식 번호/);
+test("verification through an original family contact is supported only for impersonation calls", () => {
+  const family = findPhoneCase("family_emergency");
+  const card = findPhoneCase("card_return");
+  assert.equal(allowedPhoneAction(family, "saved_family"), true);
+  assert.equal(allowedPhoneAction(card, "saved_family"), false);
+  const feedback = evaluatePhoneCase(completed("family_emergency", ["saved_family"]));
+  assert.equal(feedback.status, "good");
 });
 
-test("legitimate appointments are not incorrectly graded as phishing", () => {
-  const result = evaluatePhoneCase(state("normal_appointment", "comply"));
-  assert.equal(result.status, "good");
-  assert.equal(result.identity, "legitimate");
-  assert.match(result.lesson, /정상 전화/);
+test("legitimate ordinary requests need not be rejected automatically", () => {
+  const benign = evaluatePhoneCase(completed("normal_delivery", ["follow_request"]));
+  assert.equal(benign.status, "good");
+  assert.equal(benign.identity, "legitimate");
+  assert.match(benign.lesson, /정상/);
 });
 
-test("family callback is a distinct behavior for impersonation calls", () => {
-  const result = evaluatePhoneCase(state("family_emergency", "family"));
-  assert.equal(result.status, "good");
-  assert.match(result.action, /가족/);
+test("early hangup cannot claim that the learner heard the high-risk request", () => {
+  const result = evaluatePhoneCase(completed("account_protect", ["no_action"], false));
+  assert.equal(result.coverage, "before_request");
+  assert.match(result.whatWasRequested, /확인되지/);
 });
 
-test("phone AI route keeps state sealed and media local while enforcing safety", () => {
-  const route = readFileSync(new URL("../src/app/api/phone-training/route.ts", import.meta.url), "utf8");
+test("Live backend provisions ephemeral credentials and server-sealed multi-step decisions", () => {
+  const server = readFileSync(new URL("../src/app/api/phone-training/route.ts", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../src/lib/geminiLiveAudio.ts", import.meta.url), "utf8");
   const page = readFileSync(new URL("../src/app/roleplay/phone/page.tsx", import.meta.url), "utf8");
+  const worklet = readFileSync(new URL("../public/audio/live-input-processor.js", import.meta.url), "utf8");
   const home = readFileSync(new URL("../src/app/home/page.tsx", import.meta.url), "utf8");
-  const catalog = readFileSync(new URL("../src/app/practice/page.tsx", import.meta.url), "utf8");
-  assert.match(route, /createCipheriv\("aes-256-gcm"/);
-  assert.match(route, /createDecipheriv\("aes-256-gcm"/);
-  assert.match(route, /providers\(\)/);
-  assert.match(route, /p\.name === "gemini"/);
-  assert.match(route, /detectPii\(body\.text\)/);
-  assert.match(route, /MAX_PHONE_TURNS/);
-  assert.match(route, /session\.decision|state\.decision/);
-  assert.doesNotMatch(route, /GEMINI_API_KEY[^\n]*NextResponse\.json/);
-  assert.match(page, /SpeechRecognition|webkitSpeechRecognition/);
-  assert.match(page, /SpeechSynthesisUtterance/);
-  assert.match(page, /speechSynthesis\.cancel/);
-  assert.match(page, /다른 방법으로 확인/);
-  assert.match(page, /통화 끊기/);
-  assert.match(page, /실제 인증번호나 계좌번호는 말하지 마세요/);
-  assert.match(page, /type="text"/);
-  assert.match(page, /saveRecord/);
+  assert.match(server, /createCipheriv\("aes-256-gcm"/);
+  assert.match(server, /createDecipheriv\("aes-256-gcm"/);
+  assert.match(server, /auth_tokens/);
+  assert.match(server, /"x-goog-api-key": key/);
+  assert.match(server, /liveConnectConstraints/);
+  assert.match(server, /uses: 1/);
+  assert.match(server, /body\.action === "end_call"/);
+  assert.match(server, /body\.action === "post_action"/);
+  assert.match(server, /body\.action === "finish"/);
+  assert.match(server, /state\.postActions\.length/);
+  assert.match(server, /state\.phase !== "after_call"/);
+  assert.doesNotMatch(server, /nextResponse\.json\(\{\s*apiKey/);
+  assert.match(client, /new WebSocket/);
+  assert.match(client, /access_token/);
+  assert.match(client, /audio\/pcm;rate=16000/);
+  assert.match(client, /24_000/);
+  assert.match(client, /AudioWorkletNode/);
+  assert.match(client, /inputTranscription/);
+  assert.match(client, /outputTranscription/);
+  assert.match(client, /interrupted/);
+  assert.match(worklet, /registerProcessor\("mikki-live-input"/);
+  assert.doesNotMatch(page, /SpeechSynthesisUtterance|speechSynthesis|SpeechRecognition|webkitSpeechRecognition/);
+  assert.match(page, /GeminiLiveAudio/);
+  assert.match(page, /hangUp\(\)/);
+  assert.match(page, /phase === "after_call"/);
+  assert.match(page, /post_action/);
+  assert.match(page, /내 행동 피드백 보기/);
+  assert.match(page, /postActions/);
+  assert.match(page, /<Header title="AI 전화 대응 훈련" back=\{false\}/);
   assert.match(home, /href="\/roleplay\/phone"/);
-  assert.match(catalog, /href: "\/roleplay\/phone"/);
 });
