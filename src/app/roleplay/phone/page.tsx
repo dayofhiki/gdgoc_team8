@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Header, Screen } from "@/components/ui";
 import { saveRecord } from "@/lib/records";
 import { GeminiLiveAudio, type LiveBoot } from "@/lib/geminiLiveAudio";
-import { POST_ACTION_LABEL, type PhoneFeedback, type PhoneLine, type PhonePostAction } from "@/lib/phoneTraining";
+import { findPhoneCase, heardPhoneRequest, POST_ACTION_LABEL, type PhoneFeedback, type PhoneLine, type PhonePostAction } from "@/lib/phoneTraining";
 
 type Phase = "incoming" | "call" | "after_call" | "feedback";
 type PhoneReply = {
@@ -15,7 +15,8 @@ type PhoneReply = {
   postActions: PhonePostAction[];
   caller?: string;
   caseId?: string;
-  canCallFamily?: boolean;
+  availableActions?: PhonePostAction[];
+  requestActionLabel?: string;
   liveToken?: string;
   liveEndpoint?: string;
   liveSetup?: Record<string, unknown>;
@@ -49,7 +50,6 @@ function rememberCase(id?: string) {
   try { sessionStorage.setItem(RECENT_KEY, JSON.stringify([...previousCases().filter(x => x !== id), id].slice(-3))); }
   catch { /* 저장소를 못 써도 훈련은 정상 진행 */ }
 }
-const requestPattern = /송금|이체|입금|인증\s*번호|인증번호|계좌|반송\s*접수|전화해\s*주|연락해\s*주|상환금|취소\s*접수|확인\s*번호/;
 
 export default function GeminiLivePhonePractice() {
   const router = useRouter();
@@ -58,6 +58,7 @@ export default function GeminiLivePhonePractice() {
   const currentRun = useRef(0);
   const startedAt = useRef(0);
   const observedRisk = useRef(false);
+  const modelTurnCaption = useRef("");
   const busyRef = useRef(false);
   const savedRef = useRef(false);
   const [phase, setPhase] = useState<Phase>("incoming");
@@ -123,16 +124,23 @@ export default function GeminiLivePhonePractice() {
     observedRisk.current = false;
     const id = ++currentRun.current;
     const client = new GeminiLiveAudio({
-      onModelText: text => {
+      onModelTurnStart: () => {
         if (id !== currentRun.current) return;
-        setModelCaption(prev => (prev + " " + text).slice(-480).trim());
+        modelTurnCaption.current = "";
+        setModelCaption("");
+      },
+      onModelText: text => {
+        if (id !== currentRun.current || !text.trim()) return;
+        const startsTurn = !modelTurnCaption.current;
+        const caption = (modelTurnCaption.current + " " + text).trim().slice(-600);
+        modelTurnCaption.current = caption;
+        setModelCaption(caption);
         setTranscript(prev => {
-          const last = prev.at(-1);
-          return last?.actor === "caller"
-            ? [...prev.slice(0, -1), { actor: "caller" as const, text: (last.text + " " + text).slice(-600) }].slice(-16)
-            : [...prev, { actor: "caller" as const, text }].slice(-16);
+          const line = { actor: "caller" as const, text: caption };
+          return [...(!startsTurn && prev.at(-1)?.actor === "caller" ? prev.slice(0, -1) : prev), line].slice(-16);
         });
-        if (requestPattern.test(text)) observedRisk.current = true;
+        const phoneCase = findPhoneCase(sessionRef.current?.caseId ?? "");
+        if (phoneCase && heardPhoneRequest(phoneCase, caption)) observedRisk.current = true;
       },
       onUserText: text => {
         if (id !== currentRun.current) return;
@@ -336,6 +344,8 @@ export default function GeminiLivePhonePractice() {
 
   if (phase === "after_call") {
     const performed = session?.postActions ?? [];
+    const available = session?.availableActions ?? [];
+    const canChoose = (action: PhonePostAction) => available.includes(action);
     const stopped = performed.includes("no_action") || performed.length >= 6;
     const choose = (action: PhonePostAction, title: string, description: string) => (
       <button type="button" key={action} className="pv-after-option"
@@ -358,17 +368,17 @@ export default function GeminiLivePhonePractice() {
             <p className="pv-after-label">내 휴대전화</p>
             <div className="pv-after-tiles">
               <button type="button" onClick={() => setMenu("phone")} disabled={busy || stopped}><span aria-hidden="true">☎</span><strong>전화·연락처</strong></button>
-              <button type="button" onClick={() => setMenu("apps")} disabled={busy || stopped || !!session?.canCallFamily}><span aria-hidden="true">▦</span><strong>공식 앱</strong></button>
-              <button type="button" onClick={() => setMenu("request")} disabled={busy || stopped}><span aria-hidden="true">⇄</span><strong>상대 요구 처리</strong></button>
+              {canChoose("official_app") && <button type="button" onClick={() => setMenu("apps")} disabled={busy || stopped}><span aria-hidden="true">▦</span><strong>공식 앱</strong></button>}
+              {canChoose("follow_request") && <button type="button" onClick={() => setMenu("request")} disabled={busy || stopped}><span aria-hidden="true">⇄</span><strong>상대 요구 처리</strong></button>}
               <button type="button" onClick={() => void recordPostAction("no_action")}
-                disabled={busy || performed.length > 0}><span aria-hidden="true">▢</span><strong>아무것도 안 하기</strong></button>
+                disabled={busy || performed.length > 0}><span aria-hidden="true">▢</span><strong>별도 행동 하지 않기</strong></button>
             </div>
           </div>
           {actionNotice && <div className="pv-after-outcome" role="status"><strong>모의 행동 결과</strong><p>{actionNotice}</p></div>}
           {performed.length > 0 && (
             <section className="pv-after-history">
               <h3>지금까지 한 행동</h3>
-              <ol>{performed.map((a, i) => <li key={i}>{POST_ACTION_LABEL[a]}</li>)}</ol>
+              <ol>{performed.map((a, i) => <li key={i}>{a === "follow_request" ? session?.requestActionLabel ?? POST_ACTION_LABEL[a] : POST_ACTION_LABEL[a]}</li>)}</ol>
             </section>
           )}
           {error && <p className="pv-error" role="alert">{error}</p>}
@@ -387,18 +397,18 @@ export default function GeminiLivePhonePractice() {
               <p>실제 통화나 송금은 일어나지 않습니다.</p>
               {menu === "phone" && (
                 <>
-                  {!session?.canCallFamily && choose("official_call", "공식 대표번호를 직접 찾아 전화",
+                  {canChoose("official_call") && choose("official_call", "공식 대표번호를 직접 찾아 전화",
                     "검색이나 원래 알던 연락처에서 찾기")}
-                  {session?.canCallFamily && choose("saved_family", "원래 저장된 가족 번호로 전화",
+                  {canChoose("saved_family") && choose("saved_family", "원래 저장된 가족 번호로 전화",
                     "이번에 걸려온 번호와 무관하게 확인하기")}
-                  {choose("caller_number", "방금 상대가 안내한 번호로 전화",
+                  {canChoose("caller_number") && choose("caller_number", "방금 상대가 안내한 번호로 전화",
                     "통화 중 알려준 번호를 이용하기")}
                 </>
               )}
               {menu === "apps" && choose("official_app", "평소 사용하던 공식 앱에서 조회",
                 "문자 링크가 아닌 기존 앱을 직접 열기")}
-              {menu === "request" && choose("follow_request", "상대방이 요청한 절차 진행",
-                "실제 돈이나 인증번호는 입력하지 않고 선택만 기록")}
+              {menu === "request" && choose("follow_request", session?.requestActionLabel ?? POST_ACTION_LABEL.follow_request,
+                "실제로 실행하지 않고 모의 훈련에서 선택만 기록")}
               <button type="button" className="pv-action-cancel" onClick={() => setMenu(null)}>휴대전화로 돌아가기</button>
             </div>
           </div>
