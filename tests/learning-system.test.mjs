@@ -263,3 +263,31 @@ test("chat intro is brief and the result flips from lesson to card-contained Hom
   assert.match(css, /backface-visibility:\s*hidden/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
 });
+
+test("ordinary OX quiz always exits to home without visiting practice catalog", () => {
+  const quiz = readFileSync(new URL("../src/components/QuizRunner.tsx", import.meta.url), "utf8");
+  assert.match(quiz, /const leaveSharedQuiz = useBackNavigation\("\/"\)/);
+  assert.match(quiz, /if \(from\) leaveSharedQuiz\(\);\s*else router\.replace\("\/home"\)/);
+  assert.match(quiz, /if \(idx === 0\) \{\s*if \(from\) setStarted\(false\);\s*else router\.replace\("\/home"\)/);
+  assert.doesNotMatch(quiz, /useBackNavigation\(from \? "\/" : "\/practice"\)/);
+});
+
+test("chat response choices expand and collapse independently of phone and end-conversation actions", () => {
+  const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(chat, /const \[replyExpanded, setReplyExpanded\] = useState\(true\)/);
+  assert.match(chat, /className="figma-chat-reply-toggle"/);
+  assert.match(chat, /aria-expanded=\{replyExpanded\}/);
+  assert.match(chat, /aria-controls="rt-reply-collapsible"/);
+  assert.match(chat, /onClick=\{\(\) => setReplyExpanded\(value => !value\)\}/);
+  assert.match(chat, /inert=\{!replyExpanded\}/);
+  const start = chat.indexOf('className={"figma-chat-reply-area"');
+  const actions = chat.indexOf('className="rt-main-actions"');
+  assert.ok(start >= 0 && actions > start, "phone/app and stop actions must remain outside collapsible reply choices");
+  assert.ok(chat.indexOf('id="rt-reply-collapsible"') > start);
+  assert.ok(chat.indexOf('id="rt-reply-collapsible"') < actions);
+  assert.match(css, /grid-template-rows:\s*0fr/);
+  assert.match(css, /transition: grid-template-rows/);
+  assert.match(css, /figma-chat-reply-chevron/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+});
