@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { allowedPhoneAction, evaluatePhoneCase, findPhoneCase, MAX_POST_ACTIONS,
+import { allowedPhoneAction, availablePhoneActions, evaluatePhoneCase, findPhoneCase, MAX_POST_ACTIONS, PHONE_REQUEST_ACTION,
   phoneActionOutcome, pickPhoneCase, type PhoneCase, type PhonePostAction, type PhoneState } from "@/lib/phoneTraining";
 
 export const runtime = "nodejs";
@@ -70,10 +70,12 @@ function liveActorInstructions(c: PhoneCase): string {
     "통화에서는 이것이 교육용임을 먼저 설명하지 말고 가상의 발신자 역할에만 집중하세요.",
     "첫 발화는 다음 대사를 자연스러운 한국어로 말하세요: " + c.opening,
     "상황: " + c.context,
-    "약속된 핵심 요구: " + c.request,
+    "이 사건에서 발신자가 숨기고 있는 목적과 실제로 말해야 할 한 가지 요구: " + c.request,
+    "의심하거나 이유를 물으면 사용자의 말에 먼저 답하고, 다음 설득 단서를 한 번만 자연스럽게 활용하세요: " + c.followup,
     "대답은 일상적인 구어체 한두 문장, 최대 12초 분량. 반복이나 쓸데없는 대화로 시간을 끌지 마세요.",
-    "첫 발화 이후 상대가 한 번 대답하면 질문에 자연스럽게 답하고, 곧 핵심 요구를 한 번 명확하게 꺼냅니다.",
-    "3~4차례의 왕복이 되면 추가 요구 없이 대화를 마무리하세요. 상대가 거절하면 반복적으로 설득하지 않습니다.",
+    "첫 발화에서는 접근 이유만 말합니다. 이어서 사용자의 질문을 받아 신뢰를 얻을 만한 근거를 짧게 설명하고, 첫 답변 또는 늦어도 두 번째 답변에서 핵심 요구를 분명히 말하세요.",
+    "일상적인 배송이나 상담만 하다가 먼저 끊겠다고 하지 마세요. 사용자가 거절하거나 끊겠다고 하지 않는 한, 핵심 요구까지 연기합니다.",
+    "발신자가 스스로 공식 번호나 기존 연락처로 확인하라고 안내하거나 훈련의 정답을 말하지 마세요. 이미 요구한 뒤에는 새 요구를 만들지 말고 짧게 마무리하세요.",
     c.kind === "legitimate"
       ? "정상적인 발신자입니다. 결제, 인증번호, 설치, 민감정보, 링크, 계좌를 전혀 요구하지 않습니다."
       : "위에 지정된 한 가지 요청만 제시합니다. 다른 종류의 사기나 요구를 추가하지 않습니다.",
@@ -175,6 +177,10 @@ function status(state: PhoneState) {
     phase: state.phase,
     requestObserved: state.requestObserved,
     postActions: state.postActions,
+    ...(state.phase === "after_call" ? {
+      availableActions: availablePhoneActions(findPhoneCase(state.scenario)!, state.requestObserved),
+      requestActionLabel: state.requestObserved ? PHONE_REQUEST_ACTION[findPhoneCase(state.scenario)!.risk] : undefined,
+    } : {}),
     ...(state.phase === "finished" ? { feedback: evaluatePhoneCase(state) } : {}),
   };
 }
@@ -200,7 +206,7 @@ export async function POST(req: NextRequest) {
         liveToken: live.name,
         liveEndpoint: LIVE_WS_BASE + live.version + LIVE_WS_METHOD,
         liveSetup: liveSetup(c),
-        caller: c.caller, caseId: c.id, canCallFamily: c.family,
+        caller: c.caller, caseId: c.id,
       });
     }
     const state = unseal(body.token);
@@ -211,13 +217,13 @@ export async function POST(req: NextRequest) {
         // 이 정보는 Live 자막에 근거한 클라이언트의 표시값이므로 객관적인 위험 행동 증명으로 쓰지 않는다.
         requestObserved: body.requestObserved === true,
       };
-      return ok({ ...status(next), canCallFamily: findPhoneCase(next.scenario)!.family });
+      return ok(status(next));
     }
     if (body.action === "post_action") {
       if (state.phase !== "after_call") return fail("통화 종료 후에만 행동할 수 있어요.", 409);
       const action = body.postAction as PhonePostAction;
       const c = findPhoneCase(state.scenario)!;
-      if (!actions.includes(action) || !allowedPhoneAction(c, action)) return fail("선택할 수 없는 행동이에요.");
+      if (!actions.includes(action) || !allowedPhoneAction(c, action, state.requestObserved)) return fail("선택할 수 없는 행동이에요.");
       if (state.postActions.length >= MAX_POST_ACTIONS) return fail("이제 훈련 결과를 확인해 주세요.", 409);
       if (state.postActions.includes("no_action") || action === "no_action" && state.postActions.length)
         return fail("마무리 선택 이후에는 다른 행동을 기록할 수 없어요.", 409);
