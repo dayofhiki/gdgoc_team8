@@ -223,3 +223,43 @@ test("exported Figma refresh keeps chat actions live while adding large-print an
   for (const selector of [".figma-mode", ".figma-chat", ".figma-font-dialog",
     ".figma-flashcard", ".figma-quiz-result", ".rt-device-grid"]) assert.ok(css.includes(selector));
 });
+
+test("Figma homepage uses a paired AI/OX card grid instead of a stacked menu", () => {
+  const home = readFileSync(new URL("../src/app/home/page.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(home, /className="grid2 home-practice-grid"/);
+  assert.equal((home.match(/className="tile home-practice-tile"/g) ?? []).length, 2);
+  assert.match(home, /className="home-practice-title">AI 상황극/);
+  assert.match(home, /className="home-practice-title">OX 퀴즈/);
+  assert.match(home, /className="sec__title">가족과 함께하기/);
+  assert.match(home, /href="\/practice"/);
+  assert.match(home, /추천 미션/);
+  assert.match(css, /\.home-practice-grid\s*\{\s*grid-template-columns:\s*repeat\(2,/);
+  assert.match(css, /\.home-practice-tile:focus-visible/);
+});
+
+test("chat intro is brief and the result flips from lesson to card-contained Home/Share", () => {
+  const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  const intro = chat.slice(chat.indexOf('{introOpen && session && ('), chat.indexOf('{actionsOpen && session && ('));
+  assert.match(intro, /가상 문자에 답장해보세요/);
+  assert.match(intro, /답장을 고르거나 직접 써서 보내보세요/);
+  assert.doesNotMatch(intro, /rt-intro-steps|rt-intro-note|문자를 받고 어떻게 할지 골라/);
+  assert.match(intro, /다음부터 이 안내 보지 않기/);
+  assert.match(intro, /onClick=\{closeIntro\}/);
+  const result = chat.slice(chat.indexOf('if (phase === "result" && result && reviewPage === "feedback"'),
+    chat.indexOf('if (phase === "result" && result && reviewPage === "truth"'));
+  assert.match(result, /figma-flip-card--flipped/);
+  assert.match(result, /className="figma-flip-front"/);
+  assert.match(result, /className="figma-flip-back"/);
+  assert.match(result, /className="figma-flip-back-actions"/);
+  assert.ok(result.indexOf('learning') < result.indexOf('우리 가족에게도 공유하기'));
+  assert.match(result, /onClick=\{\(\) => void shareFamilyPractice\(false\)\}>공유하기/);
+  assert.match(result, /onClick=\{\(\) => router\.replace\("\/home"\)\}>홈으로/);
+  assert.match(result, /상세 피드백 보기/);
+  assert.doesNotMatch(result, /<BottomCTA/);
+  assert.match(css, /perspective:\s*1200px/);
+  assert.match(css, /transform:\s*rotateY\(180deg\)/);
+  assert.match(css, /backface-visibility:\s*hidden/);
+  assert.match(css, /prefers-reduced-motion:\s*reduce/);
+});
