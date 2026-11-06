@@ -736,3 +736,25 @@ test("accepting card refusal advances to the scenario-specific request without r
     assert.ok(!fallbackTrainingTurn(s, scenario, "카드 반송이 뭔가요?").actions.length || branch.requestAfterTurns === 1);
   }
 });
+
+test("routine procedure responses advance the authored request across the episode catalog", async () => {
+  const { caseBranch, caseVariantCount } = await import("../src/lib/trainingCaseFacts.ts");
+  const { fallbackTrainingTurn } = await import("../src/lib/trainingFallback.ts");
+  const { meaningfulRiskRequest, respondsToProcedure } = await import("../src/lib/trainingDecision.ts");
+  for (const [index, scenario] of SCENARIOS.entries()) {
+    if (scenario.identity !== "fraud") continue;
+    for (let variant = 0; variant < caseVariantCount(scenario); variant++) {
+      const branch = caseBranch(scenario, variant);
+      const s = { ...state(index), caseVariant: variant, turns: 1, messages: [
+        { actor: "them", text: branch.opening },
+        { actor: "me", text: "무슨 내용이에요?" },
+        { actor: "them", text: "그러면 우선 접수를 보류해 드릴까요?" },
+      ] };
+      assert.ok(respondsToProcedure(s, scenario, "네."), branch.id);
+      assert.ok(!respondsToProcedure(s, scenario, "네?"), branch.id);
+      const turn = fallbackTrainingTurn(s, scenario, "네.");
+      assert.equal(turn.actions[0]?.kind, branch.kind, branch.id);
+      assert.ok(meaningfulRiskRequest(turn.reply, turn.actions), branch.id);
+    }
+  }
+});
