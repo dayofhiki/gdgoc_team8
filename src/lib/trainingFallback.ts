@@ -1,9 +1,9 @@
 import type { Scenario, TrainingState } from "./realTraining.ts";
-import type { DialogueOutput } from "./trainingDialogue.ts";
+import { replySimilarity, type DialogueOutput } from "./trainingDialogue.ts";
 import type { Proposed } from "./trainingActions.ts";
 import { BANK_CLAIMS, caseBranch } from "./trainingCaseFacts.ts";
 import { FALLBACK_SCENE_LINES, PERSUASION_LINES } from "./trainingFallbackScenes.ts";
-import { bankQuestionNeedsSpecifics, raisesObjection, riskDecisionDue } from "./trainingDecision.ts";
+import { acceptsCardDeliveryRefusal, bankQuestionNeedsSpecifics, raisesObjection, riskDecisionDue } from "./trainingDecision.ts";
 import { hasConcreteRequest } from "./trainingResolution.ts";
 import type { TrainingTopicId } from "./trainingCatalog.ts";
 
@@ -40,12 +40,17 @@ export function fallbackTrainingTurn(state: TrainingState, scenario: Scenario, t
   const candidates = raisesObjection(text) ? [persuasion, objection, ...authored] :
     [authored[0], persuasion, authored[1], objection];
   const spoken = state.messages.filter(message => message.actor === "them").map(message => message.text);
-  const unused = (line: string) => !spoken.some(previous => previous.includes(line));
+  const unused = (line: string) => !spoken.some(previous => previous.includes(line) || replySimilarity(previous, line) >= 0.68);
   const ask = riskDecisionDue(state, scenario, text);
   const context = specific ? bankClaim : candidates.find(unused) ?? objection;
   let reply = context;
   if (ask) {
-    reply = specific || unused(persuasion) ? `${specific ? bankClaim : persuasion} ${beat.request}` : beat.request;
+    const cardHandoff = beat.kind === "provide_data"
+      ? "카드는 안 받으셔도 됩니다. 다만 배송 기록을 닫으려면 수령인 확인이 먼저라서요."
+      : "네, 수령 거부로 표시할게요. 다만 카드를 안 받는 것과 발급을 취소하는 건 별개입니다.";
+    const lead = acceptsCardDeliveryRefusal(state, scenario, text) ? cardHandoff :
+      specific ? bankClaim : unused(persuasion) ? persuasion : "";
+    reply = lead ? `${lead} ${beat.request}` : beat.request;
   } else if (hasRequest && !specific) {
     reply = [persuasion, authored[1], objection].find(unused) ??
       (scenario.topic === "family" ? "응, 알겠어. 지금 바로 답하기 어렵다면 기다릴게." : "알겠습니다. 지금 결정하기 어려우시면 기다리겠습니다.");
