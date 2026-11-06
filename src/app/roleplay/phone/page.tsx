@@ -4,362 +4,451 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header, Screen } from "@/components/ui";
 import { saveRecord } from "@/lib/records";
-import type { PhoneDecision, PhoneFeedback, PhoneLine } from "@/lib/phoneTraining";
+import { GeminiLiveAudio, type LiveBoot } from "@/lib/geminiLiveAudio";
+import { POST_ACTION_LABEL, type PhoneFeedback, type PhoneLine, type PhonePostAction } from "@/lib/phoneTraining";
 
-type Phase = "incoming" | "call" | "feedback";
+type Phase = "incoming" | "call" | "after_call" | "feedback";
 type PhoneReply = {
   token: string;
+  phase: "call" | "after_call" | "finished";
+  requestObserved: boolean;
+  postActions: PhonePostAction[];
   caller?: string;
   caseId?: string;
   canCallFamily?: boolean;
-  maxTurns?: number;
-  messages: PhoneLine[];
-  turns: number;
-  closed: boolean;
-  riskPresented: boolean;
+  liveToken?: string;
+  liveEndpoint?: string;
+  liveSetup?: Record<string, unknown>;
   feedback?: PhoneFeedback;
+  actionNotice?: string;
 };
-type RecognitionResult = { results: { [index: number]: { [index: number]: { transcript: string } } } };
-type Recognition = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((result: RecognitionResult) => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-type RecognitionConstructor = new () => Recognition;
+type AppMenu = "phone" | "apps" | "request" | null;
 const RECENT_KEY = "mikki:phone-recent-v1";
-const formatDuration = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+const fmt = (sec: number) =>
+  `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 
-async function phoneRequest(body: object): Promise<PhoneReply> {
-  const r = await fetch("/api/phone-training", {
+async function api(payload: object): Promise<PhoneReply> {
+  const response = await fetch("/api/phone-training", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    cache: "no-store", body: JSON.stringify(body),
+    body: JSON.stringify(payload), cache: "no-store",
   });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(typeof data.error === "string" ? data.error : "연결에 실패했어요.");
+  const data: unknown = await response.json().catch(() => ({}));
+  if (!response.ok) throw Error(
+    data && typeof data === "object" && "error" in data && typeof data.error === "string"
+      ? data.error : "전화 훈련 요청에 실패했어요.");
   return data as PhoneReply;
 }
-function recentCases(): string[] {
+function previousCases(): string[] {
   try {
     const parsed: unknown = JSON.parse(sessionStorage.getItem(RECENT_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === "string").slice(-3) : [];
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string").slice(-3) : [];
   } catch { return []; }
 }
-function rememberCase(caseId?: string) {
-  if (!caseId) return;
-  try { sessionStorage.setItem(RECENT_KEY, JSON.stringify([...recentCases().filter(c => c !== caseId), caseId].slice(-3))); }
-  catch { /* 저장소가 차단되어도 훈련은 진행 */ }
+function rememberCase(id?: string) {
+  if (!id) return;
+  try { sessionStorage.setItem(RECENT_KEY, JSON.stringify([...previousCases().filter(x => x !== id), id].slice(-3))); }
+  catch { /* 저장소를 못 써도 훈련은 정상 진행 */ }
 }
+const requestPattern = /송금|이체|입금|인증\s*번호|인증번호|계좌|반송\s*접수|전화해\s*주|연락해\s*주|상환금|취소\s*접수|확인\s*번호/;
 
-export default function PhoneTraining() {
+export default function GeminiLivePhonePractice() {
   const router = useRouter();
+  const live = useRef<GeminiLiveAudio | null>(null);
+  const sessionRef = useRef<PhoneReply | null>(null);
+  const currentRun = useRef(0);
+  const startedAt = useRef(0);
+  const observedRisk = useRef(false);
+  const busyRef = useRef(false);
+  const savedRef = useRef(false);
   const [phase, setPhase] = useState<Phase>("incoming");
   const [session, setSession] = useState<PhoneReply | null>(null);
-  const sessionRef = useRef<PhoneReply | null>(null);
   const [busy, setBusy] = useState(false);
-  const busyRef = useRef(false);
   const [error, setError] = useState("");
-  const [elapsed, setElapsed] = useState(0);
-  const [listening, setListening] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
+  const [status, setStatus] = useState("");
+  const [seconds, setSeconds] = useState(0);
+  const [micOn, setMicOn] = useState(true);
   const [soundOn, setSoundOn] = useState(true);
-  const [speechSupported, setSpeechSupported] = useState(false);
-  const [draft, setDraft] = useState("");
+  const [speaking, setSpeaking] = useState(false);
+  const [micAvailable, setMicAvailable] = useState(true);
+  const [modelCaption, setModelCaption] = useState("");
+  const [myCaption, setMyCaption] = useState("");
+  const [transcript, setTranscript] = useState<PhoneLine[]>([]);
+  const [typing, setTyping] = useState("");
   const [showTranscript, setShowTranscript] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const [hasSaved, setHasSaved] = useState(false);
-  const startTime = useRef(0);
-  const recognitionRef = useRef<Recognition | null>(null);
+  const [menu, setMenu] = useState<AppMenu>(null);
+  const [actionNotice, setActionNotice] = useState("");
 
   useEffect(() => {
-    const w = window as typeof window & { SpeechRecognition?: RecognitionConstructor; webkitSpeechRecognition?: RecognitionConstructor };
-    setSpeechSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
-    return () => {
-      recognitionRef.current?.stop();
-      window.speechSynthesis?.cancel();
-    };
+    return () => { currentRun.current++; live.current?.close(); live.current = null; };
   }, []);
   useEffect(() => {
     if (phase !== "call") return;
-    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - startTime.current) / 1000)), 500);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - startedAt.current) / 1000)), 500);
+    return () => clearInterval(timer);
   }, [phase]);
   useEffect(() => {
-    if (phase !== "feedback" || !session?.feedback || hasSaved) return;
-    setHasSaved(true);
-    const feedback = session.feedback;
-    void saveRecord({ kind: "training", title: "전화 상황 대응 훈련",
-      safe: feedback.status === "good", detail: { mode: "phone", coverage: feedback.coverage } });
-  }, [phase, session, hasSaved]);
+    if (phase !== "feedback" || !session?.feedback || savedRef.current) return;
+    savedRef.current = true;
+    void saveRecord({
+      kind: "training", title: "Gemini Live 전화 대응 훈련",
+      safe: session.feedback.status === "good",
+      detail: { mode: "phone_live", coverage: session.feedback.coverage,
+        postActionCount: session.feedback.actions.length - 1 },
+    });
+  }, [phase, session]);
 
-  function stopAudio() {
-    try { recognitionRef.current?.stop(); } catch { /* 이미 정지한 마이크 */ }
-    recognitionRef.current = null;
-    setListening(false);
-    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  function updateSession(next: PhoneReply) {
+    const merged = { ...sessionRef.current, ...next };
+    // Ephemeral credentials are needed only to connect, never in ongoing UI session state.
+    delete merged.liveToken;
+    sessionRef.current = merged;
+    setSession(merged);
+    if (next.actionNotice) setActionNotice(next.actionNotice);
+    return merged;
+  }
+  function stopLive() {
+    live.current?.close();
+    live.current = null;
     setSpeaking(false);
-  }
-  function speak(text: string) {
-    if (!soundOn || typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const voice = new SpeechSynthesisUtterance(text);
-    voice.lang = "ko-KR";
-    voice.rate = 0.97;
-    voice.pitch = 0.94;
-    const koreanVoice = window.speechSynthesis.getVoices().find(v => v.lang.toLowerCase().startsWith("ko"));
-    if (koreanVoice) voice.voice = koreanVoice;
-    voice.onstart = () => setSpeaking(true);
-    voice.onend = () => setSpeaking(false);
-    voice.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(voice);
-  }
-  function acceptReply(r: PhoneReply) {
-    const updated: PhoneReply = { ...sessionRef.current, ...r };
-    sessionRef.current = updated;
-    setSession(updated);
-    setError("");
-    if (updated.closed && updated.feedback) {
-      stopAudio();
-      setActionsOpen(false);
-      setPhase("feedback");
-    }
   }
   async function acceptCall() {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     setError("");
-    stopAudio();
+    setModelCaption("");
+    setMyCaption("");
+    setTranscript([]);
+    setStatus("마이크와 음성 연결을 준비하는 중…");
+    observedRisk.current = false;
+    const id = ++currentRun.current;
+    const client = new GeminiLiveAudio({
+      onModelText: text => {
+        if (id !== currentRun.current) return;
+        setModelCaption(prev => (prev + " " + text).slice(-480).trim());
+        setTranscript(prev => {
+          const last = prev.at(-1);
+          return last?.actor === "caller"
+            ? [...prev.slice(0, -1), { actor: "caller" as const, text: (last.text + " " + text).slice(-600) }].slice(-16)
+            : [...prev, { actor: "caller" as const, text }].slice(-16);
+        });
+        if (requestPattern.test(text)) observedRisk.current = true;
+      },
+      onUserText: text => {
+        if (id !== currentRun.current) return;
+        setMyCaption(text.slice(-300));
+        setTranscript(prev => {
+          const last = prev.at(-1);
+          return last?.actor === "me"
+            ? [...prev.slice(0, -1), { actor: "me" as const, text: (last.text + " " + text).slice(-600) }].slice(-16)
+            : [...prev, { actor: "me" as const, text }].slice(-16);
+        });
+      },
+      onSpeaking: setSpeaking,
+      onStatus: setStatus,
+      onError: setError,
+    });
+    live.current = client;
     try {
-      const r = await phoneRequest({ action: "start", recentCases: recentCases() });
-      rememberCase(r.caseId);
-      acceptReply(r);
-      startTime.current = Date.now();
-      setElapsed(0);
-      setDraft("");
-      setHasSaved(false);
+      await client.prepare(); // Within user activation, before any network wait.
+      if (id !== currentRun.current) return;
+      setMicAvailable(client.hasMicrophone());
+      const boot = await api({ action: "start", recentCases: previousCases() });
+      if (!boot.liveToken || !boot.liveEndpoint || !boot.liveSetup)
+        throw Error("Gemini Live 음성 연결 정보를 받지 못했어요.");
+      rememberCase(boot.caseId);
+      updateSession(boot);
+      await client.connect(boot as LiveBoot);
+      if (id !== currentRun.current) return;
+      client.setMicrophoneEnabled(micOn);
+      client.setSoundEnabled(soundOn);
+      setSeconds(0);
+      startedAt.current = Date.now();
       setPhase("call");
-      if (r.messages[0]?.text) speak(r.messages[0].text);
+      setStatus("통화가 시작됐어요.");
+      client.startConversation();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "전화를 연결하지 못했어요.");
-    } finally { busyRef.current = false; setBusy(false); }
-  }
-  async function send(text: string) {
-    const current = sessionRef.current;
-    const clean = text.trim();
-    if (!current || current.closed || !clean || busyRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    setListening(false);
-    setError("");
-    stopAudio();
-    try {
-      const r = await phoneRequest({ action: "turn", token: current.token, text: clean });
-      acceptReply(r);
-      setDraft("");
-      if (!r.closed) {
-        const answer = r.messages.at(-1);
-        if (answer?.actor === "caller") speak(answer.text);
+      client.close();
+      if (id === currentRun.current) {
+        live.current = null;
+        setPhase("incoming");
+        setError(e instanceof Error ? e.message : "Gemini Live 연결을 시작하지 못했어요.");
       }
-    } catch (e) {
-      setDraft(clean);
-      setError(e instanceof Error ? e.message : "말씀을 전달하지 못했어요.");
-    } finally { busyRef.current = false; setBusy(false); }
+    } finally { if (id === currentRun.current) { busyRef.current = false; setBusy(false); } }
   }
-  async function decide(choice: PhoneDecision) {
+
+  async function hangUp() {
+    if (busyRef.current) return;
     const current = sessionRef.current;
-    if (!current || current.closed || busyRef.current) return;
+    if (!current || current.phase !== "call") return;
     busyRef.current = true;
     setBusy(true);
     setError("");
-    stopAudio();
+    stopLive();
     try {
-      const r = await phoneRequest({ action: "decide", token: current.token, decision: choice });
-      acceptReply(r);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "선택을 기록하지 못했어요.");
-    } finally { busyRef.current = false; setBusy(false); }
+      const next = await api({ action: "end_call", token: current.token, requestObserved: observedRisk.current });
+      updateSession(next);
+      setPhase("after_call");
+      setMenu(null);
+      setActionNotice("");
+    } catch (e) { setError(e instanceof Error ? e.message : "통화 종료를 처리하지 못했어요. 다시 눌러주세요."); }
+    finally { busyRef.current = false; setBusy(false); }
   }
-  function listen() {
-    if (busy || speaking || listening || !session || session.closed) return;
-    const w = window as typeof window & { SpeechRecognition?: RecognitionConstructor; webkitSpeechRecognition?: RecognitionConstructor };
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) { setError("이 브라우저에서는 음성 인식을 지원하지 않아요. 아래 입력칸에 직접 적어주세요."); return; }
-    stopAudio();
-    const recognition = new Ctor();
-    recognitionRef.current = recognition;
-    recognition.lang = "ko-KR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.onresult = event => {
-      const text = event.results[0]?.[0]?.transcript?.trim();
-      if (text) { setDraft(text); void send(text); }
-    };
-    recognition.onerror = e => {
-      setListening(false);
-      if (e.error !== "no-speech" && e.error !== "aborted") setError("마이크 음성을 인식하지 못했어요. 다시 말하거나 직접 입력해 주세요.");
-    };
-    recognition.onend = () => setListening(false);
+
+  async function recordPostAction(action: PhonePostAction) {
+    const current = sessionRef.current;
+    if (!current || current.phase !== "after_call" || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
     try {
-      recognition.start();
-      setListening(true);
-      setError("");
-    } catch {
-      setListening(false);
-      setError("마이크를 열지 못했어요. 권한을 확인하거나 직접 입력해 주세요.");
-    }
+      const result = await api({ action: "post_action", token: current.token, postAction: action });
+      updateSession(result);
+      setMenu(null);
+    } catch (e) { setError(e instanceof Error ? e.message : "행동을 기록하지 못했어요."); }
+    finally { busyRef.current = false; setBusy(false); }
+  }
+
+  async function finish() {
+    const current = sessionRef.current;
+    if (!current || current.phase !== "after_call" || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api({ action: "finish", token: current.token });
+      updateSession(result);
+      setPhase("feedback");
+    } catch (e) { setError(e instanceof Error ? e.message : "피드백을 불러오지 못했어요."); }
+    finally { busyRef.current = false; setBusy(false); }
+  }
+
+  function sendLiveText() {
+    const text = typing.trim();
+    if (!text || !live.current?.isConnected()) return;
+    try {
+      live.current.sendText(text);
+      setMyCaption(text);
+      setTranscript(prev => [...prev, { actor: "me" as const, text }].slice(-16));
+      setTyping("");
+    } catch (e) { setError(e instanceof Error ? e.message : "전달하지 못했어요."); }
+  }
+  function toggleMic() {
+    const enabled = !micOn;
+    setMicOn(enabled);
+    live.current?.setMicrophoneEnabled(enabled);
+  }
+  function toggleSound() {
+    const enabled = !soundOn;
+    setSoundOn(enabled);
+    live.current?.setSoundEnabled(enabled);
   }
   function restart() {
-    stopAudio();
+    currentRun.current++;
+    stopLive();
     sessionRef.current = null;
     setSession(null);
+    savedRef.current = false;
     setPhase("incoming");
-    setHasSaved(false);
-    setActionsOpen(false);
-    setElapsed(0);
-    setDraft("");
     setError("");
+    setMenu(null);
+    setActionNotice("");
+    setTranscript([]);
+    setTyping("");
+    setModelCaption("");
+    setMyCaption("");
+    setSeconds(0);
+    observedRisk.current = false;
   }
 
   if (phase === "incoming") return (
     <Screen>
-      <Header title="전화 대응 훈련" back="/practice" />
+      <Header title="AI 전화 대응 훈련" back={false} />
       <section className="screen__body pv-intro">
-        <span className="pv-topline">VOICE PRACTICE</span>
-        <div className="pv-intro-icon"><img src="/images/icon-phone.png" alt="" width={88} height={88} /></div>
-        <h2>모르는 전화가 걸려왔어요.</h2>
-        <p>누구의 전화인지 미리 알 수 없어요. 실제처럼 통화하면서, 요구가 나왔을 때 직접 행동을 선택해 보세요.</p>
+        <span className="pv-topline">GEMINI LIVE · VOICE TRAINING</span>
+        <div className="pv-intro-icon"><img src="/images/icon-phone.png" alt="" width={88} height={88}/></div>
+        <h2>낯선 전화가 걸려왔어요</h2>
+        <p>실제 사람처럼 들리고 말하는 AI와 통화하세요. 전화를 끊은 뒤에도 안전한 확인 행동을 직접 연습합니다.</p>
         <div className="pv-howto">
-          <strong>이번 연습의 핵심</strong>
-          <span>① 전화를 받고 상대의 이야기를 듣기</span>
-          <span>② 목소리로 답하기 또는 글로 답하기</span>
-          <span>③ 통화를 끝내거나 별도 연락처로 확인하기</span>
+          <strong>이번 훈련 진행</strong>
+          <span>① Gemini Live와 실시간으로 통화하기</span>
+          <span>② 통화를 끊고 가상 휴대전화로 사후 행동하기</span>
+          <span>③ 통화와 그 뒤 행동을 함께 돌아보기</span>
         </div>
-        <p className="pv-note">가상의 전화입니다. 실제 전화 연결·돈 이동·개인정보 전송은 일어나지 않아요. 실제 인증번호나 계좌번호는 말하지 마세요.</p>
-        <p className="pv-note">음성 인식은 사용하는 브라우저의 서비스에서 처리할 수 있고, 인식된 말은 AI 대화 생성에 이용됩니다. 통화 녹음 파일과 대화 원문은 연습 기록에 저장하지 않아요.</p>
+        <p className="pv-note">가상의 통화이며 실제 금융 거래나 전화 연결은 이루어지지 않습니다. 마이크 음성은 실시간 대화 처리를 위해 Google에 전송됩니다. 실제 개인정보나 인증번호는 말하지 마세요. 음성·대화 원문은 연습 기록에 저장하지 않습니다.</p>
         {error && <p className="pv-error" role="alert">{error}</p>}
         <button type="button" className="pv-accept" disabled={busy} onClick={() => void acceptCall()}>
-          {busy ? "전화 연결 중…" : "전화 받기"} <span aria-hidden="true">☎</span>
+          {busy ? "Gemini Live 연결 중…" : "전화 받기"} <span aria-hidden="true">☎</span>
         </button>
-        <button type="button" className="pv-secondary" onClick={() => router.replace("/practice")}>나중에 연습하기</button>
+        <button type="button" className="pv-secondary" onClick={() => router.replace("/home")}>홈으로</button>
       </section>
     </Screen>
   );
 
-  if (phase === "feedback" && session?.feedback) {
-    const f = session.feedback;
-    return (
-      <Screen>
-        <Header title="전화 대응 돌아보기" back="/practice" />
-        <section className="screen__body pv-feedback">
-          <span className={"pv-feedback-label pv-feedback-label--" + f.status}>나의 실제 행동 평가</span>
-          <h2>{f.headline}</h2>
-          <p className="pv-feedback-main">{f.detail}</p>
-          <div className="pv-feedback-card">
-            <strong>이번에 내가 한 행동</strong>
-            <p>{f.action}</p>
-          </div>
-          <div className="pv-feedback-card">
-            <strong>통화 속 핵심 요청</strong>
-            <p>{f.whatWasRequested}</p>
-          </div>
-          <div className="pv-feedback-card pv-feedback-card--lesson">
-            <strong>다음 전화에서 기억하세요</strong>
-            <p>{f.shouldRemember}</p>
-            <small>{f.lesson}</small>
-          </div>
-          {f.coverage === "before_request" && <p className="pv-note">요구가 나오기 전에 종료했으므로 위험 요구 대응은 아직 평가하지 않았어요.</p>}
-          <details className="pv-transcript">
-            <summary>통화 내용 다시 보기</summary>
-            <ol>{session.messages.map((line, i) => <li key={i}><strong>{line.actor === "caller" ? "상대" : "나"}</strong><p>{line.text}</p></li>)}</ol>
-          </details>
-          <p className="pv-note">공개된 범죄 수법을 교육용으로 재구성한 가상 상황입니다. 이번 전화의 설정은 {f.identity === "fraud" ? "사칭 시도" : "정상적인 연락"}이었습니다.</p>
-          <div className="pv-final-actions">
-            <button type="button" className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
-            <button type="button" className="btn btn--primary" onClick={restart}>다른 전화 연습하기</button>
-          </div>
-        </section>
-      </Screen>
-    );
-  }
-
-  const last = session?.messages.at(-1);
-  const limitReached = !!session && session.turns >= (session.maxTurns ?? 4);
-  const canSpeak = !!session && !busy && !listening && !speaking && !session.closed && !limitReached;
-  return (
+  if (phase === "call") return (
     <main className="screen pv-call-screen">
-      <header className="pv-call-header">
-        <button type="button" onClick={() => void decide("hangup")} disabled={busy} aria-label="통화 종료">×</button>
-        <span>모의 통화 중</span>
-        <button type="button" onClick={() => {
-          if (soundOn) stopAudio();
-          setSoundOn(!soundOn);
-        }} aria-pressed={!soundOn}>{soundOn ? "소리 끄기" : "소리 켜기"}</button>
+      <header className="pv-call-header pv-live-header">
+        <span aria-hidden="true" />
+        <span>Gemini Live · 모의 통화 중</span>
+        <button type="button" onClick={toggleSound} aria-pressed={!soundOn}>
+          {soundOn ? "소리 끄기" : "소리 켜기"}
+        </button>
       </header>
       <section className="pv-call-stage">
-        <div className="pv-call-avatar" aria-hidden="true"><img src="/images/icon-phone.png" alt="" /></div>
-        <h1>{session?.caller ?? "전화 연결 중"}</h1>
-        <span className="pv-call-timer">{formatDuration(elapsed)}</span>
+        <div className="pv-call-avatar" aria-hidden="true"><img src="/images/icon-phone.png" alt=""/></div>
+        <h1>{session?.caller ?? "알 수 없는 번호"}</h1>
+        <span className="pv-call-timer">{fmt(seconds)}</span>
         <div className="pv-call-speech" role="status" aria-live="polite">
-          <small>{speaking ? "상대가 말하고 있어요" : busy ? "답변을 생성하고 있어요" : listening ? "내 말을 듣고 있어요" : "상대의 말"}</small>
-          <p>{last?.actor === "caller" ? last.text : "잠깐만요, 듣고 있어요."}</p>
+          <small>{speaking ? "상대가 말하는 중…" : "실시간 통화"}</small>
+          <p>{modelCaption || (speaking ? "상대가 이야기하고 있어요." : "상대방의 말을 듣거나 직접 말씀해 보세요.")}</p>
         </div>
-        <button type="button" className="pv-repeat" disabled={busy || listening}
-          onClick={() => {
-            const caller = session?.messages.slice().reverse().find(line => line.actor === "caller");
-            if (caller) speak(caller.text);
-          }}>🔊 상대 말 다시 듣기</button>
-        <details className="pv-transcript pv-transcript--call" open={showTranscript} onToggle={e => setShowTranscript(e.currentTarget.open)}>
-          <summary>통화 자막 {showTranscript ? "접기" : "펴기"}</summary>
-          <ol>{session?.messages.map((line, i) => (
+        {myCaption && <p className="pv-live-my-caption">내 말 · {myCaption}</p>}
+        <p className="pv-live-status" role="status">{status}</p>
+        <details className="pv-transcript pv-transcript--call" open={showTranscript}
+          onToggle={e => setShowTranscript(e.currentTarget.open)}>
+          <summary>실시간 자막 {showTranscript ? "접기" : "펼치기"}</summary>
+          <ol>{transcript.map((line, i) => (
             <li key={i}><strong>{line.actor === "caller" ? "상대" : "나"}</strong><p>{line.text}</p></li>
           ))}</ol>
         </details>
       </section>
       <section className="pv-call-controls">
         {error && <p className="pv-error" role="alert">{error}</p>}
-        <button type="button" className={"pv-mic" + (listening ? " pv-mic--active" : "")}
-          disabled={!canSpeak} onClick={listen}>
-          <span aria-hidden="true">🎙</span>{listening ? "듣는 중…" : speaking ? "상대방 통화 중" : "눌러서 말하기"}
-        </button>
-        {limitReached && <p className="pv-note">대화를 충분히 나눴어요. 이제 끊거나, 직접 확인할 방법을 선택해 주세요.</p>}
-        {!speechSupported && <p className="pv-note">이 기기에서는 음성 입력을 지원하지 않아 글로 답할 수 있어요.</p>}
-        <form className="pv-typed-answer" onSubmit={e => { e.preventDefault(); void send(draft); }}>
-          <input type="text" value={draft} maxLength={240}
-            aria-label="통화에서 말할 내용" placeholder="또는 직접 답장하기"
-            disabled={busy || listening || limitReached} onChange={e => setDraft(e.target.value)}/>
-          <button type="submit" disabled={busy || listening || limitReached || !draft.trim()}>말하기</button>
+        <div className="pv-live-mic-row">
+          <button type="button" className={"pv-mic" + (!micOn ? " pv-live-muted" : "")}
+            onClick={toggleMic} disabled={!micAvailable}>
+            <span aria-hidden="true">🎙</span>
+            {!micAvailable ? "마이크 사용 불가" : micOn ? "마이크 켜짐 · 끄기" : "마이크 꺼짐 · 켜기"}
+          </button>
+        </div>
+        {!micAvailable && <p className="pv-note">마이크를 사용할 수 없어 글로 답변해도 Gemini의 실제 음성으로 응답합니다.</p>}
+        <form className="pv-typed-answer" onSubmit={e => { e.preventDefault(); sendLiveText(); }}>
+          <input type="text" value={typing} maxLength={160} aria-label="모의 통화에서 말할 내용"
+            placeholder="말하기가 어려우면 글로 답변" onChange={e => setTyping(e.target.value)} />
+          <button type="submit" disabled={!typing.trim()}>전송</button>
         </form>
-        <div className="pv-call-actions">
-          <button type="button" className="pv-hangup" disabled={busy} onClick={() => void decide("hangup")}>통화 끊기</button>
-          <button type="button" className="pv-verify" disabled={busy} onClick={() => setActionsOpen(true)}>다른 방법으로 확인</button>
-        </div>
-        <p className="pv-note">모의 통화 · 중요한 선택은 버튼으로 기록돼요.</p>
-        {session?.riskPresented && <button type="button" className="pv-follow" disabled={busy}
-          onClick={() => void decide("comply")}>상대 요구대로 행동해 보기 (가상)</button>}
+        <button type="button" className="pv-hangup pv-live-hangup" disabled={busy}
+          onClick={() => void hangUp()}>{busy ? "통화 종료 중…" : "통화 끊기"}</button>
+        <p className="pv-note">통화를 끊어도 훈련은 끝나지 않아요. 통화 뒤 행동까지 연습합니다.</p>
       </section>
-      {actionsOpen && (
-        <div className="pv-action-overlay" role="presentation" onClick={() => setActionsOpen(false)}>
-          <div className="pv-action-sheet" role="dialog" aria-modal="true" aria-label="통화 밖에서 확인하기" onClick={e => e.stopPropagation()}>
-            <h2>어디에 확인하시겠어요?</h2>
-            <p>통화 상대가 알려준 정보와, 내가 원래 알고 있던 연락처는 달라요.</p>
-            <button type="button" disabled={busy} onClick={() => void decide("official")}>
-              <strong>직접 찾은 공식 연락처</strong><small>공식 앱·기관 대표번호에서 확인하기</small>
-            </button>
-            {session?.canCallFamily && <button type="button" disabled={busy} onClick={() => void decide("family")}>
-              <strong>기존에 저장한 가족 번호</strong><small>평소 알고 있던 번호로 다시 확인하기</small>
-            </button>}
-            <button type="button" disabled={busy} onClick={() => void decide("sender")}>
-              <strong>통화 상대가 알려준 번호</strong><small>방금 상대가 안내한 연락처로 재통화하기</small>
-            </button>
-            <button type="button" className="pv-action-cancel" onClick={() => setActionsOpen(false)}>통화로 돌아가기</button>
-          </div>
-        </div>
-      )}
     </main>
+  );
+
+  if (phase === "after_call") {
+    const performed = session?.postActions ?? [];
+    const stopped = performed.includes("no_action") || performed.length >= 6;
+    const choose = (action: PhonePostAction, title: string, description: string) => (
+      <button type="button" key={action} className="pv-after-option"
+        disabled={busy || stopped || performed.includes(action)}
+        onClick={() => void recordPostAction(action)}>
+        <strong>{title}</strong><small>{description}</small>
+        {performed.includes(action) && <span className="pv-after-done" aria-label="이미 수행함">✓</span>}
+      </button>
+    );
+    return (
+      <Screen>
+        <Header title="통화 후 행동 연습" back={false} />
+        <section className="screen__body pv-after-page">
+          <div className="pv-after-heading">
+            <span className="pv-after-icon" aria-hidden="true">☎</span>
+            <h2>통화가 종료됐어요.</h2>
+            <p>이제 실제 휴대전화라면 무엇을 하시겠어요? 직접 기능을 눌러보세요.</p>
+          </div>
+          <div className="pv-after-device" aria-label="모의 휴대전화">
+            <p className="pv-after-label">내 휴대전화</p>
+            <div className="pv-after-tiles">
+              <button type="button" onClick={() => setMenu("phone")} disabled={busy || stopped}><span aria-hidden="true">☎</span><strong>전화·연락처</strong></button>
+              <button type="button" onClick={() => setMenu("apps")} disabled={busy || stopped || !!session?.canCallFamily}><span aria-hidden="true">▦</span><strong>공식 앱</strong></button>
+              <button type="button" onClick={() => setMenu("request")} disabled={busy || stopped}><span aria-hidden="true">⇄</span><strong>상대 요구 처리</strong></button>
+              <button type="button" onClick={() => void recordPostAction("no_action")}
+                disabled={busy || performed.length > 0}><span aria-hidden="true">▢</span><strong>아무것도 안 하기</strong></button>
+            </div>
+          </div>
+          {actionNotice && <div className="pv-after-outcome" role="status"><strong>모의 행동 결과</strong><p>{actionNotice}</p></div>}
+          {performed.length > 0 && (
+            <section className="pv-after-history">
+              <h3>지금까지 한 행동</h3>
+              <ol>{performed.map((a, i) => <li key={i}>{POST_ACTION_LABEL[a]}</li>)}</ol>
+            </section>
+          )}
+          {error && <p className="pv-error" role="alert">{error}</p>}
+          <button type="button" className="btn btn--primary pv-after-finish"
+            disabled={!performed.length || busy} onClick={() => void finish()}>
+            {busy ? "피드백 확인 중…" : "내 행동 피드백 보기"}
+          </button>
+          <p className="pv-note">실제 앱·전화·계좌 연결은 하지 않습니다. 모든 결과는 가상 상황입니다.</p>
+        </section>
+        {menu && (
+          <div className="pv-action-overlay" role="presentation" onClick={() => setMenu(null)}>
+            <div className="pv-action-sheet" role="dialog" aria-modal="true"
+              aria-label="모의 휴대전화 메뉴" onClick={e => e.stopPropagation()}>
+              <h2>{menu === "phone" ? "누구에게 전화하시겠어요?" :
+                menu === "apps" ? "어떤 앱에서 확인하시겠어요?" : "상대 요구를 처리하시겠어요?"}</h2>
+              <p>실제 통화나 송금은 일어나지 않습니다.</p>
+              {menu === "phone" && (
+                <>
+                  {!session?.canCallFamily && choose("official_call", "공식 대표번호를 직접 찾아 전화",
+                    "검색이나 원래 알던 연락처에서 찾기")}
+                  {session?.canCallFamily && choose("saved_family", "원래 저장된 가족 번호로 전화",
+                    "이번에 걸려온 번호와 무관하게 확인하기")}
+                  {choose("caller_number", "방금 상대가 안내한 번호로 전화",
+                    "통화 중 알려준 번호를 이용하기")}
+                </>
+              )}
+              {menu === "apps" && choose("official_app", "평소 사용하던 공식 앱에서 조회",
+                "문자 링크가 아닌 기존 앱을 직접 열기")}
+              {menu === "request" && choose("follow_request", "상대방이 요청한 절차 진행",
+                "실제 돈이나 인증번호는 입력하지 않고 선택만 기록")}
+              <button type="button" className="pv-action-cancel" onClick={() => setMenu(null)}>휴대전화로 돌아가기</button>
+            </div>
+          </div>
+        )}
+      </Screen>
+    );
+  }
+
+  const feedback = session?.feedback;
+  if (!feedback) return null;
+  return (
+    <Screen>
+      <Header title="전화 대응 돌아보기" back={false} />
+      <section className="screen__body pv-feedback">
+        <span className={"pv-feedback-label pv-feedback-label--" + feedback.status}>통화 후 행동까지 분석했어요</span>
+        <h2>{feedback.headline}</h2>
+        <p className="pv-feedback-main">{feedback.detail}</p>
+        <section className="pv-feedback-card">
+          <strong>내 행동 기록</strong>
+          <ol className="pv-feedback-timeline">
+            {feedback.actions.map((item, i) => (
+              <li key={i} className={item.safe === true ? "pv-step-safe" : item.safe === false ? "pv-step-risk" : ""}>
+                <span>{String(i + 1).padStart(2, "0")}</span>
+                <div><b>{item.label}</b><p>{item.explanation}</p></div>
+              </li>
+            ))}
+          </ol>
+        </section>
+        <div className="pv-feedback-card">
+          <strong>통화에서 기억할 위험 신호</strong>
+          <p>{feedback.whatWasRequested}</p>
+        </div>
+        <div className="pv-feedback-card pv-feedback-card--lesson">
+          <strong>다음에 기억할 행동</strong>
+          <p>{feedback.shouldRemember}</p>
+          <small>{feedback.lesson}</small>
+        </div>
+        {feedback.coverage === "before_request" && <p className="pv-note">위험한 요구가 실제로 들렸는지는 확인되지 않아 통화 내용 자체는 채점하지 않았어요.</p>}
+        <details className="pv-transcript">
+          <summary>통화 자막 다시 보기 (이 기기에서만 표시)</summary>
+          <ol>{transcript.map((line, i) => (
+            <li key={i}><strong>{line.actor === "caller" ? "상대" : "나"}</strong><p>{line.text}</p></li>
+          ))}</ol>
+        </details>
+        <p className="pv-note">공개 범행 수법을 바탕으로 재구성한 가상 전화입니다. 실제 설정은 {feedback.identity === "fraud" ? "사칭 시도" : "일상 연락"}였습니다.</p>
+        <div className="pv-final-actions">
+          <button className="btn btn--gray" type="button" onClick={() => router.replace("/home")}>홈으로</button>
+          <button className="btn btn--primary" type="button" onClick={restart}>다른 전화 연습</button>
+        </div>
+      </section>
+    </Screen>
   );
 }
