@@ -231,6 +231,6 @@ test("AI hangup and network loss are not falsely credited as a user's decision t
   assert.equal(auto.actions[0].safe, null);
   assert.match(interrupted.actions[0].label, /연결이 끊김/);
   assert.equal(interrupted.actions[0].safe, null);
-  assert.match(manual.actions[0].label, /직접 끊음/);
+  assert.equal(manual.actions[0].label, "통화를 끊음");
   assert.equal(manual.actions[0].safe, true);
 });
