@@ -19,7 +19,13 @@ type QuizReview = { ids: string[]; answers: Answer[]; hints: string[] };
 
 export default function QuizRunner({ ids, from }: Props) {
   const router = useRouter();
-  const leaveQuiz = useBackNavigation(from ? "/" : "/practice");
+  const leaveSharedQuiz = useBackNavigation("/");
+  // 홈의 OX 카드에서 시작한 일반 퀴즈는 브라우저 방문 이력과
+  // 관계없이 홈으로 돌아간다. 가족 도전장의 기존 이동은 유지한다.
+  const leaveQuiz = () => {
+    if (from) leaveSharedQuiz();
+    else router.replace("/home");
+  };
   const [started, setStarted] = useState(false);
   const [items, setItems] = useState(() => pickQuiz(ids, 0));
   const [idx, setIdx] = useState(0);
@@ -85,7 +91,11 @@ export default function QuizRunner({ ids, from }: Props) {
   const goBack = () => {
     if (done) { setDone(false); return; }
     if (picked && !saved.current) { setPicked(null); return; }
-    if (idx === 0) { setStarted(false); return; }
+    if (idx === 0) {
+      if (from) setStarted(false);
+      else router.replace("/home");
+      return;
+    }
     setIdx(idx - 1);
     setPicked(answers[idx - 1]?.picked ?? null);
   };
