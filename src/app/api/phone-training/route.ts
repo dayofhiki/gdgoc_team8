@@ -12,8 +12,9 @@ const hits = new Map<string, { count: number; since: number }>();
 const actions: PhonePostAction[] = [
   "official_call", "official_app", "saved_family", "caller_number", "follow_request", "no_action",
 ];
-const LIVE_MODEL = "gemini-3.1-flash-live-preview";
-const LIVE_WS = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
+const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL?.trim() || "gemini-3.1-flash-live-preview";
+const LIVE_WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.";
+const LIVE_WS_METHOD = ".GenerativeService.BidiGenerateContentConstrained";
 
 const ok = (payload: object) => NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
 const fail = (error: string, status = 400) => NextResponse.json({ error }, {
@@ -95,38 +96,77 @@ function liveSetup(c: PhoneCase) {
   };
 }
 
-async function issueLiveToken(): Promise<string> {
+type LiveApiVersion = "v1alpha" | "v1beta";
+type IssuedToken = { name: string; version: LiveApiVersion };
+type ProviderTokenError = { status: number; reason: string; message: string };
+
+function tokenErrorDetails(value: unknown): { reason: string; message: string } {
+  if (!value || typeof value !== "object") return { reason: "UNKNOWN", message: "" };
+  const err = "error" in value ? value.error : null;
+  if (!err || typeof err !== "object") return { reason: "UNKNOWN", message: "" };
+  const e = err as { status?: unknown; message?: unknown };
+  const reason = typeof e.status === "string" ? e.status.slice(0, 48) : "UNKNOWN";
+  const message = typeof e.message === "string"
+    ? e.message.slice(0, 250).replace(/AIza[A-Za-z0-9_-]+/g, "[redacted-key]")
+    : "";
+  return { reason, message };
+}
+async function issueLiveToken(): Promise<IssuedToken> {
+  // API 키는 항상 서버에서만 사용한다. 브라우저에는 1회용 임시 토큰만 넘긴다.
   const key = process.env.GEMINI_API_KEY || process.env.TRAINING_GEMINI_API_KEY;
   if (!key) throw Error("LIVE_KEY_MISSING");
   const now = Date.now();
   const request = {
     uses: 1,
-    expireTime: new Date(now + 10 * 60_000).toISOString(),
-    newSessionExpireTime: new Date(now + 55_000).toISOString(),
+    expireTime: new Date(now + 15 * 60_000).toISOString(),
+    newSessionExpireTime: new Date(now + 60_000).toISOString(),
     liveConnectConstraints: {
-      model: "models/" + LIVE_MODEL,
+      // 공식 SDK 예시는 bare model ID를 사용한다. models/ 접두사를 붙이지 않는다.
+      model: LIVE_MODEL,
       config: { responseModalities: ["AUDIO"] },
     },
   };
-  let response: Response;
-  try {
-    response = await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens", {
-      method: "POST",
-      headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-      signal: AbortSignal.timeout(7500),
-      cache: "no-store",
-    });
-  } catch { throw Error("LIVE_UNAVAILABLE"); }
-  if (!response.ok) {
-    console.warn("Gemini Live ephemeral token request rejected:", response.status);
-    throw Error(response.status === 429 ? "LIVE_QUOTA" : "LIVE_UNAVAILABLE");
+  let last: ProviderTokenError | null = null;
+  // 토큰 API 버전은 문서 버전과 배포 리전에 따라 다를 수 있어 공식 예시 순서로 점검한다.
+  for (const version of ["v1alpha", "v1beta"] as const) {
+    let response: Response;
+    try {
+      response = await fetch(`https://generativelanguage.googleapis.com/${version}/auth_tokens`, {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+        signal: AbortSignal.timeout(9000),
+        cache: "no-store",
+      });
+    } catch (err) {
+      console.error("Live token request transport error", {
+        version, error: err instanceof Error ? err.name : "UNKNOWN",
+      });
+      throw Error("LIVE_NETWORK");
+    }
+    const body: unknown = await response.json().catch(() => null);
+    if (response.ok) {
+      const name = body && typeof body === "object" && "name" in body ?
+        (body as { name?: unknown }).name : null;
+      if (typeof name !== "string" || !name.startsWith("auth_tokens/")) {
+        console.error("Live token response missing expected token identifier", { version });
+        throw Error("LIVE_TOKEN_FORMAT");
+      }
+      return { name, version };
+    }
+    const error = tokenErrorDetails(body);
+    last = { status: response.status, ...error };
+    // Never log credentials or the raw provider response body.
+    console.error("Live token request rejected", { version, httpStatus: response.status, ...error });
+    if (response.status !== 400 && response.status !== 404 && response.status !== 405) break;
   }
-  const payload: unknown = await response.json().catch(() => null);
-  const name = payload && typeof payload === "object" && "name" in payload ?
-    (payload as { name?: unknown }).name : null;
-  if (typeof name !== "string" || name.length < 16) throw Error("LIVE_UNAVAILABLE");
-  return name;
+  if (!last) throw Error("LIVE_UNAVAILABLE");
+  if (last.status === 401) throw Error("LIVE_AUTH");
+  if (last.status === 403) throw Error("LIVE_PERMISSION");
+  if (last.status === 429 || last.reason === "RESOURCE_EXHAUSTED") throw Error("LIVE_QUOTA");
+  if (last.status === 404) throw Error("LIVE_MODEL");
+  if (last.status === 400) throw Error("LIVE_REQUEST");
+  throw Error("LIVE_UNAVAILABLE");
 }
 function status(state: PhoneState) {
   return {
@@ -149,14 +189,16 @@ export async function POST(req: NextRequest) {
   try {
     if (body.action === "start") {
       const c = pickPhoneCase(body.recentCases);
-      const liveToken = await issueLiveToken();
+      const live = await issueLiveToken();
       const state: PhoneState = {
         version: 2, scenario: c.id, createdAt: Date.now(), phase: "call",
         requestObserved: false, postActions: [],
       };
       return ok({
         ...status(state),
-        liveToken, liveEndpoint: LIVE_WS, liveSetup: liveSetup(c),
+        liveToken: live.name,
+        liveEndpoint: LIVE_WS_BASE + live.version + LIVE_WS_METHOD,
+        liveSetup: liveSetup(c),
         caller: c.caller, caseId: c.id, canCallFamily: c.family,
       });
     }
@@ -193,9 +235,23 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const message = e instanceof Error ? e.message : "UNKNOWN";
     if (message === "LIVE_KEY_MISSING" || message === "SESSION_KEY_MISSING")
-      return fail("Gemini Live 서버 설정이 필요해요.", 503);
-    if (message === "LIVE_QUOTA") return fail("Gemini Live 사용량 제한으로 통화를 시작할 수 없어요.", 503);
-    if (message === "LIVE_UNAVAILABLE") return fail("Gemini Live 연결을 준비하지 못했어요. 서버 설정을 확인해 주세요.", 503);
+      return fail("AI 피싱범 전화 훈련에 필요한 서버 API 키가 설정되지 않았어요. 관리자에게 문의해 주세요. (PHONE_KEY)", 503);
+    if (message === "LIVE_AUTH")
+      return fail("전화 훈련 API 키 인증에 실패했어요. 배포 서버의 API 키를 확인해 주세요. (PHONE_AUTH)", 503);
+    if (message === "LIVE_PERMISSION")
+      return fail("음성 모델을 사용할 권한이 없거나 API 키 제한에 걸렸어요. (PHONE_PERMISSION)", 503);
+    if (message === "LIVE_QUOTA")
+      return fail("AI 음성 통화 사용량 한도에 도달했어요. 잠시 후 다시 이용해 주세요. (PHONE_QUOTA)", 503);
+    if (message === "LIVE_MODEL")
+      return fail("현재 설정된 음성 모델을 찾을 수 없어요. 서버 모델 설정을 확인해 주세요. (PHONE_MODEL)", 503);
+    if (message === "LIVE_REQUEST")
+      return fail("AI 음성 연결 요청 형식이 거절됐어요. 서버에서 오류 내용을 확인해 주세요. (PHONE_REQUEST)", 503);
+    if (message === "LIVE_TOKEN_FORMAT")
+      return fail("AI 음성 서버가 올바른 임시 토큰을 반환하지 않았어요. (PHONE_TOKEN)", 503);
+    if (message === "LIVE_NETWORK")
+      return fail("음성 연결 서버에 접속할 수 없어요. 네트워크 상태를 확인해 주세요. (PHONE_NETWORK)", 503);
+    if (message === "LIVE_UNAVAILABLE")
+      return fail("AI 음성 서비스가 일시적으로 응답하지 않아요. (PHONE_UNAVAILABLE)", 503);
     if (message === "INVALID_SESSION") return fail("통화 세션이 유효하지 않아요. 다시 시작해 주세요.");
     console.error("Phone training API error:", message);
     return fail("전화 훈련 진행 중 오류가 발생했어요.", 500);

@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { isTrainingTopicId, topicDescriptor } from "@/lib/trainingCatalog";
 import { BottomCTA, Header, Screen } from "@/components/ui";
+import { redirect } from "next/navigation";
 
 /** 문자·채팅 대응 훈련 · 시작 전 안내 */
 export default async function RoleplayIntro({ searchParams }: { searchParams: Promise<{ topic?: string | string[]; entry?: string | string[]; mode?: string | string[] }> }) {
   const { topic: requestedTopic, entry, mode } = await searchParams;
   const topic = isTrainingTopicId(requestedTopic) ? requestedTopic : undefined;
+  // AI 상황극의 기본 진입점은 채팅/전화 선택 화면이다. 추천 문자 훈련의 안내는 보존한다.
+  if (!topic && mode !== "live") redirect("/roleplay/mode");
   const destination = topic
     ? `/roleplay/chat?topic=${topic}${entry === "live" ? "&entry=live" : ""}`
-    : mode === "live" ? "/roleplay/chat" : "/roleplay/mode";
+    : "/roleplay/chat";
   return (
     <Screen>
       <Header title="문자·채팅 대응 훈련" back="/home" />

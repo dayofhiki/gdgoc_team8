@@ -528,13 +528,15 @@ test("entry flow separates unannounced real-life practice from focused scenario 
   const home = readFileSync(new URL("../src/app/home/page.tsx", import.meta.url), "utf8");
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   const chat = readFileSync(new URL("../src/app/roleplay/chat/page.tsx", import.meta.url), "utf8");
-  assert.match(mode, /실전 훈련/);
-  assert.match(mode, /무작위로 상황이 선정돼요/);
-  assert.match(mode, /상황별 연습/);
+  assert.match(mode, /문자·채팅 훈련/);
+  assert.match(mode, /문자를 주고받고, 휴대전화로 직접 대응해요/);
+  assert.match(mode, /연습할 문자 상황을 직접 고르기/);
   assert.doesNotMatch(mode, /사례로 배우기/);
-  assert.match(home, /사례로 배우기/);
+  assert.match(home, /AI 상황극/);
+  assert.match(home, /OX 퀴즈/);
+  assert.doesNotMatch(home, /AI 전화 대응 훈련|문자·채팅 대응 훈련/);
   assert.match(mode, /path: "\/roleplay\/chat"/);
-  assert.match(mode, /path: "\/roleplay\/select"/);
+  assert.match(mode, /path: "\/roleplay\/phone"/);
   assert.match(selector, /상황별 연습/);
   assert.doesNotMatch(selector, /추천 상황으로 바로 시작|무작위|진짜인지는/);
   assert.match(selector, /TRAINING_TOPICS\.filter/);
@@ -581,7 +583,7 @@ test("action-first interface avoids identity-guessing quiz and prioritizes pract
   assert.match(home, /href="\/practice"/);
   assert.doesNotMatch(intro, /진짜 연락과 사칭 시도가 섞여/);
   assert.match(intro, /어떤 연락이 오더라도 안전하게 대응하는 연습/);
-  assert.match(mode, /실제 상황에서 어떻게 선택해야 할지 연습해 보세요/);
+  assert.match(mode, /위험한 요구에 직접 대응하고/);
 });
 
 

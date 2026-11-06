@@ -1697,3 +1697,11 @@ p, h1, h2, h3 { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .pv-after-tiles button, .pv-live-hangup { transition: none !important; }
 }
+
+
+/* AI 상황극: 채팅/전화 선택과 상황별 문자 훈련 보조 진입 */
+.figma-mode-topic-link { display: flex; width: 100%; align-items: center; justify-content: space-between;
+  min-height: 52px; padding: 11px 15px; margin-top: 15px; border: 1px solid #dae6f6;
+  border-radius: 14px; background: #f1f7ff; color: #226bd3; font-size: 15px; font-weight: 750;
+  line-height: 1.45; text-align: left; }
+.figma-mode-topic-link:focus-visible { outline: 3px solid #3182f6; outline-offset: 2px; }

@@ -116,5 +116,39 @@ test("Live backend provisions ephemeral credentials and server-sealed multi-step
   assert.match(page, /내 행동 피드백 보기/);
   assert.match(page, /postActions/);
   assert.match(page, /<Header title="AI 전화 대응 훈련" back=\{false\}/);
-  assert.match(home, /href="\/roleplay\/phone"/);
+  assert.match(home, /href="\/roleplay"/);
+  const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  assert.match(mode, /path: "\/roleplay\/phone"/);
+});
+
+test("home menu has AI situation and OX, with chat and phone nested in AI situation", () => {
+  const home = readFileSync(new URL("../src/app/home/page.tsx", import.meta.url), "utf8");
+  const practice = readFileSync(new URL("../src/app/practice/page.tsx", import.meta.url), "utf8");
+  const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  const intro = readFileSync(new URL("../src/app/roleplay/page.tsx", import.meta.url), "utf8");
+  assert.match(home, /<span className="list-row__title">AI 상황극<\/span>/);
+  assert.match(home, /<span className="list-row__title">OX 퀴즈<\/span>/);
+  assert.doesNotMatch(home, /href="\/roleplay\/phone"|href="\/roleplay\/case"/);
+  assert.match(mode, /path: "\/roleplay\/chat"/);
+  assert.match(mode, /path: "\/roleplay\/phone"/);
+  assert.match(mode, /연습할 문자 상황을 직접 고르기/);
+  assert.match(intro, /redirect\("\/roleplay\/mode"\)/);
+  assert.match(practice, /href: "\/roleplay\/case"/);
+});
+
+test("training presentation hides Gemini Live technology branding and clarifies phone service failures", () => {
+  const page = readFileSync(new URL("../src/app/roleplay/phone/page.tsx", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../src/lib/geminiLiveAudio.ts", import.meta.url), "utf8");
+  const server = readFileSync(new URL("../src/app/api/phone-training/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /GEMINI LIVE|Gemini Live/);
+  assert.match(page, /AI 피싱범과 실시간으로 통화하기/);
+  assert.match(page, /AI 피싱범 · 모의 통화 중/);
+  assert.doesNotMatch(page, /className="pv-topline"/);
+  assert.match(server, /"v1alpha", "v1beta"/);
+  assert.match(server, /model: LIVE_MODEL/);
+  assert.match(server, /PHONE_AUTH/);
+  assert.match(server, /PHONE_PERMISSION/);
+  assert.match(server, /PHONE_REQUEST/);
+  assert.match(client, /realtimeInput: \{ text \}/);
+  assert.doesNotMatch(client, /clientContent: \{ turns:/);
 });

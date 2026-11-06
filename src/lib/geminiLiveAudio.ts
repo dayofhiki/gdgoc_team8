@@ -73,7 +73,7 @@ export class GeminiLiveAudio {
   async prepare(): Promise<void> {
     if (this.closed) throw Error("전화가 종료됐어요.");
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
-      throw Error("보안 연결(HTTPS) 환경에서만 Gemini Live 통화를 사용할 수 있어요.");
+      throw Error("보안 연결(HTTPS) 환경에서만 AI 음성 통화를 사용할 수 있어요.");
     const ctx = new AudioContext({ latencyHint: "interactive" });
     this.ctx = ctx;
     await ctx.resume();
@@ -115,11 +115,11 @@ export class GeminiLiveAudio {
   async connect(boot: LiveBoot): Promise<void> {
     if (!this.ctx || this.closed) throw Error("오디오 장치를 초기화할 수 없어요.");
     if (!boot.liveToken || !boot.liveEndpoint.startsWith("wss://generativelanguage.googleapis.com/"))
-      throw Error("Gemini Live 연결 정보가 유효하지 않아요.");
+      throw Error("AI 음성 연결 정보가 유효하지 않아요.");
     const ws = new WebSocket(boot.liveEndpoint + "?access_token=" + encodeURIComponent(boot.liveToken));
     this.socket = ws;
     await new Promise<void>((resolve, reject) => {
-      const timeout = window.setTimeout(() => reject(Error("Gemini Live 연결 시간이 초과됐어요.")), 12_000);
+      const timeout = window.setTimeout(() => reject(Error("AI 음성 연결 시간이 초과됐어요.")), 12_000);
       const cleanup = () => window.clearTimeout(timeout);
       ws.onopen = () => {
         if (this.closed) return;
@@ -133,7 +133,7 @@ export class GeminiLiveAudio {
           if (wire.setupComplete && !this.ready) {
             this.ready = true;
             cleanup();
-            this.callbacks.onStatus("Gemini Live 음성 통화 연결됨");
+            this.callbacks.onStatus("AI 피싱범 음성 통화 연결됨");
             resolve();
           }
           if (wire.serverContent) this.onMessage(wire.serverContent);
@@ -145,13 +145,13 @@ export class GeminiLiveAudio {
       ws.onerror = () => {
         if (this.closed) return;
         cleanup();
-        if (!this.ready) reject(Error("Gemini Live 서버와 연결하지 못했어요."));
-        else this.callbacks.onError("Gemini Live 연결에 문제가 발생했어요.");
+        if (!this.ready) reject(Error("AI 음성 서버와 연결하지 못했어요."));
+        else this.callbacks.onError("AI 음성 통화 연결에 문제가 발생했어요.");
       };
       ws.onclose = () => {
         if (this.closed) return;
         cleanup();
-        if (!this.ready) reject(Error("Gemini Live 연결이 종료됐어요. 모델과 API 설정을 확인해 주세요."));
+        if (!this.ready) reject(Error("AI 음성 통화가 종료됐어요. 연결 설정을 확인해 주세요."));
         else this.callbacks.onError("음성 통화 연결이 끊겼어요. 통화를 종료하고 이후 대응을 연습할 수 있어요.");
         this.ready = false;
         this.stopPlayback();
@@ -164,10 +164,9 @@ export class GeminiLiveAudio {
   }
   sendText(text: string): void {
     if (!this.isConnected()) throw Error("현재 통화에 연결되지 않았어요.");
-    // Text is sent as a full user turn. Live audio remains the native output modality.
-    this.socket!.send(JSON.stringify({
-      clientContent: { turns: [{ role: "user", parts: [{ text }] }], turnComplete: true },
-    }));
+    // Gemini 3.1 Live accepts incremental text through realtimeInput.
+    // clientContent is for initial history seeding, not a normal spoken turn.
+    this.socket!.send(JSON.stringify({ realtimeInput: { text } }));
   }
   setMicrophoneEnabled(enabled: boolean): void {
     this.micEnabled = enabled;
@@ -208,7 +207,7 @@ export class GeminiLiveAudio {
         if (!this.nodes.size) this.callbacks.onSpeaking(false);
       };
     } catch {
-      this.callbacks.onError("Gemini 음성을 재생하지 못했어요.");
+      this.callbacks.onError("AI 음성을 재생하지 못했어요.");
     }
   }
   private stopPlayback() {

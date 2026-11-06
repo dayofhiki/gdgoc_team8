@@ -21,7 +21,6 @@ export default function Home() {
       <div className="home__logo">
         <img src="/images/logo.svg" alt="미끼주의보" width={121} height={24} />
       </div>
-
       <section className="hero" aria-label="추천 훈련">
         <span className="hero__chip">추천 훈련</span>
         <h2 className="hero__title">{recommended?.title ?? "추천 상황을 고르는 중이에요"}</h2>
@@ -31,7 +30,6 @@ export default function Home() {
           <Link href={`/roleplay?topic=${recommended.id}&entry=live`} className="btn btn--primary hero__btn">추천 훈련 시작하기</Link>
         )}
       </section>
-
       <div className="home__sections">
         <section>
           <div className="sec__head">
@@ -42,24 +40,8 @@ export default function Home() {
             <Link href="/roleplay" className="list-row">
               <span className="list-row__icon"><img src="/images/icon-chat.png" alt="" width={32} height={32} /></span>
               <span className="list-row__text">
-                <span className="list-row__title">문자·채팅 대응 훈련</span>
-                <span className="list-row__desc">실전 훈련 · 상황별 연습</span>
-              </span>
-              <ChevronRight />
-            </Link>
-            <Link href="/roleplay/phone" className="list-row">
-              <span className="list-row__icon"><img src="/images/icon-phone.png" alt="" width={32} height={32} /></span>
-              <span className="list-row__text">
-                <span className="list-row__title">AI 전화 대응 훈련</span>
-                <span className="list-row__desc">말로 대응하고, 직접 끊고 확인하는 연습</span>
-              </span>
-              <ChevronRight />
-            </Link>
-            <Link href="/roleplay/case" className="list-row">
-              <span className="list-row__icon"><img src="/images/fish-clipboard.png" alt="" width={32} height={32} /></span>
-              <span className="list-row__text">
-                <span className="list-row__title">사례로 배우기</span>
-                <span className="list-row__desc">실제 사건을 되감아 안전한 대응을 배워요</span>
+                <span className="list-row__title">AI 상황극</span>
+                <span className="list-row__desc">문자·채팅 또는 AI 피싱범 전화 훈련</span>
               </span>
               <ChevronRight />
             </Link>
@@ -72,13 +54,12 @@ export default function Home() {
               </span>
               <span className="list-row__text">
                 <span className="list-row__title">OX 퀴즈</span>
-                <span className="list-row__desc">매번 새로운 10문제와 틀린 개념 복습</span>
+                <span className="list-row__desc">10문제씩 풀고 틀린 개념 복습하기</span>
               </span>
               <ChevronRight />
             </Link>
           </div>
         </section>
-
         <section>
           <div className="sec__head">
             <h3 className="sec__title">가족과 함께하기</h3>

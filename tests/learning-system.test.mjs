@@ -205,7 +205,7 @@ test("exported Figma refresh keeps chat actions live while adding large-print an
   assert.match(mode, /role="radiogroup"/);
   assert.match(mode, /"\/roleplay\/chat"/);
   assert.match(mode, /"\/roleplay\/select"/);
-  assert.match(mode, /채팅으로 시작하기/);
+  assert.match(mode, /채팅 훈련 시작하기/);
   assert.match(chat, /figma-chat-reply-heading/);
   assert.match(chat, /글자 크게 보기/);
   assert.match(chat, /figma-font-dialog/);
