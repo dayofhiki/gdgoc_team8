@@ -12,9 +12,9 @@ export default function FamilyPractice() {
         <section className="family-report__hero">
           <h2>가족의 대응 약속과 연습 기록</h2>
           <p>가족 확인 암호를 정하고, 가족이 공유한 연습 기록을 확인해요.</p>
-          <a href="/family-practice/report" target="_blank" rel="noopener noreferrer" className="btn btn--gray">
-            가족 연습 리포트 보기 <span className="sr-only">(새 탭)</span>
-          </a>
+          <Link href="/family-practice/report" className="btn btn--gray">
+            가족 연습 리포트 보기
+          </Link>
         </section>
         <section className="fb-subcard family-hub__code" aria-labelledby="family-code-title">
           <h2 id="family-code-title">우리 가족 암호</h2>
