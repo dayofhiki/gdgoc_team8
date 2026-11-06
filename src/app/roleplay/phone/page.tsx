@@ -287,7 +287,8 @@ export default function PhoneTraining() {
   }
 
   const last = session?.messages.at(-1);
-  const canSpeak = !!session && !busy && !listening && !speaking && !session.closed;
+  const limitReached = !!session && session.turns >= (session.maxTurns ?? 4);
+  const canSpeak = !!session && !busy && !listening && !speaking && !session.closed && !limitReached;
   return (
     <main className="screen pv-call-screen">
       <header className="pv-call-header">
@@ -319,12 +320,13 @@ export default function PhoneTraining() {
           disabled={!canSpeak} onClick={listen}>
           <span aria-hidden="true">🎙</span>{listening ? "듣는 중…" : speaking ? "상대방 통화 중" : "눌러서 말하기"}
         </button>
+        {limitReached && <p className="pv-note">대화를 충분히 나눴어요. 이제 끊거나, 직접 확인할 방법을 선택해 주세요.</p>}
         {!speechSupported && <p className="pv-note">이 기기에서는 음성 입력을 지원하지 않아 글로 답할 수 있어요.</p>}
         <form className="pv-typed-answer" onSubmit={e => { e.preventDefault(); void send(draft); }}>
           <input type="text" value={draft} maxLength={240}
             aria-label="통화에서 말할 내용" placeholder="또는 직접 답장하기"
-            disabled={busy || listening} onChange={e => setDraft(e.target.value)}/>
-          <button type="submit" disabled={busy || listening || !draft.trim()}>말하기</button>
+            disabled={busy || listening || limitReached} onChange={e => setDraft(e.target.value)}/>
+          <button type="submit" disabled={busy || listening || limitReached || !draft.trim()}>말하기</button>
         </form>
         <div className="pv-call-actions">
           <button type="button" className="pv-hangup" disabled={busy} onClick={() => void decide("hangup")}>통화 끊기</button>
