@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { reviewPhoneTurn } from "../src/lib/phoneDialogueGuard.ts";
 import { PHONE_CASES, MAX_PHONE_TURNS, MAX_POST_ACTIONS, evaluatePhoneCase,
   findPhoneCase, allowedPhoneAction, availablePhoneActions, heardPhoneRequest, callerSaidTheyHungUp,
   phoneActionOutcome, pickPhoneCase } from "../src/lib/phoneTraining.ts";
@@ -210,7 +211,7 @@ test("Live fraudster persona challenges a first rejection and signals genuine di
   assert.match(client, /wire\.toolCall/);
   assert.match(client, /toolResponse:/);
   assert.match(client, /functionResponses:/);
-  assert.match(client, /callerSaidTheyHungUp\(this\.modelTurnText\)/);
+  assert.match(client, /callerSaidTheyHungUp\(finishedText\)/);
   assert.match(client, /private requestCallerHangup\(/);
   assert.match(client, /private finishCallerHangup\(/);
   assert.match(client, /this\.callbacks\.onCallerHangup\(\)/);
@@ -233,4 +234,51 @@ test("AI hangup and network loss are not falsely credited as a user's decision t
   assert.equal(interrupted.actions[0].safe, null);
   assert.equal(manual.actions[0].label, "통화를 끊음");
   assert.equal(manual.actions[0].safe, true);
+});
+
+test("detects fabricated investigation completion and waiting before the risk request", () => {
+  const investigation = findPhoneCase("investigation_isolation");
+  assert.equal(reviewPhoneTurn(investigation,
+    "내용 확인 마쳤고요. 선생님 명의는 안전한 것으로 확인됐습니다. 이제 통화 종료하겠습니다.", 2, false),
+    "premature_resolution");
+  assert.equal(reviewPhoneTurn(investigation, "잠시 기다려 주세요. 확인 중입니다.", 1, false),
+    "waiting");
+  assert.equal(reviewPhoneTurn(investigation, "조회하고 있습니다. 조금만 대기하세요.", 1, false),
+    "waiting");
+  assert.equal(reviewPhoneTurn(investigation, investigation.opening, 1, false),
+    "none");
+  assert.equal(reviewPhoneTurn(investigation, "무슨 말씀인지 알겠습니다.", 2, false),
+    "missing_decision");
+  assert.equal(reviewPhoneTurn(investigation, investigation.request, 2, false),
+    "none");
+  assert.equal(reviewPhoneTurn(investigation, "문제없습니다.", 3, true),
+    "premature_resolution");
+  assert.equal(reviewPhoneTurn(investigation, "잠시 기다리세요.", 3, true),
+    "waiting");
+});
+
+test("waiting mentioned as part of the story does not trigger spurious intervention", () => {
+  const family = findPhoneCase("family_emergency");
+  assert.equal(reviewPhoneTurn(family,
+    "병원 접수창구에서 사람이 많아서 기다리고 있어.", 1, false), "none");
+  assert.equal(reviewPhoneTurn(findPhoneCase("normal_delivery"),
+    "잠시 기다려 주세요.", 2, false), "none");
+});
+
+test("Live phone training blocks early model hangups and bounds neutral continuation", () => {
+  const server = readFileSync(new URL("../src/app/api/phone-training/route.ts", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../src/lib/geminiLiveAudio.ts", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../src/app/roleplay/phone/page.tsx", import.meta.url), "utf8");
+  assert.match(server, /안전한 것으로 확인됐습니다/);
+  assert.match(server, /추가로 기다리게|잠시 기다려/);
+  assert.match(server, /반드시 행동 판단이 가능한 구체적 요청/);
+  assert.match(client, /setCallerMayHangUp\(allowed: boolean\)/);
+  assert.match(client, /continue_scenario/);
+  assert.match(client, /onPrematureCallerHangup/);
+  assert.match(client, /onModelTurnComplete/);
+  assert.match(page, /heardPhoneRequest\(phoneCase, caption\)/);
+  assert.match(page, /setCallerMayHangUp\(true\)/);
+  assert.match(page, /reviewPhoneTurn\(phoneCase, text/);
+  assert.match(page, /continuationCount\.current < 2/);
+  assert.match(page, /지금 해야 할 일은 무엇인가요/);
 });

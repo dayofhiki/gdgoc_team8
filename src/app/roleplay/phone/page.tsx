@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Header, Screen } from "@/components/ui";
 import { saveRecord } from "@/lib/records";
 import { GeminiLiveAudio, type LiveBoot } from "@/lib/geminiLiveAudio";
+import { reviewPhoneTurn } from "@/lib/phoneDialogueGuard";
 import { findPhoneCase, heardPhoneRequest, POST_ACTION_LABEL, type PhoneFeedback, type PhoneLine, type PhonePostAction } from "@/lib/phoneTraining";
 
 type Phase = "incoming" | "call" | "after_call" | "feedback";
@@ -60,6 +61,10 @@ export default function GeminiLivePhonePractice() {
   const startedAt = useRef(0);
   const observedRisk = useRef(false);
   const modelTurnCaption = useRef("");
+  const modelTurnCount = useRef(0);
+  const continuationCount = useRef(0);
+  const pendingContinuation = useRef(false);
+  const aiAudioPlaying = useRef(false);
   const busyRef = useRef(false);
   const savedRef = useRef(false);
   const [phase, setPhase] = useState<Phase>("incoming");
@@ -109,6 +114,8 @@ export default function GeminiLivePhonePractice() {
     return merged;
   }
   function stopLive() {
+    pendingContinuation.current = false;
+    aiAudioPlaying.current = false;
     live.current?.close();
     live.current = null;
     setSpeaking(false);
@@ -123,6 +130,10 @@ export default function GeminiLivePhonePractice() {
     setTranscript([]);
     setStatus("마이크와 음성 연결을 준비하는 중…");
     observedRisk.current = false;
+    modelTurnCount.current = 0;
+    continuationCount.current = 0;
+    pendingContinuation.current = false;
+    aiAudioPlaying.current = false;
     const id = ++currentRun.current;
     const client = new GeminiLiveAudio({
       onCallerHangup: () => {
@@ -147,7 +158,42 @@ export default function GeminiLivePhonePractice() {
           return [...(!startsTurn && prev.at(-1)?.actor === "caller" ? prev.slice(0, -1) : prev), line].slice(-16);
         });
         const phoneCase = findPhoneCase(sessionRef.current?.caseId ?? "");
-        if (phoneCase && heardPhoneRequest(phoneCase, caption)) observedRisk.current = true;
+        if (phoneCase && heardPhoneRequest(phoneCase, caption)) {
+          observedRisk.current = true;
+          live.current?.setCallerMayHangUp(true);
+        }
+      },
+      onModelTurnComplete: text => {
+        if (id !== currentRun.current) return;
+        modelTurnCount.current += 1;
+        const phoneCase = findPhoneCase(sessionRef.current?.caseId ?? "");
+        if (!phoneCase) return;
+        const issue = reviewPhoneTurn(phoneCase, text, modelTurnCount.current, observedRisk.current);
+        if (issue !== "none" && continuationCount.current < 2) {
+          pendingContinuation.current = true;
+          setStatus("대화가 이어지고 있어요.");
+          if (!aiAudioPlaying.current && live.current?.isConnected()) {
+            pendingContinuation.current = false;
+            continuationCount.current += 1;
+            live.current.sendText("그래서 제가 지금 해야 할 일은 무엇인가요? 바로 말씀해 주세요.");
+          }
+        } else if (issue !== "none") {
+          setStatus(observedRisk.current
+            ? "상대가 대화를 반복하고 있어요. 직접 끊고 통화 후 행동을 연습할 수 있어요."
+            : "아직 필요한 요청을 듣지 못했어요. 통화를 종료해도 이후 대응을 연습할 수 있어요.");
+        }
+      },
+      onPrematureCallerHangup: () => {
+        if (id !== currentRun.current) return;
+        if (continuationCount.current < 2 && !observedRisk.current) {
+          pendingContinuation.current = true;
+          if (!aiAudioPlaying.current && live.current?.isConnected()) {
+            pendingContinuation.current = false;
+            continuationCount.current += 1;
+            live.current.sendText("그래서 제가 지금 해야 할 일은 무엇인가요? 바로 말씀해 주세요.");
+          }
+        }
+        setStatus("상대의 통화 종료가 실제로 진행되지 않았어요. 대화를 이어갑니다.");
       },
       onUserText: text => {
         if (id !== currentRun.current) return;
@@ -159,7 +205,17 @@ export default function GeminiLivePhonePractice() {
             : [...prev, { actor: "me" as const, text }].slice(-16);
         });
       },
-      onSpeaking: setSpeaking,
+      onSpeaking: active => {
+        if (id !== currentRun.current) return;
+        aiAudioPlaying.current = active;
+        setSpeaking(active);
+        if (!active && pendingContinuation.current &&
+          continuationCount.current < 2 && live.current?.isConnected()) {
+          pendingContinuation.current = false;
+          continuationCount.current += 1;
+          live.current.sendText("그래서 제가 지금 해야 할 일은 무엇인가요? 바로 말씀해 주세요.");
+        }
+      },
       onStatus: setStatus,
       onError: setError,
     });
@@ -279,6 +335,10 @@ export default function GeminiLivePhonePractice() {
     setMyCaption("");
     setSeconds(0);
     observedRisk.current = false;
+    modelTurnCount.current = 0;
+    continuationCount.current = 0;
+    pendingContinuation.current = false;
+    aiAudioPlaying.current = false;
   }
 
   if (phase === "incoming") return (

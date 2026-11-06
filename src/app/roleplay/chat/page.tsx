@@ -141,6 +141,7 @@ export default function RealTraining() {
   const [initialTransfer, setInitialTransfer] = useState<PhoneTransferRequest | null>(null);
   const [confirmStop, setConfirmStop] = useState(false);
   const [writeReply, setWriteReply] = useState(false);
+  const [replyExpanded, setReplyExpanded] = useState(true);
   const [fontMenuOpen, setFontMenuOpen] = useState(false);
   const [fontSize, setFontSize] = useState<"regular" | "large" | "xlarge">("regular");
   const [memoryStage, setMemoryStage] = useState<"card" | "flipped" | "details">("card");
@@ -200,6 +201,7 @@ export default function RealTraining() {
     setInitialTransfer(null);
     setConfirmStop(false);
     setWriteReply(false);
+    setReplyExpanded(true);
     setPhoneHint(false);
     setIntroOpen(false);
     setSkipIntroNextTime(false);
@@ -777,30 +779,44 @@ export default function RealTraining() {
           </div>
         ) : session && !session.closed && (
           <>
-            <div className="figma-chat-reply-area">
-              <p className="figma-chat-reply-heading">선택지를 눌러 답장을 보내보세요.</p>
-              {writeReply ? (
-                <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-                  <input ref={inputRef} type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="답장 쓰기"
-                    maxLength={300} value={input} disabled={busy} onChange={(event) => setInput(event.target.value)} />
-                  <button type="submit" className="rt-send" aria-label="메시지 전송" disabled={busy || !input.trim()}>
-                    <span aria-hidden="true">↑</span>
-                  </button>
-                </form>
-              ) : (
-                <div className="rt-replies" role="group" aria-label="답장 예시">
-                  {examples.length > 0 && <p>답장 예시 <span>누르면 바로 보내요</span></p>}
-                  {examples.map(text => (
-                    <button key={text} type="button" className="rt-choice" disabled={busy}
-                      onClick={() => void send(text)}>{text}</button>
-                  ))}
+            <div className={"figma-chat-reply-area" + (!replyExpanded ? " figma-chat-reply-area--collapsed" : "")}>
+              <div className="figma-chat-reply-toolbar">
+                <p className="figma-chat-reply-heading">선택지를 눌러 답장을 보내보세요.</p>
+                <button type="button" className="figma-chat-reply-toggle"
+                  aria-expanded={replyExpanded} aria-controls="rt-reply-collapsible"
+                  aria-label={replyExpanded ? "답장 선택지 접기" : "답장 선택지 펼치기"}
+                  onClick={() => setReplyExpanded(value => !value)}>
+                  <span>{replyExpanded ? "접기" : "펼치기"}</span>
+                  <span className="figma-chat-reply-chevron" aria-hidden="true">⌃</span>
+                </button>
+              </div>
+              <div id="rt-reply-collapsible" className="figma-chat-reply-collapse"
+                aria-hidden={!replyExpanded} inert={!replyExpanded}>
+                <div className="figma-chat-reply-inner">
+                  {writeReply ? (
+                    <form className="rt-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+                      <input ref={inputRef} type="text" className="rt-input" aria-label="상대에게 메시지 보내기" placeholder="답장 쓰기"
+                        maxLength={300} value={input} disabled={busy} onChange={(event) => setInput(event.target.value)} />
+                      <button type="submit" className="rt-send" aria-label="메시지 전송" disabled={busy || !input.trim()}>
+                        <span aria-hidden="true">↑</span>
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="rt-replies" role="group" aria-label="답장 예시">
+                      {examples.length > 0 && <p>답장 예시 <span>누르면 바로 보내요</span></p>}
+                      {examples.map(text => (
+                        <button key={text} type="button" className="rt-choice" disabled={busy}
+                          onClick={() => void send(text)}>{text}</button>
+                      ))}
+                    </div>
+                  )}
+                  <button type="button" className="rt-write-toggle figma-chat-write" aria-expanded={writeReply}
+                    disabled={busy} onClick={() => {
+                      setWriteReply(!writeReply);
+                      if (!writeReply) requestAnimationFrame(() => inputRef.current?.focus());
+                    }}><span aria-hidden="true">✎</span>{writeReply ? "선택지로 돌아가기" : "직접 답장을 보낸다"}<span className="figma-write-arrow" aria-hidden="true">›</span></button>
                 </div>
-              )}
-              <button type="button" className="rt-write-toggle figma-chat-write" aria-expanded={writeReply}
-                disabled={busy} onClick={() => {
-                  setWriteReply(!writeReply);
-                  if (!writeReply) requestAnimationFrame(() => inputRef.current?.focus());
-                }}><span aria-hidden="true">✎</span>{writeReply ? "선택지로 돌아가기" : "직접 답장을 보낸다"}<span className="figma-write-arrow" aria-hidden="true">›</span></button>
+              </div>
             </div>
             <div className="rt-main-actions" role="group" aria-label="문자 밖에서 할 수 있는 행동">
               <button type="button" className={phoneHint ? "rt-choice rt-phone-button--hint" : "rt-choice"}

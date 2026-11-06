@@ -13,6 +13,8 @@ export type LiveBoot = {
 export type LiveCallbacks = {
   onModelTurnStart: () => void;
   onModelText: (text: string) => void;
+  onModelTurnComplete: (text: string) => void;
+  onPrematureCallerHangup: () => void;
   onUserText: (text: string) => void;
   onSpeaking: (speaking: boolean) => void;
   onStatus: (status: string) => void;
@@ -72,6 +74,7 @@ export class GeminiLiveAudio {
   private modelTurnOpen = false;
   private modelTurnText = "";
   private callerEndRequested = false;
+  private callerMayHangUp = false;
   private callerEndNotified = false;
   private callerEndDeadline = 0;
   private callerEndTimer: ReturnType<typeof setTimeout> | null = null;
@@ -79,6 +82,7 @@ export class GeminiLiveAudio {
   constructor(private callbacks: LiveCallbacks) {}
 
   hasMicrophone(): boolean { return this.micAvailable; }
+  setCallerMayHangUp(allowed: boolean): void { this.callerMayHangUp = allowed; }
   isConnected(): boolean { return this.ready && !this.closed && this.socket?.readyState === WebSocket.OPEN; }
 
   /** Call from a user gesture: opens the audio device before network waiting. */
@@ -228,8 +232,13 @@ export class GeminiLiveAudio {
     for (const chunk of audio) this.playAudio(chunk);
     if (data.turnComplete) {
       this.modelTurnOpen = false;
-      // Fallback for explicit spoken farewell when the Live model misses the tool call.
-      if (callerSaidTheyHungUp(this.modelTurnText)) this.requestCallerHangup();
+      const finishedText = this.modelTurnText;
+      this.callbacks.onModelTurnComplete(finishedText);
+      // A false resolution before a real decision cannot auto-complete training.
+      if (callerSaidTheyHungUp(finishedText)) {
+        if (this.callerMayHangUp) this.requestCallerHangup();
+        else this.callbacks.onPrematureCallerHangup();
+      }
       this.modelTurnText = "";
       if (this.nodes.size === 0) this.callbacks.onSpeaking(false);
     }
@@ -238,20 +247,22 @@ export class GeminiLiveAudio {
     const ws = this.socket;
     for (const call of payload.functionCalls ?? []) {
       if (call.name !== "end_training_call" || !call.id) continue;
-      // Live function calling is synchronous in the current voice model.
-      // Acknowledge the tool call before closing the connection.
+      // Do not let the model unilaterally end the scenario before a
+      // decision point. The tool response tells it to continue the scene.
+      const canEnd = this.callerMayHangUp;
       if (ws?.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           toolResponse: {
             functionResponses: [{
               id: call.id,
               name: "end_training_call",
-              response: { result: "call_ending" },
+              response: { result: canEnd ? "call_ending" : "continue_scenario" },
             }],
           },
         }));
       }
-      this.requestCallerHangup();
+      if (canEnd) this.requestCallerHangup();
+      else this.callbacks.onPrematureCallerHangup();
     }
   }
   private requestCallerHangup() {
