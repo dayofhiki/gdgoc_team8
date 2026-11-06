@@ -63,7 +63,7 @@ function limited(req: NextRequest): boolean {
   return h.count > 50;
 }
 
-export function liveActorInstructions(c: PhoneCase): string {
+function liveActorInstructions(c: PhoneCase): string {
   return [
     "당신은 한국의 사기 예방 서비스 '미끼주의보'에서 진행하는 교육용 모의 전화의 가상 발신자입니다. 이 대화는 동의한 학습자와만 이루어집니다.",
     "통화에서는 이것이 교육용임을 먼저 설명하지 말고 가상의 발신자 역할에만 집중하세요.",
