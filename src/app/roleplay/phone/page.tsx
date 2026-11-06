@@ -175,7 +175,7 @@ export default function GeminiLivePhonePractice() {
           if (!aiAudioPlaying.current && live.current?.isConnected()) {
             pendingContinuation.current = false;
             continuationCount.current += 1;
-            live.current.sendText("네, 듣고 있습니다. 말씀을 이어 주세요.");
+            live.current.sendText("그래서 제가 지금 해야 할 일은 무엇인가요? 바로 말씀해 주세요.");
           }
         } else if (issue !== "none") {
           setStatus("아직 필요한 요청을 듣지 못했어요. 통화를 종료해도 이후 대응을 연습할 수 있어요.");
@@ -183,7 +183,14 @@ export default function GeminiLivePhonePractice() {
       },
       onPrematureCallerHangup: () => {
         if (id !== currentRun.current) return;
-        if (continuationCount.current < 2) pendingContinuation.current = true;
+        if (continuationCount.current < 2 && !observedRisk.current) {
+          pendingContinuation.current = true;
+          if (!aiAudioPlaying.current && live.current?.isConnected()) {
+            pendingContinuation.current = false;
+            continuationCount.current += 1;
+            live.current.sendText("그래서 제가 지금 해야 할 일은 무엇인가요? 바로 말씀해 주세요.");
+          }
+        }
         setStatus("상대의 통화 종료가 실제로 진행되지 않았어요. 대화를 이어갑니다.");
       },
       onUserText: text => {
@@ -204,7 +211,7 @@ export default function GeminiLivePhonePractice() {
           continuationCount.current < 2 && live.current?.isConnected()) {
           pendingContinuation.current = false;
           continuationCount.current += 1;
-          live.current.sendText("네, 듣고 있습니다. 말씀을 이어 주세요.");
+          live.current.sendText("그래서 제가 지금 해야 할 일은 무엇인가요? 바로 말씀해 주세요.");
         }
       },
       onStatus: setStatus,
