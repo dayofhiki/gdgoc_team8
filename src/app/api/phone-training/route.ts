@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { allowedPhoneAction, availablePhoneActions, evaluatePhoneCase, findPhoneCase, MAX_POST_ACTIONS, PHONE_REQUEST_ACTION,
-  phoneActionOutcome, pickPhoneCase, type PhoneCase, type PhonePostAction, type PhoneState } from "@/lib/phoneTraining";
+  phoneActionOutcome, pickPhoneCase, type PhoneCase, type PhoneEndedBy, type PhonePostAction, type PhoneState } from "@/lib/phoneTraining";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +49,8 @@ function unseal(token: unknown): PhoneState {
     typeof state.requestObserved !== "boolean" ||
     !Array.isArray(state.postActions) || state.postActions.length > MAX_POST_ACTIONS ||
     state.postActions.some(a => !actions.includes(a)) ||
-    (state.endedAt !== undefined && !Number.isSafeInteger(state.endedAt)))
+    (state.endedAt !== undefined && !Number.isSafeInteger(state.endedAt)) ||
+    (state.endedBy !== undefined && !["user", "caller", "connection"].includes(state.endedBy)))
     throw Error("INVALID_SESSION");
   return state;
 }
@@ -189,6 +190,7 @@ function status(state: PhoneState) {
     phase: state.phase,
     requestObserved: state.requestObserved,
     postActions: state.postActions,
+    endedBy: state.endedBy,
     ...(state.phase === "after_call" ? {
       availableActions: availablePhoneActions(findPhoneCase(state.scenario)!, state.requestObserved),
       requestActionLabel: state.requestObserved ? PHONE_REQUEST_ACTION[findPhoneCase(state.scenario)!.risk] : undefined,
@@ -224,8 +226,13 @@ export async function POST(req: NextRequest) {
     const state = unseal(body.token);
     if (body.action === "end_call") {
       if (state.phase !== "call") return fail("이미 통화가 종료됐어요.", 409);
+      const requestedBy = body.endedBy;
+      if (requestedBy !== undefined && !["user", "caller", "connection"].includes(String(requestedBy)))
+        return fail("통화 종료 사유가 올바르지 않아요.");
+      const endedBy: PhoneEndedBy =
+        requestedBy === "caller" || requestedBy === "connection" ? requestedBy : "user";
       const next: PhoneState = {
-        ...state, phase: "after_call", endedAt: Date.now(),
+        ...state, phase: "after_call", endedAt: Date.now(), endedBy,
         // 이 정보는 Live 자막에 근거한 클라이언트의 표시값이므로 객관적인 위험 행동 증명으로 쓰지 않는다.
         requestObserved: body.requestObserved === true,
       };
