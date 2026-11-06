@@ -1433,22 +1433,26 @@ p, h1, h2, h3 { margin: 0; }
 .figma-chat .rt-compose-zone { padding: 22px 16px calc(14px + env(safe-area-inset-bottom)); background: #fff; border: none; border-radius: 28px 28px 0 0; box-shadow: 0 -6px 20px rgba(25,31,40,.025); max-height: min(61dvh, 440px); display: flex; flex-direction: column; overflow-y: auto; }
 .figma-chat-reply-heading { color: #3182f6; font-size: calc(17px + var(--chat-font-increase)); line-height: 1.55; font-weight: 800; padding: 1px 2px 11px; }
 .figma-chat-reply-area { min-height: 0; padding: 2px; flex-shrink: 0; }
-.figma-chat-reply-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.figma-chat-reply-toolbar .figma-chat-reply-heading { flex: 1; min-width: 0; padding-bottom: 8px; }
-.figma-chat-reply-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
-  gap: 7px; min-height: 44px; min-width: 74px; padding: 7px 10px; border-radius: 12px;
-  background: #eaf3ff; color: #256dce; font-size: 14px; font-weight: 800; }
-.figma-chat-reply-toggle:focus-visible { outline: 3px solid #3182f6; outline-offset: 2px; }
-.figma-chat-reply-chevron { display: inline-block; font-size: 22px; font-weight: 800; line-height: 1;
-  transform: rotate(0deg); transition: transform .28s ease; }
-.figma-chat-reply-area--collapsed .figma-chat-reply-chevron { transform: rotate(180deg); }
+.figma-chat-reply-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.figma-chat-reply-toolbar .figma-chat-reply-heading { flex: 1; min-width: 0; margin: 0; padding: 0 0 3px 2px;
+  font-size: calc(16px + var(--chat-font-increase)); line-height: 1.45; }
+.figma-chat-reply-toggle { display: inline-grid; place-items: center; flex: 0 0 44px;
+  width: 44px; height: 44px; padding: 0; border: none; background: transparent; color: #4e6a89;
+  border-radius: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.figma-chat-reply-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
+  background: #f0f4f9; border: 1px solid #e6edf5; transition: background-color .18s ease, border-color .18s ease; }
+.figma-chat-reply-toggle:active .figma-chat-reply-icon { background: #e3edfa; border-color: #d4e3f6; }
+.figma-chat-reply-toggle:focus-visible { outline: 3px solid #3182f6; outline-offset: 1px; }
+.figma-chat-reply-chevron { display: block; width: 18px; height: 18px; transform: rotate(180deg);
+  transition: transform .26s cubic-bezier(.2,.75,.22,1); }
+.figma-chat-reply-area--collapsed .figma-chat-reply-chevron { transform: rotate(0deg); }
 .figma-chat-reply-collapse { display: grid; grid-template-rows: 1fr; opacity: 1; transform: translateY(0);
   transition: grid-template-rows .32s cubic-bezier(.2,.74,.2,1), opacity .22s ease, transform .28s ease; }
 .figma-chat-reply-area--collapsed .figma-chat-reply-collapse { grid-template-rows: 0fr; opacity: 0;
   transform: translateY(-6px); pointer-events: none; }
 .figma-chat-reply-inner { min-height: 0; overflow: hidden; padding: 0 1px; }
 @media (prefers-reduced-motion: reduce) {
-  .figma-chat-reply-collapse, .figma-chat-reply-chevron { transition: none !important; }
+  .figma-chat-reply-collapse, .figma-chat-reply-chevron, .figma-chat-reply-icon { transition: none !important; }
 }
 .figma-chat .rt-replies { display: grid; gap: 10px; margin: 0; }
 .figma-chat .rt-replies > p { display: none; }
