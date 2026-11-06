@@ -10,6 +10,7 @@ import { findPhoneCase, heardPhoneRequest, POST_ACTION_LABEL, type PhoneFeedback
 type Phase = "incoming" | "call" | "after_call" | "feedback";
 type PhoneReply = {
   token: string;
+  endedBy?: "user" | "caller" | "connection";
   phase: "call" | "after_call" | "finished";
   requestObserved: boolean;
   postActions: PhonePostAction[];
@@ -124,6 +125,12 @@ export default function GeminiLivePhonePractice() {
     observedRisk.current = false;
     const id = ++currentRun.current;
     const client = new GeminiLiveAudio({
+      onCallerHangup: () => {
+        if (id === currentRun.current) void hangUp("caller");
+      },
+      onConnectionClosed: () => {
+        if (id === currentRun.current) void hangUp("connection");
+      },
       onModelTurnStart: () => {
         if (id !== currentRun.current) return;
         modelTurnCaption.current = "";
@@ -185,7 +192,7 @@ export default function GeminiLivePhonePractice() {
     } finally { if (id === currentRun.current) { busyRef.current = false; setBusy(false); } }
   }
 
-  async function hangUp() {
+  async function hangUp(endedBy: "user" | "caller" | "connection" = "user") {
     if (busyRef.current) return;
     const current = sessionRef.current;
     if (!current || current.phase !== "call") return;
@@ -194,11 +201,16 @@ export default function GeminiLivePhonePractice() {
     setError("");
     stopLive();
     try {
-      const next = await api({ action: "end_call", token: current.token, requestObserved: observedRisk.current });
+      const next = await api({
+        action: "end_call", token: current.token,
+        requestObserved: observedRisk.current, endedBy,
+      });
       updateSession(next);
       setPhase("after_call");
       setMenu(null);
       setActionNotice("");
+      setStatus(endedBy === "caller" ? "상대방이 먼저 전화를 끊었어요." :
+        endedBy === "connection" ? "음성 연결이 종료됐어요." : "통화를 종료했어요.");
     } catch (e) { setError(e instanceof Error ? e.message : "통화 종료를 처리하지 못했어요. 다시 눌러주세요."); }
     finally { busyRef.current = false; setBusy(false); }
   }
@@ -361,8 +373,11 @@ export default function GeminiLivePhonePractice() {
         <section className="screen__body pv-after-page">
           <div className="pv-after-heading">
             <span className="pv-after-icon" aria-hidden="true">☎</span>
-            <h2>통화가 종료됐어요.</h2>
-            <p>이제 실제 휴대전화라면 무엇을 하시겠어요? 직접 기능을 눌러보세요.</p>
+            <h2>{session?.endedBy === "caller" ? "상대가 먼저 전화를 끊었어요." :
+              session?.endedBy === "connection" ? "음성 연결이 종료됐어요." : "통화가 종료됐어요."}</h2>
+            <p>{session?.endedBy === "caller"
+              ? "상대가 통화를 끝내도 확인은 필요해요. 이제 무엇을 하시겠어요?"
+              : "이제 실제 휴대전화라면 무엇을 하시겠어요? 직접 기능을 눌러보세요."}</p>
           </div>
           <div className="pv-after-device" aria-label="모의 휴대전화">
             <p className="pv-after-label">내 휴대전화</p>

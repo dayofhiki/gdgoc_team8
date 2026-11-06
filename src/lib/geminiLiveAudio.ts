@@ -3,6 +3,8 @@
  * Ephemeral credentials are provisioned by the Next.js backend (never the long-lived Gemini API key).
  * Audio is streamed as 16 kHz PCM and played from 24 kHz native PCM; there is NO browser TTS/STT.
  */
+import { callerSaidTheyHungUp } from "@/lib/phoneTraining";
+
 export type LiveBoot = {
   liveToken: string;
   liveEndpoint: string;
@@ -15,6 +17,8 @@ export type LiveCallbacks = {
   onSpeaking: (speaking: boolean) => void;
   onStatus: (status: string) => void;
   onError: (error: string) => void;
+  onCallerHangup: () => void;
+  onConnectionClosed: () => void;
 };
 
 type ServerContent = {
@@ -28,6 +32,7 @@ type LiveWireMessage = {
   setupComplete?: object;
   serverContent?: ServerContent;
   goAway?: object;
+  toolCall?: { functionCalls?: { id?: string; name?: string; args?: unknown }[] };
 };
 
 function pcm16ToAudioBuffer(ctx: AudioContext, base64: string): AudioBuffer {
@@ -65,6 +70,11 @@ export class GeminiLiveAudio {
   private soundEnabled = true;
   private micAvailable = true;
   private modelTurnOpen = false;
+  private modelTurnText = "";
+  private callerEndRequested = false;
+  private callerEndNotified = false;
+  private callerEndDeadline = 0;
+  private callerEndTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private callbacks: LiveCallbacks) {}
 
@@ -143,6 +153,7 @@ export class GeminiLiveAudio {
             resolve();
           }
           if (wire.serverContent) this.onMessage(wire.serverContent);
+          if (wire.toolCall) this.onToolCall(wire.toolCall);
           if (wire.goAway) this.callbacks.onStatus("통화 연결 만료가 가까워졌어요. 이제 통화를 종료해 주세요.");
         } catch {
           this.callbacks.onError("음성 응답을 처리하지 못했어요. 다시 시도해 주세요.");
@@ -157,10 +168,19 @@ export class GeminiLiveAudio {
       ws.onclose = () => {
         if (this.closed) return;
         cleanup();
-        if (!this.ready) reject(Error("AI 음성 통화가 종료됐어요. 연결 설정을 확인해 주세요."));
-        else this.callbacks.onError("음성 통화 연결이 끊겼어요. 통화를 종료하고 이후 대응을 연습할 수 있어요.");
+        const wasReady = this.ready;
         this.ready = false;
-        this.stopPlayback();
+        if (!wasReady) {
+          this.stopPlayback();
+          reject(Error("AI 음성 통화가 종료됐어요. 연결 설정을 확인해 주세요."));
+        } else if (this.callerEndRequested) {
+          // A tool-requested hangup can close the socket while queued farewell
+          // audio is still playing. Drain it instead of cutting the voice off.
+          this.finishCallerHangup();
+        } else {
+          this.stopPlayback();
+          this.callbacks.onConnectionClosed();
+        }
       };
     });
   }
@@ -189,6 +209,7 @@ export class GeminiLiveAudio {
     if (data.inputTranscription?.text) this.callbacks.onUserText(data.inputTranscription.text);
     if (data.interrupted) {
       this.modelTurnOpen = false;
+      this.modelTurnText = "";
       this.stopPlayback();
       return;
     }
@@ -197,14 +218,62 @@ export class GeminiLiveAudio {
       part.inlineData?.data && part.inlineData.mimeType?.startsWith("audio/pcm") ? [part.inlineData.data] : []);
     if (!this.modelTurnOpen && (text?.trim() || audio.length)) {
       this.modelTurnOpen = true;
+      this.modelTurnText = "";
       this.callbacks.onModelTurnStart();
     }
-    if (text) this.callbacks.onModelText(text);
+    if (text) {
+      this.modelTurnText = (this.modelTurnText + " " + text).trim().slice(-450);
+      this.callbacks.onModelText(text);
+    }
     for (const chunk of audio) this.playAudio(chunk);
     if (data.turnComplete) {
       this.modelTurnOpen = false;
+      // Fallback for explicit spoken farewell when the Live model misses the tool call.
+      if (callerSaidTheyHungUp(this.modelTurnText)) this.requestCallerHangup();
+      this.modelTurnText = "";
       if (this.nodes.size === 0) this.callbacks.onSpeaking(false);
     }
+  }
+  private onToolCall(payload: NonNullable<LiveWireMessage["toolCall"]>) {
+    const ws = this.socket;
+    for (const call of payload.functionCalls ?? []) {
+      if (call.name !== "end_training_call" || !call.id) continue;
+      // Live function calling is synchronous in the current voice model.
+      // Acknowledge the tool call before closing the connection.
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          toolResponse: {
+            functionResponses: [{
+              id: call.id,
+              name: "end_training_call",
+              response: { result: "call_ending" },
+            }],
+          },
+        }));
+      }
+      this.requestCallerHangup();
+    }
+  }
+  private requestCallerHangup() {
+    if (this.closed || this.callerEndRequested) return;
+    this.callerEndRequested = true;
+    this.callerEndDeadline = Date.now() + 6500;
+    this.micEnabled = false;
+    for (const track of this.stream?.getAudioTracks() ?? []) track.enabled = false;
+    // Let the final spoken words finish before switching to the after-call phone.
+    // A bounded deadline also prevents waiting forever for a dropped audio-end event.
+    this.callerEndTimer = setTimeout(() => this.finishCallerHangup(), 650);
+  }
+  private finishCallerHangup() {
+    if (this.closed || this.callerEndNotified || !this.callerEndRequested) return;
+    const ctx = this.ctx;
+    const remaining = ctx ? Math.max(0, (this.playhead - ctx.currentTime) * 1000) : 0;
+    if (remaining > 80 && Date.now() < this.callerEndDeadline) {
+      this.callerEndTimer = setTimeout(() => this.finishCallerHangup(), Math.min(700, remaining + 80));
+      return;
+    }
+    this.callerEndNotified = true;
+    this.callbacks.onCallerHangup();
   }
   private playAudio(raw: string) {
     const ctx = this.ctx, gain = this.gain;
@@ -237,6 +306,10 @@ export class GeminiLiveAudio {
     this.callbacks.onSpeaking(false);
   }
   close(): void {
+    if (this.callerEndTimer !== null) {
+      clearTimeout(this.callerEndTimer);
+      this.callerEndTimer = null;
+    }
     this.closed = true;
     this.ready = false;
     this.stopPlayback();
