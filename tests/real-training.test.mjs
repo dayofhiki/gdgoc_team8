@@ -711,3 +711,28 @@ test("random training continues in a different topic", async () => {
   const { randomTrainingTopic } = await import("../src/lib/trainingCatalog.ts");
   for (const topic of TRAINING_TOPICS) assert.notEqual(randomTrainingTopic(topic.id).id, topic.id);
 });
+
+
+test("accepting card refusal advances to the scenario-specific request without restarting delivery", async () => {
+  const { caseBranch, caseVariantCount } = await import("../src/lib/trainingCaseFacts.ts");
+  const { fallbackTrainingTurn } = await import("../src/lib/trainingFallback.ts");
+  const { meaningfulRiskRequest, replyQualityIssue } = await import("../src/lib/trainingDecision.ts");
+  const index = SCENARIOS.findIndex(s => s.topic === "card" && s.identity === "fraud");
+  const scenario = SCENARIOS[index];
+  for (let variant = 0; variant < caseVariantCount(scenario); variant++) {
+    const branch = caseBranch(scenario, variant);
+    const s = { ...state(index), caseVariant: variant, turns: 1, messages: [
+      { actor: "them", text: branch.alternateOpening },
+      { actor: "me", text: "카드를 신청한 기억이 없어요." },
+      { actor: "them", text: "수령 거부로 처리해 드릴까요?" },
+    ] };
+    for (const text of ["네, 수령 거부로 처리해 주세요.", "네."]) {
+      const turn = fallbackTrainingTurn(s, scenario, text);
+      assert.equal(turn.actions[0]?.kind, branch.kind, branch.id);
+      assert.ok(turn.reply.includes(branch.request), branch.id);
+      assert.ok(meaningfulRiskRequest(turn.reply, turn.actions), branch.id);
+      assert.ok(replyQualityIssue(scenario, s, text, "신청 카드가 배송될 예정이라는 안내입니다.", []), branch.id);
+    }
+    assert.ok(!fallbackTrainingTurn(s, scenario, "카드 반송이 뭔가요?").actions.length || branch.requestAfterTurns === 1);
+  }
+});

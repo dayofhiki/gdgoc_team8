@@ -15,7 +15,7 @@ import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/l
 import { hasConcreteRequest, requestHasTwoReplies, shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";
 import { TRAINING_TOPICS, isTrainingTopicId } from "@/lib/trainingCatalog";
 import { fallbackTrainingTurn } from "@/lib/trainingFallback";
-import { replyQualityIssue, riskDecisionDue, meaningfulRiskRequest } from "@/lib/trainingDecision";
+import { acceptsCardDeliveryRefusal, replyQualityIssue, riskDecisionDue, meaningfulRiskRequest } from "@/lib/trainingDecision";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -166,17 +166,20 @@ function buildEpisodeActions(proposals: Proposed[], state: TrainingState) {
 async function generateResponse(state: TrainingState, text: string) {
   const scenario = SCENARIOS[state.scenario];
   const turn = fallbackTrainingTurn(state, scenario, text);
-  try {
-    return await generateActorResponse(state, text, scenario, turn.reply);
-  } catch (err) {
-    console.warn("training: using authored continuation", scenario.topic, err instanceof Error ? err.name : "unknown");
-    const actions = buildEpisodeActions(turn.actions, state);
-    const next = decideDialogueTurn({
-      memory: state.dialogue, primary: turn.dialogue, reply: turn.reply, userText: text,
-      actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
-    });
-    return { reply: turn.reply, actions, next, replyOptions: [] };
+  // 수령 거부를 받아들인 직후의 절차 전환은 검증된 대사와 모의 행동을 함께 보낸다.
+  if (!acceptsCardDeliveryRefusal(state, scenario, text) || !turn.actions.length) {
+    try {
+      return await generateActorResponse(state, text, scenario, turn.reply);
+    } catch (err) {
+      console.warn("training: using authored continuation", scenario.topic, err instanceof Error ? err.name : "unknown");
+    }
   }
+  const actions = buildEpisodeActions(turn.actions, state);
+  const next = decideDialogueTurn({
+    memory: state.dialogue, primary: turn.dialogue, reply: turn.reply, userText: text,
+    actions, nextTurn: state.turns + 1, maxTurns: MAX_TURNS,
+  });
+  return { reply: turn.reply, actions, next, replyOptions: [] };
 }
 
 async function generateActorResponse(
@@ -223,6 +226,7 @@ async function generateActorResponse(
     }),
     "이전 말풍선은 실제로 오간 대화다. 현재 상대의 입장에서 마지막 사용자의 질문·의심·감정에 먼저 반응하라.",
     "답변은 미리 정한 다음 대사를 읽는 방식이 아니다. 상황의 확정 사실, 화자의 목적, 현재 국면을 기준으로 즉흥적으로 결정하라.",
+    "이미 답한 배송·접수 단계로 되돌아가지 마라. 사용자가 방금 수락·거부한 조건에 맞춰 다음 단계로 이어가고, 실제 처리하지 않은 일을 완료했다고 말하지 마라.",
     "요청을 하고 싶더라도 사용자 말에 대한 응답 없이 기계적으로 송금·링크·정보 제공을 반복하지 마라.",
     "정상인 역할은 아무 이유 없이 악의적인 말을 하지 않고, 사칭자 역할도 시작부터 수상하거나 악역 같은 말투를 쓰지 않는다.",
     "대사 길이는 상황에 따라 짧은 한마디 또는 자연스러운 두세 문장으로 조절하되 250자를 넘기지 않는다. 특히 가족 문자는 고객센터 안내문처럼 쓰지 않는다.",

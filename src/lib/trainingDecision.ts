@@ -6,7 +6,7 @@
 import type { Scenario, TrainingState } from "./realTraining.ts";
 import type { Proposed } from "./trainingActions.ts";
 import { BANK_CLAIMS, caseBranch } from "./trainingCaseFacts.ts";
-import { revealsSimulation } from "./trainingDialogue.ts";
+import { replySimilarity, revealsSimulation } from "./trainingDialogue.ts";
 import { groundedProposals } from "./trainingActionGuard.ts";
 import { hasConcreteRequest, clearlyDisengaged } from "./trainingResolution.ts";
 
@@ -28,12 +28,21 @@ export function raisesObjection(text: string): boolean {
   return /사기|피싱|수상|의심|믿기|본인\s*맞|누구세요|(?:너|정말|진짜).{0,10}(?:맞아|맞나요|맞으세요)|신청.{0,10}(?:안|없|않)|제가.{0,8}(?:한\s*(?:거래|결제|게).{0,5}아[니닌닙]|한\s*적\s*없)|(?:원래|기존|공식).{0,12}(?:번호|앱|연락)|왜.{0,12}(?:문자|전화|안내)/.test(text);
 }
 
+/** 배송 거부는 문자 대화 종료가 아니다. 발급 취소를 빌미로 다음 단계로 넘어간다. */
+export function acceptsCardDeliveryRefusal(state: TrainingState, scenario: Scenario, text: string): boolean {
+  if (scenario.topic !== "card" || scenario.identity !== "fraud" || state.turns === 0 || /[?？]$/.test(text.trim())) return false;
+  if (/(?:수령|배송|카드).{0,8}(?:거부|반송)(?:로|으로|해|하겠|할게|부탁)|카드.{0,8}(?:안\s*받|받지\s*않)/.test(text)) return true;
+  const last = state.messages.findLast(message => message.actor === "them")?.text ?? "";
+  return /^(?:네|예|응|그렇게 해\s*주세요|부탁드려요)[.!\s]*$/.test(text.trim()) &&
+    /(?:수령\s*거부|반송).{0,25}(?:할까요|해\s*드릴까요|원하시나요)[?？]/.test(last);
+}
+
 export function riskDecisionDue(state: TrainingState, scenario: Scenario, userText: string): boolean {
   const episode = caseBranch(scenario, state.caseVariant ?? 0);
   // 한 번은 새로 나온 의심을 받아 준다. 계속 의심해도 요구 시점이 무한히 밀리지는 않는다.
   const respondFirst = state.turns === episode.requestAfterTurns && raisesObjection(userText);
-  return scenario.identity === "fraud" && state.turns >= episode.requestAfterTurns &&
-    !respondFirst && !state.closed && !hasConcreteRequest(state.messages) && !clearlyDisengaged(userText);
+  return scenario.identity === "fraud" && (acceptsCardDeliveryRefusal(state, scenario, userText) ||
+    (state.turns >= episode.requestAfterTurns && !respondFirst)) && !state.closed && !hasConcreteRequest(state.messages) && !clearlyDisengaged(userText);
 }
 
 export function isActionableReply(reply: string, actions: Proposed[]): boolean {
@@ -77,6 +86,17 @@ export function replyQualityIssue(
     return "상대가 '어떤 거래/얼마'인지 물었습니다. 세션에 고정된 가상 거래 유형과 금액을 자연스럽게 설명하세요. 그냥 '본인 확인 부탁드립니다'를 반복하지 마세요.";
   }
   const due = riskDecisionDue(state, scenario, userText);
+  if (scenario.identity === "fraud" && !due && !(scenario.topic === "bank" && bankQuestionNeedsSpecifics(userText))) {
+    const actorMessages = state.messages.filter(message => message.actor === "them");
+    const opening = actorMessages[0]?.text;
+    if (state.turns > 0 && opening && replySimilarity(opening, reply) >= 0.60) {
+      return "첫 안내를 다시 하지 말고 이미 진행한 절차에 이어서 응답하세요.";
+    }
+    if (!hasConcreteRequest(state.messages) &&
+        /(?:반송|수령\s*거부|취소|배송).{0,12}(?:완료됐|처리됐|완료해\s*드렸|처리해\s*드렸)/.test(reply)) {
+      return "훈련에서 실행하지 않은 절차를 완료했다고 말하지 마세요.";
+    }
+  }
   if (scenario.identity === "fraud" && !due && isActionableReply(reply, actions)) {
     return "지금은 아직 새 행동을 요구하지 말고, 직전 반응에 답하면서 설정에 맞는 설명을 한 가지 더 전하세요.";
   }
