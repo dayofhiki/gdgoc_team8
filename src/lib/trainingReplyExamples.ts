@@ -42,11 +42,31 @@ const requestedPhone = /전화\s*(?:걸어|주세|주세요|해\s*주세요)|통
 const isRequest = /(?:해\s*주세요|해주세요|주십시오|보내\s*주세요|보내주세요|부탁|하셔야|필요|해야|가능|확인해|눌러|열어|접속|입력|입금|송금|이체|설치|수리비)/;
 const normalized = (value: string) => value.replace(/[\s.,!?~…·"'“”‘’()]/g, "").toLowerCase();
 
-export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine[]): string[] {
+const mentionsAmount = (line: string) => /\d[\d,.\s]*(?:만\s*원|원)/.test(line);
+
+export function refreshTrainingReplies(messages: ChatLine[], generated: string[], fallback: string[], previous: string[]): string[] {
+  const sent = new Set(messages.filter(message => message.actor === "me").map(message => normalized(message.text)));
+  const prior = new Set(previous.map(normalized));
+  const amountKnown = messages.some(message => message.actor === "them" && mentionsAmount(message.text));
+  const candidates = [...generated, ...fallback];
+  const next: string[] = [];
+  for (const text of [...candidates.filter(text => !prior.has(normalized(text))), ...candidates]) {
+    if (amountKnown && /얼마(?:\s*(?:인가|예요|에요|입니까|나왔|였|죠|되나요)|[?？])|(?:금액|결제액)\s*(?:을|이|은)?\s*알려/.test(text)) continue;
+    const key = normalized(text);
+    if (!key || sent.has(key)) continue;
+    sent.add(key);
+    next.push(text);
+    if (next.length === 2) break;
+  }
+  return next;
+}
+
+export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine[], limit = 2): string[] {
   const last = messages.at(-1);
   // 전화/앱 사용 직후에는 직전 발신자 문장을 다시 기준으로 예시를 추천하지 않는다.
   if (!last || last.actor !== "them" || !last.text.trim()) return [];
   const line = last.text;
+  const senderText = messages.filter(message => message.actor === "them").map(message => message.text).join(" ");
   const informal = informalTopics.has(topic);
   const sent = new Set(messages.filter(m => m.actor === "me").map(m => normalized(m.text)));
   const opening = !messages.some(message => message.actor === "me");
@@ -119,8 +139,14 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
     } else {
       add(60, "무슨 일인지 좀 더 말해줘.", "지금 상황이 어때?");
     }
-  } else if (topic === "bank" && /결제|거래|승인|보안/.test(line)) {
-    add(65, "어떤 결제인가요?", "금액이 얼마인가요?");
+  } else if (topic === "bank" && /결제|거래|승인|보안|기기/.test(line)) {
+    if (/본인|직접|미승인|낯선 기기/.test(line)) {
+      add(85, "제가 한 결제는 아닌 것 같아요.", "결제가 이미 승인된 건가요?");
+    } else if (/기기|접속/.test(line)) {
+      add(80, "제가 쓰던 기기와 어떻게 다른가요?", "등록이 이미 끝난 건가요?");
+    }
+    if (!/결제\s*시도|상품권|가맹점/.test(senderText)) add(65, "어떤 결제인가요?");
+    if (!mentionsAmount(senderText)) add(64, "금액이 얼마인가요?");
   } else if (topic === "delivery" && /배송|주소|반송/.test(line)) {
     add(65, "어느 택배사인가요?", "어떤 물건인가요?");
   } else if (topic === "card" && /카드|배송|반송/.test(line)) {
@@ -149,7 +175,7 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
     const replies = informal
       ? ["보증금 없이 진행할 수는 없어?", "보증금은 보내지 않을게.", "보증금을 돌려주는 조건을 문자로 알려 줘."]
       : ["보증금 없이 진행할 수 있나요?", "보증금은 보내지 않겠습니다.", "보증금을 돌려받는 조건을 문자로 알려 주세요."];
-    return replies.filter(text => !sent.has(normalized(text))).slice(0, 2);
+    return replies.filter(text => !sent.has(normalized(text))).slice(0, limit);
   }
   const hold = informal ? "잠깐 생각해 볼게." : "잠깐 생각해 볼게요.";
   const decline = kinds.has("transfer") ? (informal ? "돈은 안 보낼게." : "송금은 하지 않겠습니다.") :
@@ -161,7 +187,10 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
     topic === "card" && /카드|배송/.test(line) ? "카드를 신청한 기억이 없어요." :
     opening && /가능|괜찮|시간/.test(line) ? (informal ? "응, 듣고 있어." : "네, 말씀해 주세요.") :
     informal ? "무슨 일인지 조금 더 말해 줘." : "말씀하신 내용을 조금 더 알려 주세요.";
-  const direct = afterRequest ? [decline, hold] : kinds.size ? [hold, decline] : [neutralReply];
+  const contextualStatement = topic === "bank" && /본인|직접|미승인/.test(line) && /결제|거래|승인/.test(line)
+    ? "제가 한 결제는 아닌 것 같아요."
+    : neutralReply;
+  const direct = afterRequest ? [decline, hold] : kinds.size ? [hold, decline] : [contextualStatement];
   const unique = new Set<string>();
   const available = candidates.sort((a, b) => b.weight - a.weight)
     .map(candidate => candidate.text)
@@ -174,8 +203,8 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
   const statement = direct.find(text => !sent.has(normalized(text)));
   const question = available.find(text => /[?？]$/.test(text));
   if (afterRequest && statement) return [statement, ...direct.filter(text =>
-    text !== statement && !sent.has(normalized(text))), question]
-    .filter((text): text is string => Boolean(text)).slice(0, 2);
+    text !== statement && !sent.has(normalized(text))), question, ...available.filter(text => text !== question)]
+    .filter((text): text is string => Boolean(text)).slice(0, limit);
   return [question, statement, ...available.filter(text => text !== question && text !== statement)]
-    .filter((text): text is string => Boolean(text)).slice(0, 2);
+    .filter((text): text is string => Boolean(text)).slice(0, limit);
 }
