@@ -144,6 +144,8 @@ export default function RealTraining() {
   const [fontMenuOpen, setFontMenuOpen] = useState(false);
   const [fontSize, setFontSize] = useState<"regular" | "large" | "xlarge">("regular");
   const [memoryStage, setMemoryStage] = useState<"card" | "flipped" | "details">("card");
+  const frontFaceRef = useRef<HTMLButtonElement>(null);
+  const backFaceRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [confirmData, setConfirmData] = useState<{ action: Action; index: number } | null>(null);
   const [phoneHint, setPhoneHint] = useState(false);
@@ -433,25 +435,57 @@ export default function RealTraining() {
   if (phase === "result" && result && reviewPage === "feedback" && memoryStage !== "details") {
     const promise = result.behavior.promises.find(p => !p.practiced) ?? result.behavior.promises[0];
     const learning = promise?.title ?? result.behavior.focus;
+    const flipped = memoryStage === "flipped";
+    const revealBack = () => {
+      setMemoryStage("flipped");
+      requestAnimationFrame(() => backFaceRef.current?.focus());
+    };
+    const revealFront = () => {
+      setMemoryStage("card");
+      requestAnimationFrame(() => frontFaceRef.current?.focus());
+    };
     return (
       <Screen>
         <Header back={() => session ? setPhase("chat") : leaveTraining()} onClose={leaveTraining} />
         <section className="screen__body figma-flashcard-page">
-          <p className="figma-flashcard-instruction">카드를 눌러 뒤집어보세요</p>
-          <button type="button" className={"figma-flashcard " + (memoryStage === "flipped" ? "figma-flashcard--turned" : "figma-flashcard--front")}
-            onClick={() => setMemoryStage(memoryStage === "card" ? "flipped" : "card")}>
-            <span>똑똑한 물고기 오늘의 배움</span>
-            <strong>{memoryStage === "card" ? "우리 가족에게도 공유하기" : learning}</strong>
-            {memoryStage === "flipped" && <small>{promise?.detail ?? result.behavior.focus}</small>}
-          </button>
+          <h2 className="figma-flashcard-instruction">카드를 눌러 뒤집어보세요</h2>
+          <div className="figma-flip-scene">
+            <div className={"figma-flip-card" + (flipped ? " figma-flip-card--flipped" : "")}>
+              <button type="button" ref={frontFaceRef}
+                className="figma-flip-face figma-flip-front"
+                tabIndex={flipped ? -1 : 0} aria-hidden={flipped}
+                aria-label={`오늘의 배움: ${learning}. 카드를 뒤집어 가족과 공유하기`}
+                onClick={revealBack}>
+                <span className="figma-flip-label">똑똑한 물고기 오늘의 배움</span>
+                <span className="figma-flip-lesson">
+                  <strong>{learning}</strong>
+                  <small>{promise?.detail ?? result.behavior.focus}</small>
+                </span>
+                <span className="figma-flip-hint">↻ 카드를 뒤집어 가족에게 공유하기</span>
+              </button>
+              <div className="figma-flip-face figma-flip-back" aria-hidden={!flipped}>
+                <button type="button" ref={backFaceRef} className="figma-flip-back-content"
+                  tabIndex={flipped ? 0 : -1} onClick={revealFront}>
+                  <span className="figma-flip-label">똑똑한 물고기 오늘의 배움</span>
+                  <strong>우리 가족에게도 공유하기</strong>
+                  <small>오늘 배운 안전 행동을 가족과 함께 기억해요.</small>
+                  <span className="figma-flip-hint">↻ 다시 뒤집어 교훈 보기</span>
+                </button>
+                <div className="figma-flip-back-actions">
+                  <button type="button" className="btn btn--gray"
+                    tabIndex={flipped ? 0 : -1} disabled={!flipped}
+                    onClick={() => router.replace("/home")}>홈으로</button>
+                  <button type="button" className="btn btn--primary"
+                    tabIndex={flipped ? 0 : -1} disabled={!flipped}
+                    onClick={() => void shareFamilyPractice(false)}>공유하기</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <button type="button" className="figma-flashcard-more" onClick={() => setMemoryStage("details")}>
             상세 피드백 보기 <span aria-hidden="true">⌄</span>
           </button>
         </section>
-        <BottomCTA row>
-          <button type="button" className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
-          <button type="button" className="btn btn--primary" onClick={() => void shareFamilyPractice(false)}>공유하기</button>
-        </BottomCTA>
         {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
       </Screen>
     );
@@ -794,25 +828,17 @@ export default function RealTraining() {
       )}
       {introOpen && session && (
         <BottomSheet onClose={closeIntro}>
-          <div className="rt-intro" aria-labelledby="rt-intro-title">
+          <div className="rt-intro rt-intro--simple" aria-labelledby="rt-intro-title">
             <div className="rt-intro-icon"><TrainingPhoneIcon /></div>
-            <h2 id="rt-intro-title">문자를 받고 어떻게 할지 골라 보세요</h2>
-            <p className="rt-intro-lead">
-              답장 예시를 누르면 바로 보내요. <strong>직접 쓰기</strong>를 누르면 원하는 말을 보낼 수 있어요.
-            </p>
-            <div className="rt-intro-steps">
-              <div><strong>① 대화하기</strong><span>답장을 고르거나 직접 쓸 수 있어요.</span></div>
-              <div><strong>② 전화·앱 열기</strong><span>화면 아래에서 연락처, 전화, 앱을 사용할 수 있어요.</span></div>
-              <div><strong>③ 대화 끝내기</strong><span>그만 대응하고 싶을 때 화면 아래에서 대화를 끝낼 수 있어요.</span></div>
-            </div>
-            <p className="rt-intro-note">어떤 연락에도 필요한 행동을 직접 선택해 보세요. 실제 통화나 송금은 일어나지 않아요.</p>
+            <h2 id="rt-intro-title">가상 문자에 답장해보세요</h2>
+            <p className="rt-intro-lead">답장을 고르거나 직접 써서 보내보세요.</p>
             <label className="rt-intro-check">
               <input type="checkbox" checked={skipIntroNextTime}
                 onChange={e => setSkipIntroNextTime(e.target.checked)} />
               <span>다음부터 이 안내 보지 않기</span>
             </label>
             <button type="button" className="btn btn--primary" onClick={closeIntro}>
-              알겠어요, 훈련 시작하기
+              훈련 시작하기
             </button>
           </div>
         </BottomSheet>

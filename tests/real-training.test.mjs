@@ -314,9 +314,9 @@ test("phone onboarding is explicit at start, optional on later runs and does not
   assert.match(ui, /localStorage\.setItem\(INTRO_HIDE_KEY, "1"\)/);
   assert.match(ui, /type="checkbox" checked=\{skipIntroNextTime\}/);
   assert.match(ui, /다음부터 이 안내 보지 않기/);
-  assert.match(ui, /<strong>직접 쓰기<\/strong>/);
-  assert.match(ui, /화면 아래에서 연락처, 전화, 앱을 사용할 수 있어요/);
-  assert.match(ui, /누르면 바로 보내요/);
+  assert.match(ui, /가상 문자에 답장해보세요/);
+  assert.doesNotMatch(ui, /rt-intro-steps/);
+  assert.match(ui, /답장을 고르거나 직접 써서 보내보세요/);
   assert.match(ui, /if \(introOpen\) return/);
   assert.doesNotMatch(ui, /휴대전화 아이콘.*사칭범/);
 });
@@ -579,7 +579,7 @@ test("action-first interface avoids identity-guessing quiz and prioritizes pract
   assert.ok(chat.indexOf("다음 연락에서도 기억할 행동") < chat.indexOf("이번 가상 연락의 설정 살펴보기"));
   assert.doesNotMatch(chat, /정체와 안전 약속 확인하기|정체를 몰라도 괜찮아요/);
   assert.doesNotMatch(home, /진짜 가족일까요/);
-  assert.match(home, /추천 훈련 시작하기/);
+  assert.match(home, /시작하기<\/Link>/);
   assert.match(home, /href="\/practice"/);
   assert.doesNotMatch(intro, /진짜 연락과 사칭 시도가 섞여/);
   assert.match(intro, /어떤 연락이 오더라도 안전하게 대응하는 연습/);
