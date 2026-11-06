@@ -15,7 +15,7 @@ import { isExplicitTrainingStop, learnerContext, learnerTurnGuidance } from "@/l
 import { hasConcreteRequest, requestHasTwoReplies, shouldResolveAfterActorReply, shouldResolveOnLearnerReply } from "@/lib/trainingResolution";
 import { TRAINING_TOPICS, isTrainingTopicId } from "@/lib/trainingCatalog";
 import { fallbackTrainingTurn } from "@/lib/trainingFallback";
-import { acceptsCardDeliveryRefusal, replyQualityIssue, riskDecisionDue, meaningfulRiskRequest } from "@/lib/trainingDecision";
+import { respondsToProcedure, replyQualityIssue, riskDecisionDue, meaningfulRiskRequest } from "@/lib/trainingDecision";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -166,8 +166,8 @@ function buildEpisodeActions(proposals: Proposed[], state: TrainingState) {
 async function generateResponse(state: TrainingState, text: string) {
   const scenario = SCENARIOS[state.scenario];
   const turn = fallbackTrainingTurn(state, scenario, text);
-  // 수령 거부를 받아들인 직후의 절차 전환은 검증된 대사와 모의 행동을 함께 보낸다.
-  if (!acceptsCardDeliveryRefusal(state, scenario, text) || !turn.actions.length) {
+  // 사용자가 답한 절차에 이어 사건에 지정된 다음 모의 행동을 확실히 노출한다.
+  if (!respondsToProcedure(state, scenario, text) || !turn.actions.length) {
     try {
       return await generateActorResponse(state, text, scenario, turn.reply);
     } catch (err) {
