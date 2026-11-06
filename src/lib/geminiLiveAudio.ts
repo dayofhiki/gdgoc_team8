@@ -170,10 +170,17 @@ export class GeminiLiveAudio {
         cleanup();
         const wasReady = this.ready;
         this.ready = false;
-        this.stopPlayback();
-        if (!wasReady) reject(Error("AI 음성 통화가 종료됐어요. 연결 설정을 확인해 주세요."));
-        else if (this.callerEndRequested) this.finishCallerHangup();
-        else this.callbacks.onConnectionClosed();
+        if (!wasReady) {
+          this.stopPlayback();
+          reject(Error("AI 음성 통화가 종료됐어요. 연결 설정을 확인해 주세요."));
+        } else if (this.callerEndRequested) {
+          // A tool-requested hangup can close the socket while queued farewell
+          // audio is still playing. Drain it instead of cutting the voice off.
+          this.finishCallerHangup();
+        } else {
+          this.stopPlayback();
+          this.callbacks.onConnectionClosed();
+        }
       };
     });
   }
