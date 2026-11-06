@@ -72,7 +72,7 @@ test("legitimate ordinary requests need not be rejected automatically", () => {
   const benign = evaluatePhoneCase(completed("normal_delivery", ["follow_request"]));
   assert.equal(benign.status, "good");
   assert.equal(benign.identity, "legitimate");
-  assert.match(benign.lesson, /정상/);
+  assert.match(benign.lesson, /위험한 요구가 없는 일상 연락/);
 });
 
 test("early hangup cannot claim that the learner heard the high-risk request", () => {
