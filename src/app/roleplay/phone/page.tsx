@@ -129,8 +129,8 @@ export default function GeminiLivePhonePractice() {
         setTranscript(prev => {
           const last = prev.at(-1);
           return last?.actor === "caller"
-            ? [...prev.slice(0, -1), { actor: "caller", text: (last.text + " " + text).slice(-600) }].slice(-16)
-            : [...prev, { actor: "caller", text }].slice(-16);
+            ? [...prev.slice(0, -1), { actor: "caller" as const, text: (last.text + " " + text).slice(-600) }].slice(-16)
+            : [...prev, { actor: "caller" as const, text }].slice(-16);
         });
         if (requestPattern.test(text)) observedRisk.current = true;
       },
@@ -140,8 +140,8 @@ export default function GeminiLivePhonePractice() {
         setTranscript(prev => {
           const last = prev.at(-1);
           return last?.actor === "me"
-            ? [...prev.slice(0, -1), { actor: "me", text: (last.text + " " + text).slice(-600) }].slice(-16)
-            : [...prev, { actor: "me", text }].slice(-16);
+            ? [...prev.slice(0, -1), { actor: "me" as const, text: (last.text + " " + text).slice(-600) }].slice(-16)
+            : [...prev, { actor: "me" as const, text }].slice(-16);
         });
       },
       onSpeaking: setSpeaking,
@@ -229,7 +229,7 @@ export default function GeminiLivePhonePractice() {
     try {
       live.current.sendText(text);
       setMyCaption(text);
-      setTranscript(prev => [...prev, { actor: "me", text }].slice(-16));
+      setTranscript(prev => [...prev, { actor: "me" as const, text }].slice(-16));
       setTyping("");
     } catch (e) { setError(e instanceof Error ? e.message : "전달하지 못했어요."); }
   }
