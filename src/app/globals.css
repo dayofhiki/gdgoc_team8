@@ -1465,17 +1465,73 @@ p, h1, h2, h3 { margin: 0; }
 .rt-device-grid .rt-device-tile:nth-child(3) .rt-device-tile-icon { color: #f2a400; }
 .rt-device-grid .rt-device-tile:nth-child(4) .rt-device-tile-icon { color: #f04452; }
 
-/* Card-flip learning keeps the current behavior-based feedback intact */
-.figma-flashcard-page { padding-top: 16px; gap: 24px; align-items: stretch; }
-.figma-flashcard-instruction { color: #191f28; font-size: 18px; font-weight: 750; text-align: center; line-height: 1.5; }
-.figma-flashcard { display: flex; min-height: min(55dvh, 460px); flex-direction: column; justify-content: space-between; gap: 24px; padding: 28px 26px 48px; border: 0; border-radius: 21px; background: linear-gradient(150deg, #fff2dd 2%, #fbd6d2 35%, #e6d9fc 63%, #c6fcf8 100%); box-shadow: 0 12px 24px rgba(38,49,59,.22); color: #121418; text-align: left; }
-.figma-flashcard--front { justify-content: space-between; }
-.figma-flashcard > span { border-radius: 999px; background: #fff; padding: 10px 14px; font-size: 16px; font-weight: 800; align-self: flex-start; line-height: 1.4; }
-.figma-flashcard strong { font-size: clamp(23px, 7vw, 31px); line-height: 1.45; font-weight: 850; letter-spacing: -.6px; white-space: pre-line; overflow-wrap: anywhere; }
-.figma-flashcard small { color: #355273; font-size: 16px; font-weight: 650; line-height: 1.6; }
-.figma-flashcard-more { text-align: center; color: #718092; font-size: 16px; line-height: 1.65; font-weight: 800; min-height: 58px; }
-.figma-flashcard-more span { display: block; font-size: 23px; }
-.figma-flashcard:focus-visible, .figma-flashcard-more:focus-visible { outline: 3px solid #3182f6; outline-offset: 4px; }
+/* Learning card: front is the lesson; back contains the Home/Share actions. */
+.figma-flashcard-page { padding-top: 20px; padding-bottom: 30px; gap: 22px; align-items: stretch; }
+.figma-flashcard-instruction { color: #191f28; font-size: 19px; font-weight: 800; text-align: center; line-height: 1.5; padding: 4px 0 8px; }
+.figma-flip-scene {
+  width: 100%; max-width: 425px; height: clamp(355px, 56dvh, 520px);
+  margin: 0 auto; perspective: 1200px; -webkit-perspective: 1200px;
+}
+.figma-flip-card {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d; -webkit-transform-style: preserve-3d;
+  transition: transform .76s cubic-bezier(.2,.72,.21,1); will-change: transform;
+}
+.figma-flip-card--flipped { transform: rotateY(180deg); }
+.figma-flip-face {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  border-radius: 25px; padding: 28px 27px; border: 0;
+  background: linear-gradient(140deg, #fff1d9 0%, #f9ded5 27%, #ebdcf7 66%, #c9f5f3 100%);
+  color: #14191f; text-align: left;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  box-shadow: 0 16px 28px rgba(37,46,62,.16);
+  overflow: hidden;
+}
+.figma-flip-front { cursor: pointer; align-items: flex-start; justify-content: space-between; gap: 20px; width: 100%; }
+.figma-flip-label { display: inline-flex; align-self: flex-start; max-width: 100%; padding: 10px 14px;
+  background: #fff; border-radius: 999px; color: #161b22; font-size: clamp(14px, 4vw, 17px);
+  font-weight: 800; line-height: 1.45; word-break: keep-all; }
+.figma-flip-lesson { display: flex; flex-direction: column; gap: 12px; margin: auto 0; width: 100%; }
+.figma-flip-lesson strong, .figma-flip-back-content > strong {
+  color: #11161e; font-size: clamp(25px, 6.9vw, 34px); line-height: 1.36; font-weight: 850;
+  letter-spacing: -.6px; overflow-wrap: anywhere; word-break: keep-all;
+}
+.figma-flip-lesson small, .figma-flip-back-content > small {
+  color: #4c6072; font-size: clamp(15px, 4vw, 17px); line-height: 1.58; font-weight: 600;
+  word-break: keep-all; overflow-wrap: anywhere;
+}
+.figma-flip-hint { color: #667888; font-size: 13px; font-weight: 750; line-height: 1.5; align-self: center; text-align: center; }
+.figma-flip-back { transform: rotateY(180deg); justify-content: space-between; gap: 13px; }
+.figma-flip-back-content { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
+  width: 100%; min-height: 0; flex: 1; gap: 12px; padding: 0; background: transparent; border: 0;
+  color: inherit; text-align: left; cursor: pointer;
+}
+.figma-flip-back-content > strong { margin-top: auto; }
+.figma-flip-back-content > small { max-width: 29ch; }
+.figma-flip-back-content .figma-flip-hint { padding-top: 2px; }
+.figma-flip-back-actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; width: 100%; }
+.figma-flip-back-actions .btn { width: 100%; min-width: 0; min-height: 57px; border-radius: 15px;
+  padding: 11px 9px; font-size: 18px; font-weight: 800; line-height: 1.35; }
+.figma-flip-front:focus-visible, .figma-flip-back-content:focus-visible,
+.figma-flip-back-actions .btn:focus-visible, .figma-flashcard-more:focus-visible {
+  outline: 3px solid #3182f6; outline-offset: 3px;
+}
+.figma-flashcard-more { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1px;
+  color: #778596; font-size: 16px; line-height: 1.6; font-weight: 800; min-height: 58px; text-align: center; }
+.figma-flashcard-more span { display: block; font-size: 24px; }
+@media (max-height: 690px) {
+  .figma-flashcard-page { gap: 12px; padding-top: 8px; }
+  .figma-flip-scene { height: 355px; }
+  .figma-flip-face { padding: 21px 20px; }
+  .figma-flip-back-actions .btn { min-height: 51px; font-size: 16px; }
+}
+@media (max-width: 350px) {
+  .figma-flip-face { padding: 22px 19px; }
+  .figma-flip-lesson strong, .figma-flip-back-content > strong { font-size: 25px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .figma-flip-card { transition: none !important; }
+}
 
 /* Figma feedback cards: compact, high-contrast safe/caution comparisons */
 .fb-summary-flow .fb-impact-hero { background: #fff; border: none; border-radius: 19px; padding: 21px 18px; min-height: 145px; }
@@ -1705,3 +1761,31 @@ p, h1, h2, h3 { margin: 0; }
   border-radius: 14px; background: #f1f7ff; color: #226bd3; font-size: 15px; font-weight: 750;
   line-height: 1.45; text-align: left; }
 .figma-mode-topic-link:focus-visible { outline: 3px solid #3182f6; outline-offset: 2px; }
+
+
+/* Figma home: two equal visual tiles for AI roleplay and OX quiz */
+.home-practice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.home-practice-tile { min-height: 137px; padding: 17px 15px 15px; gap: 5px; border-radius: 20px; background: #fff;
+  justify-content: flex-start; align-items: flex-start; color: #191f28; text-decoration: none; }
+.home-practice-icon { height: 42px; min-height: 42px; display: inline-flex; align-items: center; justify-content: flex-start; }
+.home-practice-icon--chat img { width: 37px; height: 37px; object-fit: contain; }
+.home-practice-icon--quiz .ox-badges { gap: 5px; }
+.home-practice-icon--quiz .ox-badge { width: 34px; height: 34px; border-radius: 10px; font-size: 18px; font-weight: 850; }
+.home-practice-title { margin-top: 6px; font-size: 17px; font-weight: 800; line-height: 1.4; letter-spacing: -.3px; }
+.home-practice-description { font-size: 12.5px; color: #85909e; line-height: 1.5; font-weight: 500; word-break: keep-all; }
+.home-practice-tile:focus-visible { outline: 3px solid #3182f6; outline-offset: 3px; }
+.home-practice-tile:active { transform: scale(.98); }
+.hero__chip { background: rgba(255,255,255,.2); }
+.hero__bobber { top: 64px; right: 15px; width: 70px; height: 70px; }
+.hero__title { padding-right: 73px; font-weight: 800; }
+.hero__btn { min-height: 54px; font-weight: 800; }
+.rt-intro--simple { gap: 17px; }
+.rt-intro--simple h2 { font-size: clamp(22px, 6.2vw, 27px); font-weight: 850; line-height: 1.4; }
+.rt-intro--simple .rt-intro-lead { font-size: 17px; line-height: 1.55; color: #5c6877; }
+.rt-intro--simple .rt-intro-check { margin-top: 10px; font-size: 16px; }
+.rt-intro--simple .btn { margin-top: 5px; min-height: 56px; font-size: 17px; }
+@media (max-width: 350px) {
+  .home-practice-tile { padding-left: 12px; padding-right: 12px; }
+  .home-practice-title { font-size: 16px; }
+  .home-practice-description { font-size: 12px; }
+}
