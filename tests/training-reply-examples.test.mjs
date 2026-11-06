@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { trainingReplyExamples } from "../src/lib/trainingReplyExamples.ts";
+import { refreshTrainingReplies, trainingReplyExamples } from "../src/lib/trainingReplyExamples.ts";
 import { TRAINING_TOPIC_IDS } from "../src/lib/trainingCatalog.ts";
 
 const them = (text, actions = []) => ({ actor: "them", text, actions });
@@ -107,4 +107,22 @@ test("offers a statement at the opening and a bounded, actionable refusal after 
     messages.push(them("새로 보내드린 인증번호를 알려주세요.", [{ kind: "provide_data", origin: "sender" }]));
     assert.equal(requestHasTwoReplies(messages), false);
   }
+});
+
+test("new options replace the previous turn and do not ask for a disclosed amount", () => {
+  const messages = [
+    them("늘봄몰에서 모바일 상품권 48만 원 결제 시도가 있었습니다."),
+    me("말씀하신 내용을 조금 더 알려 주세요."),
+    them("미승인 기기에서 접속한 건으로 본인이 직접 결제했는지 확인하고 있습니다."),
+  ];
+  const fallback = trainingReplyExamples("bank", messages, 8);
+  const previous = ["방금 말씀하신 부분을 조금 더 설명해 주세요.", messages[1].text];
+  const generated = ["금액이 얼마인가요?", previous[0], "이 기기로 결제한 적 없어요."];
+  const next = refreshTrainingReplies(messages, generated, fallback, previous);
+  assert.equal(next[0], generated[2]);
+  assert.equal(next.length, 2);
+  assert.ok(next.every(option => !previous.includes(option) && !option.includes("얼마")));
+  assert.deepEqual(refreshTrainingReplies(messages, [], fallback, previous), [
+    "결제가 이미 승인된 건가요?", "제가 한 결제는 아닌 것 같아요.",
+  ]);
 });
