@@ -116,5 +116,7 @@ test("Live backend provisions ephemeral credentials and server-sealed multi-step
   assert.match(page, /내 행동 피드백 보기/);
   assert.match(page, /postActions/);
   assert.match(page, /<Header title="AI 전화 대응 훈련" back=\{false\}/);
-  assert.match(home, /href="\/roleplay\/phone"/);
+  assert.match(home, /href="\/roleplay"/);
+  const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
+  assert.match(mode, /path: "\/roleplay\/phone"/);
 });
