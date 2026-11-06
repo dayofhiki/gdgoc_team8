@@ -252,7 +252,9 @@ test("detects fabricated investigation completion and waiting before the risk re
   assert.equal(reviewPhoneTurn(investigation, investigation.request, 2, false),
     "none");
   assert.equal(reviewPhoneTurn(investigation, "문제없습니다.", 3, true),
-    "none");
+    "premature_resolution");
+  assert.equal(reviewPhoneTurn(investigation, "잠시 기다리세요.", 3, true),
+    "waiting");
 });
 
 test("waiting mentioned as part of the story does not trigger spurious intervention", () => {
