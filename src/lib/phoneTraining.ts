@@ -155,7 +155,8 @@ export function phoneActionOutcome(c: PhoneCase, action: PhonePostAction): strin
 }
 
 export function allowedPhoneAction(c: PhoneCase, action: PhonePostAction): boolean {
-  return action !== "saved_family" || c.family;
+  if (c.family) return action !== "official_call" && action !== "official_app";
+  return action !== "saved_family";
 }
 
 export function evaluatePhoneCase(state: PhoneState): PhoneFeedback {
