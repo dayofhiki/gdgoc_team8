@@ -5,6 +5,7 @@
 export type PhonePostAction = "official_call" | "official_app" | "saved_family" |
   "caller_number" | "follow_request" | "no_action";
 export type PhonePhase = "call" | "after_call" | "finished";
+export type PhoneEndedBy = "user" | "caller" | "connection";
 export type PhoneCase = {
   id: string;
   kind: "fraud" | "legitimate";
@@ -26,6 +27,7 @@ export type PhoneState = {
   createdAt: number;
   phase: PhonePhase;
   endedAt?: number;
+  endedBy?: PhoneEndedBy;
   requestObserved: boolean;
   postActions: PhonePostAction[];
   // 원문/음성파일은 세션에 저장하지 않는다. UI 자막은 브라우저 메모리에서만 유지한다.
@@ -265,8 +267,17 @@ export function evaluatePhoneCase(state: PhoneState): PhoneFeedback {
     follow_request: c.kind === "fraud" ? "검증하지 않은 요구에 따라가면 위험할 수 있습니다." : "이번에는 민감정보가 필요 없는 일상 연락이었습니다.",
     no_action: "통화를 끊은 뒤에도 별도의 확인이 필요한 상황이 있을 수 있습니다.",
   };
+  const hangup = state.endedBy === "caller"
+    ? { label: "상대가 먼저 전화를 끊음", safe: null as boolean | null, explanation: "발신자가 통화를 종료했습니다. 사용자의 통화 종료 행동으로 채점하지 않습니다." }
+    : state.endedBy === "connection"
+      ? { label: "음성 연결이 끊김", safe: null as boolean | null, explanation: "음성 연결이 예기치 않게 종료됐습니다. 이 자체는 안전 행동으로 평가하지 않습니다." }
+      : { label: "통화를 직접 끊음", safe: true as boolean | null, explanation: "직접 통화를 끝내고 다음 행동으로 넘어갔습니다." };
+  if (independent && state.endedBy !== "user" && !risky) {
+    headline = "통화 종료 뒤 독립적으로 확인했어요";
+    detail = "누가 먼저 전화를 끊었는지와 별개로, 이후 직접 찾은 경로에서 확인한 행동이 중요합니다.";
+  }
   const actions = [
-    { label: "통화를 끊음", safe: true as boolean | null, explanation: "모의 통화를 종료하고 다음 행동으로 넘어갔습니다." },
+    hangup,
     ...state.postActions.map(a => ({
       label: a === "follow_request" ? PHONE_REQUEST_ACTION[c.risk] : POST_ACTION_LABEL[a],
       safe: a === "caller_number" || a === "follow_request" && c.kind === "fraud" ? false :
