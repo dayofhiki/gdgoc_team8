@@ -126,8 +126,8 @@ test("home menu has AI situation and OX, with chat and phone nested in AI situat
   const practice = readFileSync(new URL("../src/app/practice/page.tsx", import.meta.url), "utf8");
   const mode = readFileSync(new URL("../src/app/roleplay/mode/page.tsx", import.meta.url), "utf8");
   const intro = readFileSync(new URL("../src/app/roleplay/page.tsx", import.meta.url), "utf8");
-  assert.match(home, /<span className="list-row__title">AI 상황극<\/span>/);
-  assert.match(home, /<span className="list-row__title">OX 퀴즈<\/span>/);
+  assert.match(home, /className="home-practice-title">AI 상황극<\/span>/);
+  assert.match(home, /className="home-practice-title">OX 퀴즈<\/span>/);
   assert.doesNotMatch(home, /href="\/roleplay\/phone"|href="\/roleplay\/case"/);
   assert.match(mode, /path: "\/roleplay\/chat"/);
   assert.match(mode, /path: "\/roleplay\/phone"/);
