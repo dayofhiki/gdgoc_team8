@@ -145,7 +145,11 @@ test("training presentation hides Gemini Live technology branding and clarifies 
   assert.match(page, /AI 피싱범 · 모의 통화 중/);
   assert.doesNotMatch(page, /className="pv-topline"/);
   assert.match(server, /"v1alpha", "v1beta"/);
-  assert.match(server, /model: LIVE_MODEL/);
+  assert.match(server, /bidiGenerateContentSetup: \{\s*model: "models\/" \+ LIVE_MODEL,\s*generationConfig: \{ responseModalities: \["AUDIO"\] \}/);
+  assert.match(server, /fieldMask: "model,generationConfig.responseModalities"/);
+  assert.doesNotMatch(server, /liveConnectConstraints:/);
+  assert.match(client, /ws.binaryType = "arraybuffer"/);
+  assert.match(client, /typeof data === "string" \? data : decoder.decode\(data\)/);
   assert.match(server, /PHONE_AUTH/);
   assert.match(server, /PHONE_PERMISSION/);
   assert.match(server, /PHONE_REQUEST/);
