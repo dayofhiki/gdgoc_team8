@@ -33,6 +33,8 @@ const topicClues: Record<TrainingTopicId, RegExp> = {
   team_mission: /후기|부업|정산|쇼핑/,
 };
 const requestedMoney = /송금|이체|입금|선입금|보증금|수수료|계좌로|돈을?\s*보내|금액을?\s*보내|수리비/;
+const deposit = /보증금|재료비/;
+const depositExplanation = /돌려\s*드|반환|환불|돌려\s*받|안전장치/;
 const requestedLink = /링크|URL|사이트|주소를?\s*(?:눌러|클릭|접속|열어)|청첩장\s*(?:확인|보기)|부고장\s*(?:확인|보기)/i;
 const requestedData = /인증번호|비밀번호|주민등록|계좌번호|카드번호|개인정보|생년월일|잔액|신분증|보안카드/;
 const requestedInstall = /원격\s*(?:제어|지원)|앱\s*(?:설치|깔)|프로그램\s*설치|설치해/;
@@ -47,10 +49,16 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
   const line = last.text;
   const informal = informalTopics.has(topic);
   const sent = new Set(messages.filter(m => m.actor === "me").map(m => normalized(m.text)));
+  const opening = !messages.some(message => message.actor === "me");
   const latestRequest = messages.findLastIndex(message => message.actor === "them" &&
     message.actions?.some(action => action.origin === "sender"));
   const kinds = new Set((latestRequest >= 0 ? messages[latestRequest].actions ?? [] : [])
     .filter(action => action.origin === "sender").map(action => action.kind));
+  const earlierDepositRequest = messages.slice(0, -1).some(message =>
+    message.actor === "them" && deposit.test(message.text) && isRequest.test(message.text));
+  // 보증금을 돌려준다는 설명은 새 송금 요청으로 표시되지 않아도 앞선 요구에 대한 답이다.
+  const explainingDeposit = deposit.test(line) && depositExplanation.test(line) &&
+    (earlierDepositRequest || kinds.has("transfer"));
   const afterRequest = latestRequest >= 0 && latestRequest < messages.length - 1;
   const requested = isRequest.test(line);
   const candidates: { text: string; weight: number }[] = [];
@@ -80,7 +88,7 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
   }
 
   // 현재 문자가 구체적인 질문을 던졌다면, 주제별 첫인사 문구보다 질문에 대한 반응을 택한다.
-  if (/지금.{0,14}(?:연락|통화|시간|괜찮|가능)|(?:연락|통화).{0,12}(?:가능|되|할\s*수)/.test(line)) {
+  if (opening && /지금.{0,14}(?:연락|통화|시간|괜찮|가능)|(?:연락|통화).{0,12}(?:가능|되|할\s*수)/.test(line)) {
     add(90, informal ? "응, 무슨 일이야?" : "네, 어떤 용건인가요?",
       informal ? "지금 무슨 일인데?" : "어떤 내용으로 연락하셨나요?");
   }
@@ -125,7 +133,10 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
   // 주제명은 UI 분류일 뿐, 상대가 이미 말한 사실이라는 뜻이 아니다.
   const topicMentioned = messages.some(message =>
     message.actor === "them" && topicClues[topic].test(message.text));
-  if (topicMentioned) {
+  if (!opening) {
+    add(25, informal ? "방금 말한 부분을 조금 더 설명해 줘." : "방금 말씀하신 부분을 조금 더 설명해 주세요.",
+      informal ? "다른 방법은 없어?" : "다른 방법은 없나요?");
+  } else if (topicMentioned) {
     openingReplies[topic].forEach((text, i) => add(30 - i, text));
   } else if (informal) {
     add(25, "무슨 일이야?", "어떻게 된 건지 말해 줘.", "지금 무슨 상황인데?");
@@ -133,6 +144,12 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
     add(25, "무슨 소식인가요?", "어떤 일인가요?", "좀 더 설명해 주시겠어요?");
   } else {
     add(25, "어떤 내용으로 연락하셨나요?", "조금 더 자세히 설명해 주세요.", "무슨 일인지 알려주시겠어요?");
+  }
+  if (explainingDeposit) {
+    const replies = informal
+      ? ["보증금 없이 진행할 수는 없어?", "보증금은 보내지 않을게.", "보증금을 돌려주는 조건을 문자로 알려 줘."]
+      : ["보증금 없이 진행할 수 있나요?", "보증금은 보내지 않겠습니다.", "보증금을 돌려받는 조건을 문자로 알려 주세요."];
+    return replies.filter(text => !sent.has(normalized(text))).slice(0, 2);
   }
   const hold = informal ? "잠깐 생각해 볼게." : "잠깐 생각해 볼게요.";
   const decline = kinds.has("transfer") ? (informal ? "돈은 안 보낼게." : "송금은 하지 않겠습니다.") :
@@ -142,7 +159,7 @@ export function trainingReplyExamples(topic: TrainingTopicId, messages: ChatLine
   const neutralReply = topic === "obituary" && /돌아가셨|별세/.test(line) ? "삼가 고인의 명복을 빕니다." :
     topic === "invitation" && /결혼/.test(line) ? "결혼 축하해요." :
     topic === "card" && /카드|배송/.test(line) ? "카드를 신청한 기억이 없어요." :
-    /가능|괜찮|시간/.test(line) ? (informal ? "응, 듣고 있어." : "네, 말씀해 주세요.") :
+    opening && /가능|괜찮|시간/.test(line) ? (informal ? "응, 듣고 있어." : "네, 말씀해 주세요.") :
     informal ? "무슨 일인지 조금 더 말해 줘." : "말씀하신 내용을 조금 더 알려 주세요.";
   const direct = afterRequest ? [decline, hold] : kinds.size ? [hold, decline] : [neutralReply];
   const unique = new Set<string>();
