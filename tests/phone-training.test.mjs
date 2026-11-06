@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PHONE_CASES, MAX_PHONE_TURNS, MAX_POST_ACTIONS, evaluatePhoneCase,
-  findPhoneCase, allowedPhoneAction, phoneActionOutcome, pickPhoneCase } from "../src/lib/phoneTraining.ts";
+  findPhoneCase, allowedPhoneAction, availablePhoneActions, heardPhoneRequest, phoneActionOutcome, pickPhoneCase } from "../src/lib/phoneTraining.ts";
 
 function completed(scenario, postActions, requestObserved = true) {
   return {
@@ -12,9 +12,10 @@ function completed(scenario, postActions, requestObserved = true) {
 }
 
 test("Gemini Live telephone training retains diverse fraud and legitimate call premises", () => {
-  assert.equal(PHONE_CASES.length, 7);
-  assert.equal(new Set(PHONE_CASES.map(c => c.id)).size, 7);
-  assert.ok(PHONE_CASES.filter(c => c.kind === "fraud").length >= 4);
+  assert.equal(new Set(PHONE_CASES.map(c => c.id)).size, PHONE_CASES.length);
+  const playable = PHONE_CASES.filter(c => c.kind === "fraud");
+  assert.equal(playable.length, 9);
+  assert.equal(new Set(playable.map(c => c.risk)).size, 6);
   assert.ok(PHONE_CASES.filter(c => c.kind === "legitimate").length >= 2);
   assert.ok(PHONE_CASES.every(c => c.opening.length > 20 && c.request.length > 15));
   assert.ok(PHONE_CASES.every(c => !/https?:\/\/|(?:\+?82|0)10\d{7,8}/.test(c.opening + c.request)));
@@ -24,7 +25,26 @@ test("Gemini Live telephone training retains diverse fraud and legitimate call p
 
 test("scenarios rotate excluding recent experiences", () => {
   const recent = ["card_return", "account_protect", "normal_delivery"];
-  for (let n = 0; n < 20; n++) assert.ok(!recent.includes(pickPhoneCase(recent, () => n / 20).id));
+  for (let n = 0; n < 20; n++) {
+    const selected = pickPhoneCase(recent, () => n / 20);
+    assert.ok(!recent.includes(selected.id));
+    assert.equal(selected.kind, "fraud");
+  }
+});
+
+test("each playable scenario has an independent verification path and a concrete request action", () => {
+  for (const c of PHONE_CASES.filter(item => item.kind === "fraud")) {
+    assert.equal(heardPhoneRequest(c, c.opening), false, c.id);
+    assert.equal(heardPhoneRequest(c, c.request), true, c.id);
+    const afterRequest = availablePhoneActions(c, true);
+    const beforeRequest = availablePhoneActions(c, false);
+    assert.ok(beforeRequest.includes(c.family ? "saved_family" : "official_call"), c.id);
+    assert.ok(beforeRequest.includes("no_action"), c.id);
+    const risky = c.risk === "sender_number" ? "caller_number" : "follow_request";
+    assert.ok(afterRequest.includes(risky), c.id);
+    assert.ok(!beforeRequest.includes(risky), c.id);
+    assert.equal(allowedPhoneAction(c, risky, false), false, c.id);
+  }
 });
 
 test("call hangup cannot produce a final result without an intentional post-call action", () => {
@@ -107,6 +127,9 @@ test("Live backend provisions ephemeral credentials and server-sealed multi-step
   assert.match(client, /inputTranscription/);
   assert.match(client, /outputTranscription/);
   assert.match(client, /interrupted/);
+  assert.match(client, /onModelTurnStart\(\)/);
+  assert.match(page, /onModelTurnStart: \(\) => \{/);
+  assert.match(page, /별도 행동 하지 않기/);
   assert.match(worklet, /registerProcessor\("mikki-live-input"/);
   assert.doesNotMatch(page, /SpeechSynthesisUtterance|speechSynthesis|SpeechRecognition|webkitSpeechRecognition/);
   assert.match(page, /GeminiLiveAudio/);
