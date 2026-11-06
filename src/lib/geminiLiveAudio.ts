@@ -9,6 +9,7 @@ export type LiveBoot = {
   liveSetup: Record<string, unknown>;
 };
 export type LiveCallbacks = {
+  onModelTurnStart: () => void;
   onModelText: (text: string) => void;
   onUserText: (text: string) => void;
   onSpeaking: (speaking: boolean) => void;
@@ -63,6 +64,7 @@ export class GeminiLiveAudio {
   private micEnabled = true;
   private soundEnabled = true;
   private micAvailable = true;
+  private modelTurnOpen = false;
 
   constructor(private callbacks: LiveCallbacks) {}
 
@@ -184,14 +186,25 @@ export class GeminiLiveAudio {
     if (this.gain) this.gain.gain.value = enabled ? 1 : 0;
   }
   private onMessage(data: ServerContent) {
-    if (data.interrupted) this.stopPlayback();
     if (data.inputTranscription?.text) this.callbacks.onUserText(data.inputTranscription.text);
-    if (data.outputTranscription?.text) this.callbacks.onModelText(data.outputTranscription.text);
-    for (const part of data.modelTurn?.parts ?? []) {
-      const audio = part.inlineData;
-      if (audio?.data && audio.mimeType?.startsWith("audio/pcm")) this.playAudio(audio.data);
+    if (data.interrupted) {
+      this.modelTurnOpen = false;
+      this.stopPlayback();
+      return;
     }
-    if (data.turnComplete && this.nodes.size === 0) this.callbacks.onSpeaking(false);
+    const text = data.outputTranscription?.text;
+    const audio = (data.modelTurn?.parts ?? []).flatMap(part =>
+      part.inlineData?.data && part.inlineData.mimeType?.startsWith("audio/pcm") ? [part.inlineData.data] : []);
+    if (!this.modelTurnOpen && (text?.trim() || audio.length)) {
+      this.modelTurnOpen = true;
+      this.callbacks.onModelTurnStart();
+    }
+    if (text) this.callbacks.onModelText(text);
+    for (const chunk of audio) this.playAudio(chunk);
+    if (data.turnComplete) {
+      this.modelTurnOpen = false;
+      if (this.nodes.size === 0) this.callbacks.onSpeaking(false);
+    }
   }
   private playAudio(raw: string) {
     const ctx = this.ctx, gain = this.gain;
