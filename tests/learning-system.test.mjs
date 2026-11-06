@@ -250,8 +250,8 @@ test("chat intro is brief and the result flips from lesson to card-contained Hom
   const result = chat.slice(chat.indexOf('if (phase === "result" && result && reviewPage === "feedback"'),
     chat.indexOf('if (phase === "result" && result && reviewPage === "truth"'));
   assert.match(result, /figma-flip-card--flipped/);
-  assert.match(result, /className="figma-flip-front"/);
-  assert.match(result, /className="figma-flip-back"/);
+  assert.match(result, /className="figma-flip-face figma-flip-front"/);
+  assert.match(result, /className="figma-flip-face figma-flip-back"/);
   assert.match(result, /className="figma-flip-back-actions"/);
   assert.ok(result.indexOf('learning') < result.indexOf('우리 가족에게도 공유하기'));
   assert.match(result, /onClick=\{\(\) => void shareFamilyPractice\(false\)\}>공유하기/);
