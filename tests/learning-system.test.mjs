@@ -132,7 +132,7 @@ test("the chat API fixes a branch in the sealed state and prevents action drift"
   const api = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   const decision = readFileSync(new URL("../src/lib/trainingDecision.ts", import.meta.url), "utf8");
   assert.match(api, /caseVariant = nextCaseVariant/);
-  assert.match(api, /recentByTopic\[scenario\.topic\]/);
+  assert.match(api, /const recent = history\[scenario\.topic\]/);
   assert.match(api, /version: 1, scenario: index, caseVariant/);
   assert.match(api, /caseBranch\(scenario, state\.caseVariant \?\? 0\)/);
   assert.match(decision, /expected\.kind/);

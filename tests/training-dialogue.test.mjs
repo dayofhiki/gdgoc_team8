@@ -357,7 +357,7 @@ test("v3 uses second AI audit only for proposed actions, closing or near-duplica
   const route = readFileSync(new URL("../src/app/api/real-training/route.ts", import.meta.url), "utf8");
   assert.match(route, /const needsAudit = first\.value\.actions\.length > 0 \|\| first\.value\.dialogue\.conversationComplete/);
   assert.match(route, /if \(needsAudit\) \{/);
-  assert.match(route, /const caseVariant = nextCaseVariant\(req, scenario, recentByTopic\[scenario\.topic\]\)/);
+  assert.match(route, /const caseVariant = nextCaseVariant\(req, scenario, recentByTopic\)/);
   assert.match(route, /caseVariant, createdAt/);
 });
 
@@ -448,4 +448,19 @@ test("an unchanged payment demand ends after repeated non-progress, not after th
     memory: repeat1.memory, primary:pendingSignal, audit:pendingSignal,userText:"그런데 왜 갑자기 그 돈이 필요해?",
   });
   assert.equal(openQuestion.closed,false);
+});
+
+
+test("repeat practice prefers a different mechanism and pacing when the pool permits", async () => {
+  const { caseBranch, variedCaseCandidates, episodeTactic, episodeActorDirection } =
+    await import("../src/lib/trainingCaseFacts.ts");
+  const card = SCENARIOS.find(s => s.topic === "card" && s.identity === "fraud");
+  const last = caseBranch(card, 0);
+  const ranked = variedCaseCandidates(card, [1, 2, 3, 4], last);
+  assert.ok(ranked.every(index => caseBranch(card, index).kind !== last.kind));
+  assert.deepEqual(variedCaseCandidates(card, [3], last), [3]);
+  const callback = caseBranch(card, 4);
+  assert.notEqual(episodeTactic(callback), episodeTactic(last));
+  assert.match(episodeActorDirection(callback), /통화 이후/);
+  assert.doesNotMatch(actorBrief(card, INITIAL_DIALOGUE, 0, callback.facts), /화자의 목적과 허용된 대응:/);
 });
