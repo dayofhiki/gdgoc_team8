@@ -3,7 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } 
 import { evaluate, MAX_TURNS, normalizeKoreanReply, PHONE_METHODS, recordChoice, SCENARIOS } from "@/lib/realTraining";
 import { ACTION_RULES, buildActions } from "@/lib/trainingActions";
 import type { Proposed } from "@/lib/trainingActions";
-import { caseBranch, caseDetail, caseVariantCount } from "@/lib/trainingCaseFacts";
+import { caseBranch, caseDetail, caseVariantCount, episodeActorDirection, variedCaseCandidates } from "@/lib/trainingCaseFacts";
 import { groundedProposals } from "@/lib/trainingActionGuard";
 import { DIALOGUE_SCHEMA, DIALOGUE_POLICY, INITIAL_DIALOGUE, actorBrief, acceptableOpening, unsolicitedSolution, decideDialogueTurn, parseDialogueOutput, replySimilarity } from "@/lib/trainingDialogue";
 import type { DialogueSignal } from "@/lib/trainingDialogue";
@@ -25,7 +25,7 @@ const RATE_LIMIT = 40;
 const hits = new Map<string, { count: number; since: number }>();
 // Rotate branches for repeat plays without storing conversation text or personal details.
 const lastBranch = new Map<string, { index: number; time: number }>();
-function nextCaseVariant(req: NextRequest, scenario: (typeof SCENARIOS)[number], recent?: unknown): number {
+function nextCaseVariant(req: NextRequest, scenario: (typeof SCENARIOS)[number], history: Record<string, unknown>): number {
   const visitor = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous";
   const key = visitor + ":" + scenario.topic;
   const now = Date.now();
@@ -36,12 +36,21 @@ function nextCaseVariant(req: NextRequest, scenario: (typeof SCENARIOS)[number],
   // 서버 인스턴스가 달라져도 같은 범주의 최근 사건을 피해 출제한다.
   // 입력값은 출제 취향만 결정하며 비밀 상태·정답·행동 평가에는 관여하지 않는다.
   const count = caseVariantCount(scenario);
+  const recent = history[scenario.topic];
   const valid = Array.isArray(recent) ? recent.filter((v): v is number =>
     Number.isInteger(v) && v >= 0 && v < count) : [];
   const seen = Array.from(new Set(valid.reverse())).slice(0, count - 1);
   if (!seen.length && previous && previous.index < count && now - previous.time < RATE_WINDOW_MS) seen.push(previous.index);
   const candidates = Array.from({ length: count }, (_, i) => i).filter(i => !seen.includes(i));
-  const index = candidates[randomInt(candidates.length)];
+  const latest = Object.entries(history).reverse().flatMap(([topic, indices]) => {
+    if (!isTrainingTopicId(topic) || !Array.isArray(indices)) return [];
+    const variant = indices.at(-1);
+    const other = SCENARIOS[TRAINING_TOPICS.findIndex(t => t.id === topic) * 2 + 1];
+    return Number.isInteger(variant) && variant >= 0 && variant < caseVariantCount(other)
+      ? [caseBranch(other, variant)] : [];
+  })[0] ?? (seen.length ? caseBranch(scenario, seen[0]) : undefined);
+  const varied = variedCaseCandidates(scenario, candidates, latest);
+  const index = varied[randomInt(varied.length)];
   lastBranch.set(key, { index, time: now });
   return index;
 }
@@ -201,6 +210,7 @@ async function generateActorResponse(
       "### 이번 차례의 사건 진행",
       "공통 주제 설명은 학습 범위일 뿐 줄거리가 아니다. 현재 사건의 사실만 사용한다.",
       "이번 사건: " + branch.incident,
+      "이 사건의 수법에 맞춘 화자 지침: " + episodeActorDirection(branch),
       "화자가 말할 수 없는 사실: " + branch.factConstraint,
       "직전 발화에 먼저 응답한 뒤 이번 차례에 허용된 정보만 전한다.",
       "이번 차례에 활용할 사건 맥락(사용자 질문에 맞춰 자연스럽게 변형): " + plannedReply,
@@ -253,7 +263,7 @@ async function generateActorResponse(
     { role: "user", content: text },
   ];
   const first = await complete(messages, {
-    temperature: 0.75, maxTokens: 1400, json: true, schema: ACTOR_SCHEMA,
+    temperature: 0.60, maxTokens: 1400, json: true, schema: ACTOR_SCHEMA,
     parse: parseActorOutput, budgetMs: 5000,
   }, { list: available });
   const reply = normalizeKoreanReply(first.value.reply).trim().slice(0, 280);
@@ -380,7 +390,7 @@ export async function POST(req: NextRequest) {
       const scenario = SCENARIOS[index];
       const recentByTopic = body.recentBranches && typeof body.recentBranches === "object" &&
         !Array.isArray(body.recentBranches) ? body.recentBranches as Record<string, unknown> : {};
-      const caseVariant = nextCaseVariant(req, scenario, recentByTopic[scenario.topic]);
+      const caseVariant = nextCaseVariant(req, scenario, recentByTopic);
       const opening = await generateOpening(scenario, caseVariant);
       const state: TrainingState = {
         version: 1, scenario: index, caseVariant, createdAt: Date.now(), turns: 0,
