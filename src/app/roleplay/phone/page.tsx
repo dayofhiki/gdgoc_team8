@@ -308,6 +308,11 @@ export default function PhoneTraining() {
           <small>{speaking ? "상대가 말하고 있어요" : busy ? "답변을 생성하고 있어요" : listening ? "내 말을 듣고 있어요" : "상대의 말"}</small>
           <p>{last?.actor === "caller" ? last.text : "잠깐만요, 듣고 있어요."}</p>
         </div>
+        <button type="button" className="pv-repeat" disabled={busy || listening}
+          onClick={() => {
+            const caller = session?.messages.slice().reverse().find(line => line.actor === "caller");
+            if (caller) speak(caller.text);
+          }}>🔊 상대 말 다시 듣기</button>
         <details className="pv-transcript pv-transcript--call" open={showTranscript} onToggle={e => setShowTranscript(e.currentTarget.open)}>
           <summary>통화 자막 {showTranscript ? "접기" : "펴기"}</summary>
           <ol>{session?.messages.map((line, i) => (
