@@ -1635,3 +1635,6 @@ p, h1, h2, h3 { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .pv-intro-icon, .pv-call-avatar { animation: none !important; }
 }
+
+.pv-repeat { min-height: 39px; border-radius: 10px; padding: 7px 16px; border: 1px solid rgba(255,255,255,.19); color: #c6e0ff; font-size: 14px; font-weight: 750; }
+.pv-repeat:disabled { opacity: .5; }
