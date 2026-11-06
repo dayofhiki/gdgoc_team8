@@ -6,6 +6,7 @@ import { TRAINING_TOPICS } from "@/lib/trainingCatalog";
 const shortcuts = [
   { title: "실전 훈련", description: "어떤 연락이 올지 모르는 상태에서 대응해요", href: "/roleplay?mode=live" },
   { title: "상황별 연습", description: `가족·택배·금융 등 ${TRAINING_TOPICS.length}가지 상황 중 골라 연습해요`, href: "/roleplay/select" },
+  { title: "AI 전화 대응 훈련", description: "말로 응답하고 끊기·독립 확인을 직접 연습해요", href: "/roleplay/phone" },
   { title: "사례로 배우기", description: "실제 사건을 되감으며 배워요", href: "/roleplay/case" },
   { title: "OX 퀴즈", description: "50문제은행에서 10문제씩 풀어요", href: "/quiz" },
 ];
