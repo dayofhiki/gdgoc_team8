@@ -6,7 +6,7 @@
  * messages containing live links, telephone numbers, financial destinations
  * or authentication codes.
  */
-import { heardPhoneRequest, type PhoneCase } from "./phoneTraining";
+import { heardPhoneRequest, type PhoneCase } from "./phoneTraining.ts";
 
 export type PhoneTurnIssue = "none" | "waiting" | "premature_resolution" | "missing_decision";
 
