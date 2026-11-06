@@ -144,6 +144,8 @@ export default function RealTraining() {
   const [fontMenuOpen, setFontMenuOpen] = useState(false);
   const [fontSize, setFontSize] = useState<"regular" | "large" | "xlarge">("regular");
   const [memoryStage, setMemoryStage] = useState<"card" | "flipped" | "details">("card");
+  const frontFaceRef = useRef<HTMLButtonElement>(null);
+  const backFaceRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [confirmData, setConfirmData] = useState<{ action: Action; index: number } | null>(null);
   const [phoneHint, setPhoneHint] = useState(false);
@@ -433,25 +435,57 @@ export default function RealTraining() {
   if (phase === "result" && result && reviewPage === "feedback" && memoryStage !== "details") {
     const promise = result.behavior.promises.find(p => !p.practiced) ?? result.behavior.promises[0];
     const learning = promise?.title ?? result.behavior.focus;
+    const flipped = memoryStage === "flipped";
+    const revealBack = () => {
+      setMemoryStage("flipped");
+      requestAnimationFrame(() => backFaceRef.current?.focus());
+    };
+    const revealFront = () => {
+      setMemoryStage("card");
+      requestAnimationFrame(() => frontFaceRef.current?.focus());
+    };
     return (
       <Screen>
         <Header back={() => session ? setPhase("chat") : leaveTraining()} onClose={leaveTraining} />
         <section className="screen__body figma-flashcard-page">
-          <p className="figma-flashcard-instruction">카드를 눌러 뒤집어보세요</p>
-          <button type="button" className={"figma-flashcard " + (memoryStage === "flipped" ? "figma-flashcard--turned" : "figma-flashcard--front")}
-            onClick={() => setMemoryStage(memoryStage === "card" ? "flipped" : "card")}>
-            <span>똑똑한 물고기 오늘의 배움</span>
-            <strong>{memoryStage === "card" ? "우리 가족에게도 공유하기" : learning}</strong>
-            {memoryStage === "flipped" && <small>{promise?.detail ?? result.behavior.focus}</small>}
-          </button>
+          <h2 className="figma-flashcard-instruction">카드를 눌러 뒤집어보세요</h2>
+          <div className="figma-flip-scene">
+            <div className={"figma-flip-card" + (flipped ? " figma-flip-card--flipped" : "")}>
+              <button type="button" ref={frontFaceRef}
+                className="figma-flip-face figma-flip-front"
+                tabIndex={flipped ? -1 : 0} aria-hidden={flipped}
+                aria-label={`오늘의 배움: ${learning}. 카드를 뒤집어 가족과 공유하기`}
+                onClick={revealBack}>
+                <span className="figma-flip-label">똑똑한 물고기 오늘의 배움</span>
+                <span className="figma-flip-lesson">
+                  <strong>{learning}</strong>
+                  <small>{promise?.detail ?? result.behavior.focus}</small>
+                </span>
+                <span className="figma-flip-hint">↻ 카드를 뒤집어 가족에게 공유하기</span>
+              </button>
+              <div className="figma-flip-face figma-flip-back" aria-hidden={!flipped}>
+                <button type="button" ref={backFaceRef} className="figma-flip-back-content"
+                  tabIndex={flipped ? 0 : -1} onClick={revealFront}>
+                  <span className="figma-flip-label">똑똑한 물고기 오늘의 배움</span>
+                  <strong>우리 가족에게도 공유하기</strong>
+                  <small>오늘 배운 안전 행동을 가족과 함께 기억해요.</small>
+                  <span className="figma-flip-hint">↻ 다시 뒤집어 교훈 보기</span>
+                </button>
+                <div className="figma-flip-back-actions">
+                  <button type="button" className="btn btn--gray"
+                    tabIndex={flipped ? 0 : -1} disabled={!flipped}
+                    onClick={() => router.replace("/home")}>홈으로</button>
+                  <button type="button" className="btn btn--primary"
+                    tabIndex={flipped ? 0 : -1} disabled={!flipped}
+                    onClick={() => void shareFamilyPractice(false)}>공유하기</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <button type="button" className="figma-flashcard-more" onClick={() => setMemoryStage("details")}>
             상세 피드백 보기 <span aria-hidden="true">⌄</span>
           </button>
         </section>
-        <BottomCTA row>
-          <button type="button" className="btn btn--gray" onClick={() => router.replace("/home")}>홈으로</button>
-          <button type="button" className="btn btn--primary" onClick={() => void shareFamilyPractice(false)}>공유하기</button>
-        </BottomCTA>
         {shareNotice && <div className="toast" role="status">{shareNotice}</div>}
       </Screen>
     );
