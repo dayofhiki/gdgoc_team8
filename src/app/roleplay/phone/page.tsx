@@ -118,10 +118,11 @@ export default function PhoneTraining() {
     window.speechSynthesis.speak(voice);
   }
   function acceptReply(r: PhoneReply) {
-    sessionRef.current = r;
-    setSession(r);
+    const updated: PhoneReply = { ...sessionRef.current, ...r };
+    sessionRef.current = updated;
+    setSession(updated);
     setError("");
-    if (r.closed && r.feedback) {
+    if (updated.closed && updated.feedback) {
       stopAudio();
       setActionsOpen(false);
       setPhase("feedback");
