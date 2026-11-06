@@ -47,6 +47,14 @@ export default function Home() {
               </span>
               <ChevronRight />
             </Link>
+            <Link href="/roleplay/phone" className="list-row">
+              <span className="list-row__icon"><img src="/images/icon-phone.png" alt="" width={32} height={32} /></span>
+              <span className="list-row__text">
+                <span className="list-row__title">AI 전화 대응 훈련</span>
+                <span className="list-row__desc">말로 대응하고, 직접 끊고 확인하는 연습</span>
+              </span>
+              <ChevronRight />
+            </Link>
             <Link href="/roleplay/case" className="list-row">
               <span className="list-row__icon"><img src="/images/fish-clipboard.png" alt="" width={32} height={32} /></span>
               <span className="list-row__text">

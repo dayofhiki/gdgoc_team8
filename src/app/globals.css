@@ -1539,3 +1539,102 @@ p, h1, h2, h3 { margin: 0; }
   .figma-chat .rt-compose-zone { padding-top: 12px; }
   .figma-chat-reply-heading { padding-bottom: 7px; }
 }
+
+
+/* ===== Gemini voice decision training: actual phone-like interaction ===== */
+.pv-intro { padding-top: 29px; align-items: center; text-align: center; gap: 14px; }
+.pv-topline { font-size: 12px; font-weight: 800; color: #3182f6; letter-spacing: 2px; }
+.pv-intro-icon { display: grid; place-items: center; width: 137px; height: 137px; border-radius: 50%; background: #e6f2ff; margin: 14px 0 9px; }
+.pv-intro-icon img { object-fit: contain; }
+.pv-intro h2 { font-size: 26px; line-height: 1.35; font-weight: 850; color: #192434; letter-spacing: -.5px; }
+.pv-intro > p:not(.pv-note):not(.pv-error) { font-size: 17px; color: #69798c; line-height: 1.65; max-width: 30ch; }
+.pv-howto { display: flex; flex-direction: column; gap: 12px; width: 100%; background: white; border-radius: 19px; padding: 23px 20px; text-align: left; margin-top: 10px; }
+.pv-howto strong { font-size: 19px; color: #191f28; margin-bottom: 4px; }
+.pv-howto span { font-size: 16px; line-height: 1.45; color: #45556a; }
+.pv-note { color: #7f8997; font-size: 13px; line-height: 1.55; text-align: center; }
+.pv-intro .pv-note { margin: 3px auto 7px; }
+.pv-error { width: 100%; color: #b42233; font-weight: 750; font-size: 15px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: #fff0f1; }
+.pv-accept { width: 100%; display: flex; justify-content: center; align-items: center; gap: 15px; padding: 17px; background: #21865b; color: white; font-size: 19px; font-weight: 850; border-radius: 18px; min-height: 63px; }
+.pv-accept span { font-size: 24px; line-height: 1; }
+.pv-accept:disabled { opacity: .6; }
+.pv-secondary { font-size: 15px; color: #66768b; min-height: 49px; }
+.pv-call-screen { background: #101c2c; color: white; min-height: 100dvh; height: 100dvh; overflow: hidden; }
+.pv-call-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 17px 10px; height: 68px; flex-shrink: 0; }
+.pv-call-header > span { color: #a3b7d0; font-size: 14px; font-weight: 800; }
+.pv-call-header button { min-width: 48px; min-height: 45px; color: #dce9fb; background: rgba(255,255,255,.09); border-radius: 12px; padding: 6px 11px; font-size: 14px; font-weight: 750; }
+.pv-call-header button:first-child { font-size: 26px; width: 47px; }
+.pv-call-stage { display: flex; flex-direction: column; flex: 1; align-items: center; gap: 11px; padding: 10px 19px 9px; min-height: 0; overflow-y: auto; }
+.pv-call-avatar { width: 89px; height: 89px; flex-shrink: 0; background: linear-gradient(145deg, #243d61, #3977ad); border: 1px solid rgba(255,255,255,.21); border-radius: 50%; display: grid; place-items: center; }
+.pv-call-avatar img { width: 56px; height: 56px; object-fit: contain; }
+.pv-call-stage h1 { font-size: clamp(23px, 6vw, 28px); line-height: 1.4; font-weight: 850; text-align: center; }
+.pv-call-timer { font-variant-numeric: tabular-nums; font-size: 17px; letter-spacing: 1px; color: #afc5df; font-weight: 700; }
+.pv-call-speech { border-radius: 18px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.075); padding: 17px 18px; width: 100%; max-width: 360px; margin-top: 8px; min-height: 132px; display: flex; flex-direction: column; gap: 11px; }
+.pv-call-speech small { font-weight: 750; font-size: 13px; color: #94c4ff; }
+.pv-call-speech p { font-size: 18px; line-height: 1.6; color: white; font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
+.pv-transcript { width: 100%; border-radius: 12px; border: 1px solid #e1e6ed; color: #50627a; padding: 11px 13px; }
+.pv-transcript--call { color: #c1d2e5; border-color: rgba(255,255,255,.16); max-width: 360px; }
+.pv-transcript summary { cursor: pointer; min-height: 32px; font-size: 14px; font-weight: 750; line-height: 1.7; }
+.pv-transcript ol { list-style: none; display: flex; flex-direction: column; gap: 13px; margin-top: 13px; padding-left: 0; max-height: 35dvh; overflow-y: auto; }
+.pv-transcript li strong { font-size: 12px; color: #3182f6; }
+.pv-transcript--call li strong { color: #8bbcff; }
+.pv-transcript li p { font-size: 14px; line-height: 1.65; margin-top: 4px; overflow-wrap: anywhere; }
+.pv-call-controls { flex-shrink: 0; padding: 16px 18px calc(12px + env(safe-area-inset-bottom)); background: #1a2d44; border-radius: 26px 26px 0 0; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 -8px 34px rgba(0,0,0,.14); }
+.pv-call-controls .pv-note { color: #a8b9cd; font-size: 12px; }
+.pv-mic { width: 100%; min-height: 63px; border-radius: 15px; background: #f3f8ff; display: flex; align-items: center; justify-content: center; gap: 12px; color: #134f91; font-size: 19px; font-weight: 850; }
+.pv-mic span { font-size: 25px; }
+.pv-mic--active { background: #b7e7d1; color: #126a49; }
+.pv-mic:disabled { opacity: .56; }
+.pv-typed-answer { display: flex; gap: 7px; align-items: center; border: 1px solid rgba(255,255,255,.17); border-radius: 13px; background: #233a55; padding: 5px 6px 5px 13px; min-height: 50px; }
+.pv-typed-answer input { flex: 1; width: 100%; min-width: 0; background: transparent; color: white; font-size: 16px; outline: none; }
+.pv-typed-answer input::placeholder { color: #b2c3d7; }
+.pv-typed-answer button { min-height: 40px; border-radius: 10px; background: #2e72d5; color: white; padding: 6px 13px; font-size: 15px; font-weight: 800; }
+.pv-typed-answer button:disabled { opacity: .5; }
+.pv-call-actions { display: flex; gap: 9px; }
+.pv-call-actions button { flex: 1; min-width: 0; min-height: 56px; border-radius: 14px; font-size: 16px; font-weight: 850; padding: 8px 11px; line-height: 1.4; }
+.pv-hangup { background: #d63c4c; color: white; }
+.pv-verify { background: #d6e9ff; color: #15579c; }
+.pv-follow { min-height: 47px; width: 100%; border: 1px solid rgba(255,255,255,.28); border-radius: 13px; color: #dae8f7; font-size: 14px; font-weight: 750; }
+.pv-action-overlay { position: fixed; inset: 0; z-index: 55; display: flex; align-items: flex-end; justify-content: center; background: rgba(3,11,23,.63); }
+.pv-action-sheet { width: 100%; max-width: var(--screen-w); max-height: 84dvh; overflow-y: auto; background: #fff; border-radius: 25px 25px 0 0; color: #172335; padding: 25px 20px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+.pv-action-sheet h2 { font-size: 23px; font-weight: 850; }
+.pv-action-sheet > p { font-size: 15px; color: #6e7d8c; line-height: 1.5; margin-bottom: 3px; }
+.pv-action-sheet > button:not(.pv-action-cancel) { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 15px; border-radius: 14px; border: 1.5px solid #dfe6ee; background: #f9fbff; text-align: left; min-height: 72px; }
+.pv-action-sheet > button strong { font-size: 17px; color: #182b43; }
+.pv-action-sheet > button small { font-size: 13px; color: #6d7e90; line-height: 1.5; }
+.pv-action-sheet > .pv-action-cancel { color: #52647a; font-size: 16px; font-weight: 800; min-height: 50px; }
+.pv-feedback { padding-top: 32px; gap: 15px; }
+.pv-feedback-label { font-size: 13px; font-weight: 850; color: #3182f6; }
+.pv-feedback-label--caution { color: #cf3447; }
+.pv-feedback-label--incomplete { color: #b07424; }
+.pv-feedback h2 { font-size: 26px; font-weight: 850; line-height: 1.35; color: #192434; }
+.pv-feedback-main { color: #536275; font-size: 17px; line-height: 1.65; margin-bottom: 5px; }
+.pv-feedback-card { display: flex; flex-direction: column; gap: 8px; padding: 19px 18px; background: white; border-radius: 16px; }
+.pv-feedback-card strong { font-size: 16px; font-weight: 850; color: #25354a; }
+.pv-feedback-card p { font-size: 16px; line-height: 1.6; color: #526174; }
+.pv-feedback-card--lesson { background: #e8f3ff; }
+.pv-feedback-card--lesson strong { color: #1d64b8; }
+.pv-feedback-card--lesson p { color: #184f91; font-weight: 750; }
+.pv-feedback-card small { font-size: 14px; color: #536b8a; line-height: 1.6; }
+.pv-final-actions { display: flex; gap: 9px; width: 100%; margin-top: 9px; }
+.pv-final-actions .btn { min-width: 0; flex: 1; height: auto; min-height: 56px; padding: 8px 4px; }
+.pv-mic:focus-visible, .pv-accept:focus-visible, .pv-hangup:focus-visible, .pv-verify:focus-visible,
+.pv-action-sheet button:focus-visible { outline: 3px solid #6ac0ff; outline-offset: 3px; }
+@media (max-height: 720px) {
+  .pv-call-avatar { width: 61px; height: 61px; }
+  .pv-call-avatar img { width: 43px; height: 43px; }
+  .pv-call-speech { min-height: 90px; padding: 11px 14px; }
+  .pv-call-speech p { font-size: 16px; }
+  .pv-call-controls { padding-top: 11px; gap: 7px; }
+  .pv-mic { min-height: 54px; }
+}
+@media (max-width: 350px) {
+  .pv-call-controls { padding-left: 11px; padding-right: 11px; }
+  .pv-call-actions button { font-size: 14px; }
+  .pv-intro { padding-left: 16px; padding-right: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv-intro-icon, .pv-call-avatar { animation: none !important; }
+}
+
+.pv-repeat { min-height: 39px; border-radius: 10px; padding: 7px 16px; border: 1px solid rgba(255,255,255,.19); color: #c6e0ff; font-size: 14px; font-weight: 750; }
+.pv-repeat:disabled { opacity: .5; }
