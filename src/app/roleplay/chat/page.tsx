@@ -781,13 +781,18 @@ export default function RealTraining() {
           <>
             <div className={"figma-chat-reply-area" + (!replyExpanded ? " figma-chat-reply-area--collapsed" : "")}>
               <div className="figma-chat-reply-toolbar">
-                <p className="figma-chat-reply-heading">선택지를 눌러 답장을 보내보세요.</p>
+                <p className="figma-chat-reply-heading">답장 선택지</p>
                 <button type="button" className="figma-chat-reply-toggle"
                   aria-expanded={replyExpanded} aria-controls="rt-reply-collapsible"
                   aria-label={replyExpanded ? "답장 선택지 접기" : "답장 선택지 펼치기"}
+                  title={replyExpanded ? "선택지 접기" : "선택지 펼치기"}
                   onClick={() => setReplyExpanded(value => !value)}>
-                  <span>{replyExpanded ? "접기" : "펼치기"}</span>
-                  <span className="figma-chat-reply-chevron" aria-hidden="true">⌃</span>
+                  <span className="figma-chat-reply-icon" aria-hidden="true">
+                    <svg className="figma-chat-reply-chevron" viewBox="0 0 24 24"
+                      fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </span>
                 </button>
               </div>
               <div id="rt-reply-collapsible" className="figma-chat-reply-collapse"
