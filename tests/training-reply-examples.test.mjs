@@ -16,6 +16,28 @@ test("suggestions answer the latest concrete request, not a stale topic template
   assert.ok(replies.every(reply => !/보냈습니다|확인했어요/.test(reply)));
 });
 
+test("deposit explanations get follow-up replies even without sender actions", () => {
+  const messages = [
+    them("작업 재료를 택배로 보내드립니다. 재료비 보증금을 먼저 입금해 주셔야 합니다."),
+    me("왜 돈을 보내야 하나요?"),
+    them("물품만 받고 연락이 두절되는 경우가 있어 안전장치로 보증금을 받고 있습니다. 작업을 제출하면 수당과 함께 돌려드려요."),
+  ];
+  for (const topic of ["job", "team_mission"]) {
+    assert.deepEqual(trainingReplyExamples(topic, messages), [
+      "보증금 없이 진행할 수 있나요?", "보증금은 보내지 않겠습니다.",
+    ]);
+  }
+});
+
+test("follow-up suggestions do not fall back to asking why the sender contacted them", () => {
+  const replies = trainingReplyExamples("job", [
+    them("안녕하세요. 재택 일자리 안내입니다."),
+    me("어떤 일을 하는 건가요?"),
+    them("포장 업무예요. 연락이 두절되는 경우에는 다음 작업 배정이 어려워요."),
+  ]);
+  assert.ok(replies.every(reply => !/용건|연락하셨|근무 시간|급여 조건/.test(reply)));
+});
+
 test("bereavement messages produce context-appropriate sympathetic replies", () => {
   const opening = trainingReplyExamples("obituary", [them("갑작스러운 부고 소식을 전합니다.")]);
   assert.ok(opening.some(reply => /고인|빈소|부고/.test(reply)));
