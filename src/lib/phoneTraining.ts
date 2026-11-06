@@ -1,9 +1,10 @@
 /**
- * 공개된 국내 보이스피싱 경보에 나오는 범행 유형을 짧은 모의 통화로 재구성한다.
- * 아래 인물/대사는 실제 피해 기록이 아니며, 실제 번호·계좌·URL을 제공하지 않는다.
- * 핵심은 대사 내용이 아니라 통화 중 위험 요구에 대한 행동이다.
+ * 7개의 가상 전화 사건. 공개된 범행 패턴의 교육용 재구성이며 실존 계좌·번호는 없다.
+ * 통화 후 행동은 반드시 서버의 암호화된 세션 상태로 기록하고 나서 평가한다.
  */
-export type PhoneDecision = "hangup" | "official" | "family" | "sender" | "comply";
+export type PhonePostAction = "official_call" | "official_app" | "saved_family" |
+  "caller_number" | "follow_request" | "no_action";
+export type PhonePhase = "call" | "after_call" | "finished";
 export type PhoneCase = {
   id: string;
   kind: "fraud" | "legitimate";
@@ -20,16 +21,17 @@ export type PhoneCase = {
 };
 export type PhoneLine = { actor: "caller" | "me"; text: string };
 export type PhoneState = {
-  version: 1;
+  version: 2;
   scenario: string;
   createdAt: number;
-  turns: number;
-  riskPresented: boolean;
-  closed: boolean;
-  messages: PhoneLine[];
-  decision?: PhoneDecision;
+  phase: PhonePhase;
+  endedAt?: number;
+  requestObserved: boolean;
+  postActions: PhonePostAction[];
+  // 원문/음성파일은 세션에 저장하지 않는다. UI 자막은 브라우저 메모리에서만 유지한다.
 };
-export const MAX_PHONE_TURNS = 4;
+export const MAX_PHONE_TURNS = 5;
+export const MAX_POST_ACTIONS = 6;
 
 export const PHONE_CASES: readonly PhoneCase[] = [
   {
@@ -108,65 +110,103 @@ export function pickPhoneCase(recent: unknown, random: () => number = Math.rando
   const n = Math.max(0, Math.min(pool.length - 1, Math.floor(random() * pool.length)));
   return pool[n];
 }
+
+export const POST_ACTION_LABEL: Record<PhonePostAction, string> = {
+  official_call: "직접 찾은 공식 대표번호에 문의",
+  official_app: "평소 설치해 둔 공식 앱에서 조회",
+  saved_family: "저장된 가족 번호로 직접 확인",
+  caller_number: "방금 상대가 알려준 번호로 재통화",
+  follow_request: "상대가 요구한 절차를 따르기로 선택",
+  no_action: "통화 후 추가 확인 없이 마무리",
+};
 export type PhoneFeedback = {
   status: "good" | "caution" | "incomplete";
   headline: string;
   detail: string;
   lesson: string;
-  whatWasRequested: string;
-  action: string;
   shouldRemember: string;
+  whatWasRequested: string;
   identity: "fraud" | "legitimate";
   coverage: "before_request" | "request_reached";
+  actions: { label: string; safe: boolean | null; explanation: string }[];
 };
-const ACTION_LABEL: Record<PhoneDecision, string> = {
-  hangup: "통화를 직접 종료했어요",
-  official: "직접 찾은 공식 연락처로 확인했어요",
-  family: "평소 저장된 가족 연락처로 확인했어요",
-  sender: "상대방이 알려준 번호로 다시 연락했어요",
-  comply: "상대 요구에 따르기로 선택했어요",
-};
+
+export function phoneActionOutcome(c: PhoneCase, action: PhonePostAction): string {
+  if (action === "official_call" || action === "official_app") {
+    return c.kind === "fraud"
+      ? "직접 찾은 공식 경로를 확인했더니, 통화 상대가 주장한 내용에 해당하는 기록을 확인할 수 없었습니다. (가상 조회)"
+      : "공식 경로에서 일반적인 배송 또는 예약 안내를 확인했습니다. (가상 조회)";
+  }
+  if (action === "saved_family") {
+    return c.kind === "fraud" ?
+      "평소 저장된 번호로 연락하니 가족은 방금 전화를 걸거나 송금을 요청한 사실이 없다고 말합니다. (가상 통화)" :
+      "평소 저장된 가족 연락처에 직접 확인했습니다. (가상 통화)";
+  }
+  if (action === "caller_number") {
+    return "상대가 알려준 번호로 연결됐지만, 그 번호가 실제 기관의 번호인지는 확인되지 않았습니다. (가상 통화)";
+  }
+  if (action === "follow_request") {
+    return c.kind === "fraud"
+      ? c.risk === "otp" ? "인증번호를 넘긴 것으로 가정했습니다. 실제 코드나 계정 정보는 사용하지 않았습니다." :
+        "상대의 요청을 따른 것으로 가정했습니다. 실제 송금·가입·통화는 이루어지지 않았습니다."
+      : "일상적인 배송·예약 요청에 응답한 것으로 가정했습니다. 실제 변경은 일어나지 않았습니다.";
+  }
+  return "추가로 확인하지 않고 훈련을 마무리하기로 했습니다.";
+}
+
+export function allowedPhoneAction(c: PhoneCase, action: PhonePostAction): boolean {
+  return action !== "saved_family" || c.family;
+}
+
 export function evaluatePhoneCase(state: PhoneState): PhoneFeedback {
   const c = findPhoneCase(state.scenario);
-  if (!c || !state.decision) throw new Error("INVALID_PHONE_RESULT");
-  const wasRisk = state.riskPresented;
-  const independent = state.decision === "official" || state.decision === "family" && c.family;
-  const responded = state.decision === "comply";
-  const sender = state.decision === "sender";
-  const refused = state.decision === "hangup";
-  let status: PhoneFeedback["status"] = "good";
-  let headline = "스스로 확인하는 행동을 실천했어요";
-  let detail = "상대방의 말만 믿지 않고 별도 경로에서 확인하려는 선택이었습니다.";
-  if (!wasRisk && (refused || independent)) {
-    status = "incomplete";
-    headline = "통화를 중단했지만 요청 대응은 아직 평가하지 않았어요";
-    detail = "위험한 요구가 나오기 전의 선택입니다. 다음에는 실제 요구가 무엇인지 들은 뒤 어떻게 확인할지도 연습해 보세요.";
-  } else if (sender) {
-    // 설령 통화의 실제 정체가 정상이라고 해도, 발신자가 제공한 번호는
-    // 독립적인 확인 경로가 아니다. 결과를 알고 판단을 뒤집지 않는다.
+  if (!c || state.phase !== "finished" || !state.postActions.length) throw Error("INVALID_PHONE_RESULT");
+  const independent = state.postActions.some(a =>
+    a === "official_call" || a === "official_app" || a === "saved_family" && c.family);
+  const followed = state.postActions.includes("follow_request");
+  const returned = state.postActions.includes("caller_number");
+  const risky = returned || followed && c.kind === "fraud";
+  const requestObserved = state.requestObserved;
+  let status: PhoneFeedback["status"] = "incomplete";
+  let headline = "통화는 끊었지만 확인 행동은 더 연습할 수 있어요";
+  let detail = "통화 후 직접 찾은 공식 연락처나 가족의 기존 연락처를 이용해 확인하는 행동을 연습해 보세요.";
+  if (risky) {
     status = "caution";
-    headline = "상대가 알려준 번호는 독립 확인이 아니에요";
-    detail = "상대가 안내한 번호로 다시 연락하는 것만으로는 신원을 확인할 수 없어요. 내가 직접 찾은 공식 번호로 확인하세요.";
-  } else if (c.kind === "fraud" && responded) {
-    status = "caution";
-    headline = "상대방의 요구에 따라가면 위험할 수 있어요";
-    detail = c.risk === "otp"
-      ? "인증번호를 전달하면 다른 곳에서 진행 중인 로그인·인증 절차가 완료될 수 있습니다."
-      : "송금이나 절차 진행을 요구받았을 때, 먼저 통화를 종료하고 실제 기관에 독립적으로 확인해야 합니다.";
-  } else if (c.kind === "fraud" && refused) {
-    headline = "위험한 요구를 멈추는 행동을 실천했어요";
-    detail = "통화를 끝내고 실제 가족·금융기관에 직접 확인하면 더욱 안전합니다.";
-  } else if (c.kind === "legitimate") {
-    headline = independent ? "독립적인 확인 방법을 선택했어요" :
-      responded ? "일상적인 요청과 위험한 요청을 구별했어요" : "의심되는 통화는 직접 끝낼 수 있어요";
-    detail = independent ? "안내를 받은 뒤 공식 창구에서 다시 확인하는 것도 좋은 대응입니다." :
-      responded ? "이번에는 돈이나 민감정보 요구가 없는 정상적인 일정·배송 확인이었어요." :
-        "필요한 안내만 있던 일반 전화였습니다. 통화를 종료해도 문제없지만 모든 전화를 사기로 단정할 필요는 없어요.";
+    headline = "상대가 알려준 경로를 이용한 행동을 돌아보세요";
+    detail = "이후 안전한 확인을 시도했더라도, 먼저 상대의 번호를 이용하거나 요구를 따른 행동에는 위험이 남습니다.";
+  } else if (independent) {
+    status = "good";
+    headline = "전화를 끊은 뒤 직접 확인까지 실천했어요";
+    detail = "통화 중 판단을 보류하고, 상대가 제공하지 않은 독립적인 경로로 확인했습니다.";
+  } else if (c.kind === "legitimate" && followed) {
+    status = "good";
+    headline = "위험하지 않은 일상 요청에만 대응했어요";
+    detail = "이번에는 민감정보나 송금이 없는 정상적인 배송·예약 안내였습니다.";
+  } else if (requestObserved) {
+    headline = "통화를 끊는 선택은 했어요. 다음엔 별도로 확인해 보세요";
+    detail = "요청에 바로 응하지 않은 점은 좋습니다. 통화 종료 후 독립 확인까지 하면 더 확실해집니다.";
   }
+  const explanations: Record<PhonePostAction, string> = {
+    official_call: "상대가 알려준 번호가 아닌 공식 경로를 직접 찾았습니다.",
+    official_app: "통화에서 전달받은 링크 대신 평소 사용하던 공식 앱으로 확인했습니다.",
+    saved_family: "새 번호 대신 평소 저장된 가족 연락처로 확인했습니다.",
+    caller_number: "상대가 알려준 번호는 그 상대의 신원을 보장하지 않습니다.",
+    follow_request: c.kind === "fraud" ? "검증하지 않은 요구에 따라가면 위험할 수 있습니다." : "이번에는 민감정보가 필요 없는 일상 연락이었습니다.",
+    no_action: "통화를 끊은 뒤에도 별도의 확인이 필요한 상황이 있을 수 있습니다.",
+  };
+  const actions = [
+    { label: "통화를 끊음", safe: true as boolean | null, explanation: "모의 통화를 종료하고 다음 행동으로 넘어갔습니다." },
+    ...state.postActions.map(a => ({
+      label: POST_ACTION_LABEL[a],
+      safe: a === "caller_number" || a === "follow_request" && c.kind === "fraud" ? false :
+        a === "no_action" ? null : true,
+      explanation: explanations[a],
+    })),
+  ];
   return {
-    status, headline, detail, lesson: c.lesson,
-    whatWasRequested: wasRisk ? c.request : "이번 통화의 핵심 요청에 도달하기 전 종료됐습니다.",
-    action: ACTION_LABEL[state.decision], shouldRemember: c.safeAction, identity: c.kind,
-    coverage: wasRisk ? "request_reached" : "before_request",
+    status, headline, detail,
+    lesson: c.lesson, shouldRemember: c.safeAction,
+    whatWasRequested: requestObserved ? c.request : "통화에서 위험한 요청을 들었는지는 확인되지 않았습니다.",
+    identity: c.kind, coverage: requestObserved ? "request_reached" : "before_request", actions,
   };
 }
