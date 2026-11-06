@@ -22,12 +22,12 @@ export default function Home() {
         <img src="/images/logo.svg" alt="미끼주의보" width={121} height={24} />
       </div>
       <section className="hero" aria-label="추천 훈련">
-        <span className="hero__chip">추천 훈련</span>
+        <span className="hero__chip">오늘의 추천 미션</span>
         <h2 className="hero__title">{recommended?.title ?? "추천 상황을 고르는 중이에요"}</h2>
-        <p className="hero__sub">{recommended && `${recommended.description}. 어떤 행동을 할지 연습해 보세요.`}</p>
+        <p className="hero__sub">{recommended && recommended.description}</p>
         <img className="hero__bobber float" src="/images/bobber.png" alt="" />
         {recommended && (
-          <Link href={`/roleplay?topic=${recommended.id}&entry=live`} className="btn btn--primary hero__btn">추천 훈련 시작하기</Link>
+          <Link href={`/roleplay?topic=${recommended.id}&entry=live`} className="btn btn--primary hero__btn">시작하기</Link>
         )}
       </section>
       <div className="home__sections">
@@ -36,27 +36,23 @@ export default function Home() {
             <h3 className="sec__title">혼자 연습하기</h3>
             <Link href="/practice" className="sec__more">전체 보기</Link>
           </div>
-          <div className="list">
-            <Link href="/roleplay" className="list-row">
-              <span className="list-row__icon"><img src="/images/icon-chat.png" alt="" width={32} height={32} /></span>
-              <span className="list-row__text">
-                <span className="list-row__title">AI 상황극</span>
-                <span className="list-row__desc">문자·채팅 또는 AI 피싱범 전화 훈련</span>
+          <div className="grid2 home-practice-grid">
+            <Link href="/roleplay" className="tile home-practice-tile">
+              <span className="home-practice-icon home-practice-icon--chat">
+                <img src="/images/icon-chat.png" alt="" width={36} height={36} />
               </span>
-              <ChevronRight />
+              <span className="home-practice-title">AI 상황극</span>
+              <span className="home-practice-description">채팅·전화로 연습해요</span>
             </Link>
-            <Link href="/quiz" className="list-row">
-              <span className="list-row__icon">
+            <Link href="/quiz" className="tile home-practice-tile">
+              <span className="home-practice-icon home-practice-icon--quiz" aria-hidden="true">
                 <span className="ox-badges ox-badges--sm">
                   <span className="ox-badge" style={{ background: "var(--blue)" }}>O</span>
                   <span className="ox-badge" style={{ background: "var(--red)" }}>X</span>
                 </span>
               </span>
-              <span className="list-row__text">
-                <span className="list-row__title">OX 퀴즈</span>
-                <span className="list-row__desc">10문제씩 풀고 틀린 개념 복습하기</span>
-              </span>
-              <ChevronRight />
+              <span className="home-practice-title">OX 퀴즈</span>
+              <span className="home-practice-description">10문제로 실력 확인해요</span>
             </Link>
           </div>
         </section>
