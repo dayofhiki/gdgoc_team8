@@ -35,8 +35,8 @@ export function respondsToProcedure(state: TrainingState, scenario: Scenario, te
   const procedure = /수령\s*거부|반송|취소|변경|재접수|접수|보류|중단/;
   const directive = /(?:거부|반송|취소|변경|보류|중단)(?:로|으로|해|하겠|할게|부탁)|(?:안\s*받|받지\s*않)/;
   const acknowledgement = /^(?:네|예|응|그렇게 해\s*(?:주세요|줘)|부탁드려요)[.!\s]*$/;
-  if (!procedure.test(last)) return false;
-  return directive.test(text) ||
+  if (directive.test(text)) return procedure.test(last) || /처리|표시|배송|예약|발급|신청|결제/.test(last);
+  return procedure.test(last) &&
     (acknowledgement.test(text.trim()) &&
       /(?:할까요|해\s*드릴까요|원하시나요|하시겠어요)[?？]/.test(last));
 }
