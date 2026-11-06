@@ -140,6 +140,7 @@ export type TrainingState = {
   verification: "none" | "confirmed" | "failed";
   closed: boolean;
   dialogue?: DialogueMemory;
+  replyOptions?: string[];
   caseVariant?: number; // 최초 시작할 때 선택; 봉인 토큰에 저장되어 전 턴에서 동일하게 유지
   endReason?: EndReason;
 };
