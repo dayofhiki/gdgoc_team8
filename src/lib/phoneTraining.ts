@@ -281,3 +281,16 @@ export function evaluatePhoneCase(state: PhoneState): PhoneFeedback {
     identity: c.kind, coverage: requestObserved ? "request_reached" : "before_request", actions,
   };
 }
+
+
+/**
+ * Transcript-based backup for a caller's EXPLICIT final sign-off.
+ * Inspect only completed MODEL turns, never user captions. Ambiguous talk
+ * such as "끊지 마세요" or "끊으시면" must not terminate the call.
+ * The dedicated Gemini function-call signal is the preferred mechanism.
+ */
+export function callerSaidTheyHungUp(text: string): boolean {
+  const tail = text.trim().replace(/\\s+/g, " ").slice(-240);
+  const finalLine = tail.split(/[.!?]\s+/).at(-1)?.trim() ?? tail;
+  return /(?:통화(?:를|는)?\s*(?:여기서\s*)?(?:종료하겠습니다|마치겠습니다|끝내겠습니다|마칠게요|끝낼게요)|(?:전화(?:를|는)?\s*)?(?:그럼\s*|그러면\s*|이만\s*|여기서\s*|먼저\s*)*끊(?:겠습니다|을게요)|이만\s*실례하겠습니다)[.!?~\s]*$/.test(finalLine);
+}
