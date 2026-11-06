@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Header, Screen } from "@/components/ui";
 import { saveRecord } from "@/lib/records";
 import { GeminiLiveAudio, type LiveBoot } from "@/lib/geminiLiveAudio";
+import { reviewPhoneTurn } from "@/lib/phoneDialogueGuard";
 import { findPhoneCase, heardPhoneRequest, POST_ACTION_LABEL, type PhoneFeedback, type PhoneLine, type PhonePostAction } from "@/lib/phoneTraining";
 
 type Phase = "incoming" | "call" | "after_call" | "feedback";
@@ -60,6 +61,10 @@ export default function GeminiLivePhonePractice() {
   const startedAt = useRef(0);
   const observedRisk = useRef(false);
   const modelTurnCaption = useRef("");
+  const modelTurnCount = useRef(0);
+  const continuationCount = useRef(0);
+  const pendingContinuation = useRef(false);
+  const aiAudioPlaying = useRef(false);
   const busyRef = useRef(false);
   const savedRef = useRef(false);
   const [phase, setPhase] = useState<Phase>("incoming");
@@ -109,6 +114,8 @@ export default function GeminiLivePhonePractice() {
     return merged;
   }
   function stopLive() {
+    pendingContinuation.current = false;
+    aiAudioPlaying.current = false;
     live.current?.close();
     live.current = null;
     setSpeaking(false);
@@ -123,6 +130,10 @@ export default function GeminiLivePhonePractice() {
     setTranscript([]);
     setStatus("마이크와 음성 연결을 준비하는 중…");
     observedRisk.current = false;
+    modelTurnCount.current = 0;
+    continuationCount.current = 0;
+    pendingContinuation.current = false;
+    aiAudioPlaying.current = false;
     const id = ++currentRun.current;
     const client = new GeminiLiveAudio({
       onCallerHangup: () => {
@@ -152,14 +163,28 @@ export default function GeminiLivePhonePractice() {
           live.current?.setCallerMayHangUp(true);
         }
       },
-      onModelTurnComplete: () => {
-        // A spoken farewell before the scenario's key decision does not count
-        // as completed training and cannot trigger automatic hangup.
+      onModelTurnComplete: text => {
+        if (id !== currentRun.current) return;
+        modelTurnCount.current += 1;
+        const phoneCase = findPhoneCase(sessionRef.current?.caseId ?? "");
+        if (!phoneCase || observedRisk.current) return;
+        const issue = reviewPhoneTurn(phoneCase, text, modelTurnCount.current, false);
+        if (issue !== "none" && continuationCount.current < 2) {
+          pendingContinuation.current = true;
+          setStatus("대화가 이어지고 있어요.");
+          if (!aiAudioPlaying.current && live.current?.isConnected()) {
+            pendingContinuation.current = false;
+            continuationCount.current += 1;
+            live.current.sendText("네, 듣고 있습니다. 말씀을 이어 주세요.");
+          }
+        } else if (issue !== "none") {
+          setStatus("아직 필요한 요청을 듣지 못했어요. 통화를 종료해도 이후 대응을 연습할 수 있어요.");
+        }
       },
       onPrematureCallerHangup: () => {
-        if (id === currentRun.current) {
-          setStatus("통화 상대가 종료를 언급했지만 중요한 요청은 확인되지 않았어요.");
-        }
+        if (id !== currentRun.current) return;
+        if (continuationCount.current < 2) pendingContinuation.current = true;
+        setStatus("상대의 통화 종료가 실제로 진행되지 않았어요. 대화를 이어갑니다.");
       },
       onUserText: text => {
         if (id !== currentRun.current) return;
@@ -171,7 +196,17 @@ export default function GeminiLivePhonePractice() {
             : [...prev, { actor: "me" as const, text }].slice(-16);
         });
       },
-      onSpeaking: setSpeaking,
+      onSpeaking: active => {
+        if (id !== currentRun.current) return;
+        aiAudioPlaying.current = active;
+        setSpeaking(active);
+        if (!active && pendingContinuation.current && !observedRisk.current &&
+          continuationCount.current < 2 && live.current?.isConnected()) {
+          pendingContinuation.current = false;
+          continuationCount.current += 1;
+          live.current.sendText("네, 듣고 있습니다. 말씀을 이어 주세요.");
+        }
+      },
       onStatus: setStatus,
       onError: setError,
     });
@@ -291,6 +326,10 @@ export default function GeminiLivePhonePractice() {
     setMyCaption("");
     setSeconds(0);
     observedRisk.current = false;
+    modelTurnCount.current = 0;
+    continuationCount.current = 0;
+    pendingContinuation.current = false;
+    aiAudioPlaying.current = false;
   }
 
   if (phase === "incoming") return (
