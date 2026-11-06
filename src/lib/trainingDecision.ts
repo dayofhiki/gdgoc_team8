@@ -28,20 +28,24 @@ export function raisesObjection(text: string): boolean {
   return /사기|피싱|수상|의심|믿기|본인\s*맞|누구세요|(?:너|정말|진짜).{0,10}(?:맞아|맞나요|맞으세요)|신청.{0,10}(?:안|없|않)|제가.{0,8}(?:한\s*(?:거래|결제|게).{0,5}아[니닌닙]|한\s*적\s*없)|(?:원래|기존|공식).{0,12}(?:번호|앱|연락)|왜.{0,12}(?:문자|전화|안내)/.test(text);
 }
 
-/** 배송 거부는 문자 대화 종료가 아니다. 발급 취소를 빌미로 다음 단계로 넘어간다. */
-export function acceptsCardDeliveryRefusal(state: TrainingState, scenario: Scenario, text: string): boolean {
-  if (scenario.topic !== "card" || scenario.identity !== "fraud" || state.turns === 0 || /[?？]$/.test(text.trim())) return false;
-  if (/(?:수령|배송|카드).{0,8}(?:거부|반송)(?:로|으로|해|하겠|할게|부탁)|카드.{0,8}(?:안\s*받|받지\s*않)/.test(text)) return true;
+/** A response to a routine procedure advances the pretext instead of replaying the introduction. */
+export function respondsToProcedure(state: TrainingState, scenario: Scenario, text: string): boolean {
+  if (scenario.identity !== "fraud" || state.turns === 0 || /[?？]$/.test(text.trim())) return false;
   const last = state.messages.findLast(message => message.actor === "them")?.text ?? "";
-  return /^(?:네|예|응|그렇게 해\s*주세요|부탁드려요)[.!\s]*$/.test(text.trim()) &&
-    /(?:수령\s*거부|반송).{0,25}(?:할까요|해\s*드릴까요|원하시나요)[?？]/.test(last);
+  const procedure = /수령\s*거부|반송|취소|변경|재접수|접수|보류|중단/;
+  const directive = /(?:거부|반송|취소|변경|보류|중단)(?:로|으로|해|하겠|할게|부탁)|(?:안\s*받|받지\s*않)/;
+  const acknowledgement = /^(?:네|예|응|그렇게 해\s*(?:주세요|줘)|부탁드려요)[.!\s]*$/;
+  if (!procedure.test(last)) return false;
+  return directive.test(text) ||
+    (acknowledgement.test(text.trim()) &&
+      /(?:할까요|해\s*드릴까요|원하시나요|하시겠어요)[?？]/.test(last));
 }
 
 export function riskDecisionDue(state: TrainingState, scenario: Scenario, userText: string): boolean {
   const episode = caseBranch(scenario, state.caseVariant ?? 0);
   // 한 번은 새로 나온 의심을 받아 준다. 계속 의심해도 요구 시점이 무한히 밀리지는 않는다.
   const respondFirst = state.turns === episode.requestAfterTurns && raisesObjection(userText);
-  return scenario.identity === "fraud" && (acceptsCardDeliveryRefusal(state, scenario, userText) ||
+  return scenario.identity === "fraud" && (respondsToProcedure(state, scenario, userText) ||
     (state.turns >= episode.requestAfterTurns && !respondFirst)) && !state.closed && !hasConcreteRequest(state.messages) && !clearlyDisengaged(userText);
 }
 
@@ -89,7 +93,8 @@ export function replyQualityIssue(
   if (scenario.identity === "fraud" && !due && !(scenario.topic === "bank" && bankQuestionNeedsSpecifics(userText))) {
     const actorMessages = state.messages.filter(message => message.actor === "them");
     const opening = actorMessages[0]?.text;
-    if (state.turns > 0 && opening && replySimilarity(opening, reply) >= 0.60) {
+    if (state.turns > 0 && ((opening && replySimilarity(opening, reply) >= 0.60) ||
+        actorMessages.slice(1).some(message => replySimilarity(message.text, reply) >= 0.82))) {
       return "첫 안내를 다시 하지 말고 이미 진행한 절차에 이어서 응답하세요.";
     }
     if (!hasConcreteRequest(state.messages) &&
