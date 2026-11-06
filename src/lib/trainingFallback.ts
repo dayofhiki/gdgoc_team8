@@ -3,7 +3,7 @@ import { replySimilarity, type DialogueOutput } from "./trainingDialogue.ts";
 import type { Proposed } from "./trainingActions.ts";
 import { BANK_CLAIMS, caseBranch } from "./trainingCaseFacts.ts";
 import { FALLBACK_SCENE_LINES, PERSUASION_LINES } from "./trainingFallbackScenes.ts";
-import { acceptsCardDeliveryRefusal, bankQuestionNeedsSpecifics, raisesObjection, riskDecisionDue } from "./trainingDecision.ts";
+import { respondsToProcedure, bankQuestionNeedsSpecifics, raisesObjection, riskDecisionDue } from "./trainingDecision.ts";
 import { hasConcreteRequest } from "./trainingResolution.ts";
 import type { TrainingTopicId } from "./trainingCatalog.ts";
 
@@ -45,10 +45,10 @@ export function fallbackTrainingTurn(state: TrainingState, scenario: Scenario, t
   const context = specific ? bankClaim : candidates.find(unused) ?? objection;
   let reply = context;
   if (ask) {
-    const cardHandoff = beat.kind === "provide_data"
-      ? "카드는 안 받으셔도 됩니다. 다만 배송 기록을 닫으려면 수령인 확인이 먼저라서요."
-      : "네, 수령 거부로 표시할게요. 다만 카드를 안 받는 것과 발급을 취소하는 건 별개입니다.";
-    const lead = acceptsCardDeliveryRefusal(state, scenario, text) ? cardHandoff :
+    const acknowledged = scenario.topic === "family"
+      ? "응, 알겠어. 그거랑 별개로 부탁할 게 있어."
+      : "네, 말씀하신 건 전달해 둘게요. 다만 그걸로 절차가 모두 끝나는 건 아니라서요.";
+    const lead = respondsToProcedure(state, scenario, text) ? acknowledged :
       specific ? bankClaim : unused(persuasion) ? persuasion : "";
     reply = lead ? `${lead} ${beat.request}` : beat.request;
   } else if (hasRequest && !specific) {
