@@ -73,7 +73,7 @@ async function generateCallerReply(state: PhoneState, userText: string): Promise
     "당신은 한국의 보이스피싱 예방 교육을 위한 '모의 통화' 속 통화 상대입니다. 실제 대상에게 전화를 걸지 않습니다.",
     "상대는 어르신일 수 있으므로 자연스러운 한국어 구어체로 한두 문장만 말합니다. 70자 안팎, 최대 125자.",
     "통화 상대 설정: " + c.context,
-    "지금 통화 상대가 해야 할 일: " + (due ? "한 가지 핵심 요청을 짧게 전달하고 더 이상 내용을 늘리지 않는다." :
+    "지금 통화 상대가 해야 할 일: " + (due ? "상대가 방금 질문한 내용에만 한 문장으로 답한다. 돈·계좌·인증번호·전화번호·링크 요청은 뒤에서 별도로 이어지므로 말하지 않는다." :
       state.turns >= 2 ? "사용자 질문에 짧게 답하거나 부탁을 한 번만 정리한다. 반복적으로 몰아붙이지 않는다." :
         "첫 질문에 답하고 배경을 한 가지만 설명한다. 요청은 아직 꺼내지 않는다."),
     "사용자의 질문이 구체적이면 먼저 답하되, 주어지지 않은 개인 사실, 계좌, 전화번호, 업체명, 실제 링크·인증번호는 지어내지 않습니다.",
@@ -94,9 +94,12 @@ async function generateCallerReply(state: PhoneState, userText: string): Promise
     ], { maxTokens: 140, temperature: 0.75, budgetMs: 6800 }, { list: geminiFirst });
     const spoken = sanitizeSpeech(answer.value);
     if (due) {
-      // 핵심 행동 요청은 검수된 문구로 고정한다. AI는 앞뒤 대화만 변화시킨다.
-      // 한 통화에 여러 종류의 위험 행동이 섞이지 않도록 모델의 요구 문구는 사용하지 않는다.
-      return c.request;
+      // Gemini는 직전 질문에 맞는 도입문을 짧게 만들고, 위험 행동 요청은
+      // 검수된 문장 하나만 덧붙인다. 다른 사기 수법이나 실번호가 섞이면 도입을 버린다.
+      const safePreface = spoken &&
+        !/송금|이체|입금|인증번호|비밀번호|보호\s*계좌|번호로\s*(?:전화|연락)|누르세요|설치/.test(spoken) &&
+        spoken.length <= 65 && !c.request.includes(spoken);
+      return safePreface ? spoken + " " + c.request : c.request;
     }
     if (!spoken) return c.followup;
     if (c.risk !== "none" && state.turns === 0 &&
@@ -152,6 +155,7 @@ export async function POST(req: NextRequest) {
       return ok(result(decide(state, body.decision as PhoneDecision)));
     }
     if (body.action !== "turn") return fail("지원하지 않는 요청입니다.");
+    if (state.turns >= MAX_PHONE_TURNS) return fail("통화가 충분히 진행됐어요. 이제 행동을 선택해 주세요.", 409);
     if (typeof body.text !== "string" || body.text.trim().length < 1 || body.text.length > 240)
       return fail("말한 내용을 240자 이내로 입력해 주세요.");
     if (detectPii(body.text).length) return fail("실제 전화번호·계좌·주소·인증정보를 말하지 말아 주세요.");
