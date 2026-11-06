@@ -278,5 +278,5 @@ test("Live phone training blocks early model hangups and bounds neutral continua
   assert.match(page, /setCallerMayHangUp\(true\)/);
   assert.match(page, /reviewPhoneTurn\(phoneCase, text/);
   assert.match(page, /continuationCount\.current < 2/);
-  assert.match(page, /말씀을 이어 주세요/);
+  assert.match(page, /지금 해야 할 일은 무엇인가요/);
 });
