@@ -794,25 +794,17 @@ export default function RealTraining() {
       )}
       {introOpen && session && (
         <BottomSheet onClose={closeIntro}>
-          <div className="rt-intro" aria-labelledby="rt-intro-title">
+          <div className="rt-intro rt-intro--simple" aria-labelledby="rt-intro-title">
             <div className="rt-intro-icon"><TrainingPhoneIcon /></div>
-            <h2 id="rt-intro-title">문자를 받고 어떻게 할지 골라 보세요</h2>
-            <p className="rt-intro-lead">
-              답장 예시를 누르면 바로 보내요. <strong>직접 쓰기</strong>를 누르면 원하는 말을 보낼 수 있어요.
-            </p>
-            <div className="rt-intro-steps">
-              <div><strong>① 대화하기</strong><span>답장을 고르거나 직접 쓸 수 있어요.</span></div>
-              <div><strong>② 전화·앱 열기</strong><span>화면 아래에서 연락처, 전화, 앱을 사용할 수 있어요.</span></div>
-              <div><strong>③ 대화 끝내기</strong><span>그만 대응하고 싶을 때 화면 아래에서 대화를 끝낼 수 있어요.</span></div>
-            </div>
-            <p className="rt-intro-note">어떤 연락에도 필요한 행동을 직접 선택해 보세요. 실제 통화나 송금은 일어나지 않아요.</p>
+            <h2 id="rt-intro-title">가상 문자에 답장해보세요</h2>
+            <p className="rt-intro-lead">답장을 고르거나 직접 써서 보내보세요.</p>
             <label className="rt-intro-check">
               <input type="checkbox" checked={skipIntroNextTime}
                 onChange={e => setSkipIntroNextTime(e.target.checked)} />
               <span>다음부터 이 안내 보지 않기</span>
             </label>
             <button type="button" className="btn btn--primary" onClick={closeIntro}>
-              알겠어요, 훈련 시작하기
+              훈련 시작하기
             </button>
           </div>
         </BottomSheet>
