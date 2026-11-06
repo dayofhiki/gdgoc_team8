@@ -240,6 +240,7 @@ export default function PhoneTraining() {
           <span>③ 통화를 끝내거나 별도 연락처로 확인하기</span>
         </div>
         <p className="pv-note">가상의 전화입니다. 실제 전화 연결·돈 이동·개인정보 전송은 일어나지 않아요. 실제 인증번호나 계좌번호는 말하지 마세요.</p>
+        <p className="pv-note">음성 인식은 사용하는 브라우저의 서비스에서 처리할 수 있고, 인식된 말은 AI 대화 생성에 이용됩니다. 통화 녹음 파일과 대화 원문은 연습 기록에 저장하지 않아요.</p>
         {error && <p className="pv-error" role="alert">{error}</p>}
         <button type="button" className="pv-accept" disabled={busy} onClick={() => void acceptCall()}>
           {busy ? "전화 연결 중…" : "전화 받기"} <span aria-hidden="true">☎</span>
