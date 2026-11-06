@@ -12,7 +12,7 @@ const hits = new Map<string, { count: number; since: number }>();
 const actions: PhonePostAction[] = [
   "official_call", "official_app", "saved_family", "caller_number", "follow_request", "no_action",
 ];
-const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL?.trim() || "gemini-3.1-flash-live-preview";
+const LIVE_MODEL = (process.env.GEMINI_LIVE_MODEL?.trim() || "gemini-3.1-flash-live-preview").replace(/^models\//, "");
 const LIVE_WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.";
 const LIVE_WS_METHOD = ".GenerativeService.BidiGenerateContentConstrained";
 
@@ -120,14 +120,15 @@ async function issueLiveToken(): Promise<IssuedToken> {
     uses: 1,
     expireTime: new Date(now + 15 * 60_000).toISOString(),
     newSessionExpireTime: new Date(now + 60_000).toISOString(),
-    liveConnectConstraints: {
-      // 공식 SDK 예시는 bare model ID를 사용한다. models/ 접두사를 붙이지 않는다.
-      model: LIVE_MODEL,
-      config: { responseModalities: ["AUDIO"] },
+    // The SDK's liveConnectConstraints is converted to this shape on the wire.
+    bidiGenerateContentSetup: {
+      model: "models/" + LIVE_MODEL,
+      generationConfig: { responseModalities: ["AUDIO"] },
     },
+    fieldMask: "model,generationConfig.responseModalities",
   };
   let last: ProviderTokenError | null = null;
-  // 토큰 API 버전은 문서 버전과 배포 리전에 따라 다를 수 있어 공식 예시 순서로 점검한다.
+  // Prefer the SDK endpoint; only fall back if the endpoint is unavailable.
   for (const version of ["v1alpha", "v1beta"] as const) {
     let response: Response;
     try {
@@ -158,7 +159,7 @@ async function issueLiveToken(): Promise<IssuedToken> {
     last = { status: response.status, ...error };
     // Never log credentials or the raw provider response body.
     console.error("Live token request rejected", { version, httpStatus: response.status, ...error });
-    if (response.status !== 400 && response.status !== 404 && response.status !== 405) break;
+    if (response.status !== 404 && response.status !== 405) break;
   }
   if (!last) throw Error("LIVE_UNAVAILABLE");
   if (last.status === 401) throw Error("LIVE_AUTH");
