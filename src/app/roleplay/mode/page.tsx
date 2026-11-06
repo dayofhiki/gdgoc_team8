@@ -1,35 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "@/components/Icons";
 import { BottomCTA, Header, Screen } from "@/components/ui";
 
 const OPTIONS = [
-  { title: "실전 훈련", subtitle: "무작위로 상황이 선정돼요.", image: "/images/icon-chat.png", path: "/roleplay/chat" },
-  { title: "상황별 연습", subtitle: "연습하고 싶은 상황을 골라요.", image: "/images/fish-ox.png", path: "/roleplay/select" },
+  {
+    title: "문자·채팅 훈련",
+    subtitle: "문자를 주고받고, 휴대전화로 직접 대응해요.",
+    image: "/images/icon-chat.png",
+    path: "/roleplay/chat",
+    start: "채팅 훈련 시작하기",
+  },
+  {
+    title: "AI 피싱범 전화 훈련",
+    subtitle: "목소리로 대응하고, 끊은 뒤에도 행동을 연습해요.",
+    image: "/images/icon-phone.png",
+    path: "/roleplay/phone",
+    start: "전화 훈련 시작하기",
+  },
 ] as const;
 
 export default function RoleplayMode() {
   const router = useRouter();
   const [selected, setSelected] = useState<(typeof OPTIONS)[number]["path"]>("/roleplay/chat");
-  useEffect(() => {
-    if (window.history.state?.mikkiMode === "/roleplay/select") setSelected("/roleplay/select");
-  }, []);
-  const start = () => {
-    window.history.replaceState({ ...window.history.state, mikkiMode: selected }, "");
-    router.push(selected);
-  };
+  const choice = OPTIONS.find(option => option.path === selected) ?? OPTIONS[0];
   return (
     <Screen>
-      <Header title="AI 상황극" back="/roleplay" />
+      <Header title="AI 상황극" back="/home" />
       <section className="screen__body figma-mode">
         <div className="figma-mode-heading">
-          <span className="figma-kicker">가족·지인 사칭 미션</span>
-          <h2>어떤 방식으로<br />연습해 볼까요?</h2>
-          <p>선택해서 답장하거나 직접 답장할 수 있어요. 문자·전화·앱을 통해 실제 상황에서 어떻게 선택해야 할지 연습해 보세요.</p>
+          <h2>어떤 상황극으로<br />연습해 볼까요?</h2>
+          <p>문자를 주고받거나 AI 피싱범과 통화해 보세요. 위험한 요구에 직접 대응하고, 그 뒤 행동까지 돌아볼 수 있어요.</p>
         </div>
-        <div className="figma-mode-list" role="radiogroup" aria-label="연습 방식">
+        <div className="figma-mode-list" role="radiogroup" aria-label="AI 상황극 방식">
           {OPTIONS.map(option => (
             <button key={option.path} type="button" role="radio" aria-checked={selected === option.path}
               className={"figma-mode-item" + (selected === option.path ? " figma-mode-item--selected" : "")}
@@ -42,11 +47,17 @@ export default function RoleplayMode() {
             </button>
           ))}
         </div>
-        <p className="figma-mode-disclaimer">ⓘ 모든 대화는 가상입니다. 실제 송금·통화·개인정보 전송은 일어나지 않아요.</p>
+        {selected === "/roleplay/chat" && (
+          <button type="button" className="figma-mode-topic-link"
+            onClick={() => router.push("/roleplay/select")}>
+            연습할 문자 상황을 직접 고르기 <ChevronRight size={18} />
+          </button>
+        )}
+        <p className="figma-mode-disclaimer">ⓘ 모든 대화와 행동은 가상입니다. 실제 송금, 외부 통화, 개인정보 전송은 일어나지 않아요.</p>
       </section>
       <BottomCTA>
-        <button type="button" className="btn btn--primary" onClick={start}>
-          {selected === "/roleplay/chat" ? "채팅으로 시작하기" : "상황 고르기"}
+        <button type="button" className="btn btn--primary" onClick={() => router.push(choice.path)}>
+          {choice.start}
         </button>
       </BottomCTA>
     </Screen>
