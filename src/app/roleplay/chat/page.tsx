@@ -96,7 +96,9 @@ function rememberCase(topic?: TrainingTopicId, variant?: number) {
   if (!topic || variant === undefined || !Number.isInteger(variant)) return;
   try {
     const history = recentCases();
-    history[topic] = [...(history[topic] ?? []).filter(i => i !== variant), variant].slice(-8);
+    const previous = history[topic] ?? [];
+    delete history[topic]; // Keep the most recently played topic last across categories.
+    history[topic] = [...previous.filter(i => i !== variant), variant].slice(-8);
     sessionStorage.setItem(RECENT_CASES_KEY, JSON.stringify(history));
   } catch { /* 저장소가 꺼져도 훈련은 정상 진행 */ }
 }
