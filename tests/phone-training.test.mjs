@@ -55,6 +55,14 @@ test("stopping before hearing the request never earns full safe-action credit", 
   assert.equal(late.status, "good");
 });
 
+test("caller-supplied callback number is never treated as independent verification", () => {
+  const normal = evaluatePhoneCase(state("normal_delivery", "sender"));
+  const fake = evaluatePhoneCase(state("card_return", "sender"));
+  assert.equal(normal.status, "caution");
+  assert.equal(fake.status, "caution");
+  assert.match(normal.detail, /직접 찾은 공식 번호/);
+});
+
 test("legitimate appointments are not incorrectly graded as phishing", () => {
   const result = evaluatePhoneCase(state("normal_appointment", "comply"));
   assert.equal(result.status, "good");
