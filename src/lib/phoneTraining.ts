@@ -271,7 +271,7 @@ export function evaluatePhoneCase(state: PhoneState): PhoneFeedback {
     ? { label: "상대가 먼저 전화를 끊음", safe: null as boolean | null, explanation: "발신자가 통화를 종료했습니다. 사용자의 통화 종료 행동으로 채점하지 않습니다." }
     : state.endedBy === "connection"
       ? { label: "음성 연결이 끊김", safe: null as boolean | null, explanation: "음성 연결이 예기치 않게 종료됐습니다. 이 자체는 안전 행동으로 평가하지 않습니다." }
-      : { label: "통화를 직접 끊음", safe: true as boolean | null, explanation: "직접 통화를 끝내고 다음 행동으로 넘어갔습니다." };
+      : { label: "통화를 끊음", safe: true as boolean | null, explanation: "직접 통화를 끝내고 다음 행동으로 넘어갔습니다." };
   if (independent && (state.endedBy === "caller" || state.endedBy === "connection") && !risky) {
     headline = "통화 종료 뒤 독립적으로 확인했어요";
     detail = "누가 먼저 전화를 끊었는지와 별개로, 이후 직접 찾은 경로에서 확인한 행동이 중요합니다.";
