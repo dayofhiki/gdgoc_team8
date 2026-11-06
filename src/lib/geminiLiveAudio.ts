@@ -117,6 +117,9 @@ export class GeminiLiveAudio {
     if (!boot.liveToken || !boot.liveEndpoint.startsWith("wss://generativelanguage.googleapis.com/"))
       throw Error("AI 음성 연결 정보가 유효하지 않아요.");
     const ws = new WebSocket(boot.liveEndpoint + "?access_token=" + encodeURIComponent(boot.liveToken));
+    // Gemini can send JSON as a binary WebSocket frame.
+    ws.binaryType = "arraybuffer";
+    const decoder = new TextDecoder();
     this.socket = ws;
     await new Promise<void>((resolve, reject) => {
       const timeout = window.setTimeout(() => reject(Error("AI 음성 연결 시간이 초과됐어요.")), 12_000);
@@ -129,7 +132,8 @@ export class GeminiLiveAudio {
       ws.onmessage = event => {
         if (this.closed) return;
         try {
-          const wire: LiveWireMessage = JSON.parse(event.data as string);
+          const data = event.data as string | ArrayBuffer;
+          const wire: LiveWireMessage = JSON.parse(typeof data === "string" ? data : decoder.decode(data));
           if (wire.setupComplete && !this.ready) {
             this.ready = true;
             cleanup();
