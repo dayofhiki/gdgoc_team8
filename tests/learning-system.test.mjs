@@ -277,6 +277,10 @@ test("chat response choices expand and collapse independently of phone and end-c
   const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
   assert.match(chat, /const \[replyExpanded, setReplyExpanded\] = useState\(true\)/);
   assert.match(chat, /className="figma-chat-reply-toggle"/);
+  assert.match(chat, /className="figma-chat-reply-heading">답장 선택지/);
+  assert.match(chat, /className="figma-chat-reply-icon"/);
+  assert.match(chat, /<svg className="figma-chat-reply-chevron"/);
+  assert.doesNotMatch(chat, /<span>\{replyExpanded \? "접기" : "펼치기"\}<\/span>/);
   assert.match(chat, /aria-expanded=\{replyExpanded\}/);
   assert.match(chat, /aria-controls="rt-reply-collapsible"/);
   assert.match(chat, /onClick=\{\(\) => setReplyExpanded\(value => !value\)\}/);
@@ -289,5 +293,8 @@ test("chat response choices expand and collapse independently of phone and end-c
   assert.match(css, /grid-template-rows:\s*0fr/);
   assert.match(css, /transition: grid-template-rows/);
   assert.match(css, /figma-chat-reply-chevron/);
+  assert.match(css, /figma-chat-reply-icon/);
+  assert.match(css, /width: 44px; height: 44px/);
+  assert.match(css, /width: 32px; height: 32px/);
   assert.match(css, /prefers-reduced-motion: reduce/);
 });
