@@ -25,6 +25,7 @@ type Session = {
   caseVariant?: number;
   title?: string;
   messages: Message[];
+  replyOptions?: string[];
   turns: number;
   maxTurns: number;
   verified: boolean;
@@ -301,6 +302,7 @@ export default function RealTraining() {
       if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       setSession({ ...next, title: session.title, topic: session.topic });
       setPendingMessage(null);
+      setWriteReply(false);
       // 정체/위험도를 추측하지 않고, 방금 등장한 구체적 행동 요청이나 사용자의
       // 외부 확인 의사만 참고한다. 단순히 두 턴 지났다는 이유로 정답 힌트를 주지 않는다.
       const latestActorReply = [...next.messages].reverse().find(m => m.actor === "them");
@@ -633,7 +635,9 @@ export default function RealTraining() {
   const transferRequests: PhoneTransferRequest[] = panelActions.filter(({ action }) => action.kind === "transfer");
   const senderPhoneRequests: PhoneTransferRequest[] = panelActions.filter(({ action }) =>
     action.kind === "phone" && action.origin === "sender");
-  const examples = session && !session.closed ? trainingReplyExamples(phoneTopic, session.messages) : [];
+  const examples = session && !session.closed
+    ? session.replyOptions ?? trainingReplyExamples(phoneTopic, session.messages)
+    : [];
   const activeLink = previewIndex !== null ? session?.messages[previewIndex]?.actions?.find(a => a.id === previewActionId)?.linkPreview : undefined;
 
   return (
