@@ -141,14 +141,18 @@ export function evaluatePhoneCase(state: PhoneState): PhoneFeedback {
     status = "incomplete";
     headline = "통화를 중단했지만 요청 대응은 아직 평가하지 않았어요";
     detail = "위험한 요구가 나오기 전의 선택입니다. 다음에는 실제 요구가 무엇인지 들은 뒤 어떻게 확인할지도 연습해 보세요.";
-  } else if (c.kind === "fraud" && (responded || sender)) {
+  } else if (sender) {
+    // 설령 통화의 실제 정체가 정상이라고 해도, 발신자가 제공한 번호는
+    // 독립적인 확인 경로가 아니다. 결과를 알고 판단을 뒤집지 않는다.
+    status = "caution";
+    headline = "상대가 알려준 번호는 독립 확인이 아니에요";
+    detail = "상대가 안내한 번호로 다시 연락하는 것만으로는 신원을 확인할 수 없어요. 내가 직접 찾은 공식 번호로 확인하세요.";
+  } else if (c.kind === "fraud" && responded) {
     status = "caution";
     headline = "상대방의 요구에 따라가면 위험할 수 있어요";
-    detail = sender
-      ? "상대가 알려준 번호에 다시 연락하는 것은 독립적인 확인이 아닙니다."
-      : c.risk === "otp"
-        ? "인증번호를 전달하면 다른 곳에서 진행 중인 로그인·인증 절차가 완료될 수 있습니다."
-        : "송금이나 절차 진행을 요구받았을 때, 먼저 통화를 종료하고 실제 기관에 독립적으로 확인해야 합니다.";
+    detail = c.risk === "otp"
+      ? "인증번호를 전달하면 다른 곳에서 진행 중인 로그인·인증 절차가 완료될 수 있습니다."
+      : "송금이나 절차 진행을 요구받았을 때, 먼저 통화를 종료하고 실제 기관에 독립적으로 확인해야 합니다.";
   } else if (c.kind === "fraud" && refused) {
     headline = "위험한 요구를 멈추는 행동을 실천했어요";
     detail = "통화를 끝내고 실제 가족·금융기관에 직접 확인하면 더욱 안전합니다.";
