@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PHONE_CASES, MAX_PHONE_TURNS, MAX_POST_ACTIONS, evaluatePhoneCase,
-  findPhoneCase, allowedPhoneAction, availablePhoneActions, heardPhoneRequest, phoneActionOutcome, pickPhoneCase } from "../src/lib/phoneTraining.ts";
+  findPhoneCase, allowedPhoneAction, availablePhoneActions, heardPhoneRequest, callerSaidTheyHungUp,
+  phoneActionOutcome, pickPhoneCase } from "../src/lib/phoneTraining.ts";
 
 function completed(scenario, postActions, requestObserved = true) {
   return {
@@ -178,4 +179,58 @@ test("training presentation hides Gemini Live technology branding and clarifies 
   assert.match(server, /PHONE_REQUEST/);
   assert.match(client, /realtimeInput: \{ text \}/);
   assert.doesNotMatch(client, /clientContent: \{ turns:/);
+});
+
+test("simulated caller signs off only on an explicit FINAL model statement", () => {
+  for (const line of [
+    "알겠습니다. 통화 종료하겠습니다.",
+    "그럼 여기서 끊겠습니다.",
+    "네, 이만 끊을게요.",
+    "통화를 여기서 마치겠습니다.",
+  ]) assert.equal(callerSaidTheyHungUp(line), true, line);
+  for (const line of [
+    "꺼져 그냥",
+    "지금은 통화를 끊지 마세요.",
+    "통화 종료한다고 말하면 안 됩니다.",
+    "제가 안내한 번호로 연락하면 통화가 종료됩니다.",
+    "끊으시면 접수가 안 됩니다.",
+    "통화를 종료하시겠어요?",
+  ]) assert.equal(callerSaidTheyHungUp(line), false, line);
+});
+
+test("Live fraudster persona challenges a first rejection and signals genuine disconnect via tool", () => {
+  const server = readFileSync(new URL("../src/app/api/phone-training/route.ts", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../src/lib/geminiLiveAudio.ts", import.meta.url), "utf8");
+  const ui = readFileSync(new URL("../src/app/roleplay/phone/page.tsx", import.meta.url), "utf8");
+  assert.match(server, /꺼져 그냥/);
+  assert.match(server, /첫.+거절|거절이나 짜증을 처음 받으면/);
+  assert.match(server, /한 번의 설득/);
+  assert.match(server, /end_training_call/);
+  assert.match(server, /functionDeclarations:/);
+  assert.match(client, /wire\.toolCall/);
+  assert.match(client, /toolResponse:/);
+  assert.match(client, /functionResponses:/);
+  assert.match(client, /callerSaidTheyHungUp\(this\.modelTurnText\)/);
+  assert.match(client, /private requestCallerHangup\(/);
+  assert.match(client, /private finishCallerHangup\(/);
+  assert.match(client, /this\.callbacks\.onCallerHangup\(\)/);
+  assert.match(client, /this\.callbacks\.onConnectionClosed\(\)/);
+  assert.match(ui, /onCallerHangup: \(\) =>/);
+  assert.match(ui, /void hangUp\("caller"\)/);
+  assert.match(ui, /void hangUp\("connection"\)/);
+  assert.match(ui, /phase === "after_call"/);
+  assert.match(server, /endedBy/);
+});
+
+test("AI hangup and network loss are not falsely credited as a user's decision to disconnect", () => {
+  const auto = evaluatePhoneCase({ ...completed("card_return", ["official_call"]), endedBy: "caller" });
+  const interrupted = evaluatePhoneCase({ ...completed("card_return", ["no_action"]), endedBy: "connection" });
+  const manual = evaluatePhoneCase({ ...completed("card_return", ["official_call"]), endedBy: "user" });
+  assert.equal(auto.status, "good");
+  assert.match(auto.actions[0].label, /상대가 먼저/);
+  assert.equal(auto.actions[0].safe, null);
+  assert.match(interrupted.actions[0].label, /연결이 끊김/);
+  assert.equal(interrupted.actions[0].safe, null);
+  assert.match(manual.actions[0].label, /직접 끊음/);
+  assert.equal(manual.actions[0].safe, true);
 });
