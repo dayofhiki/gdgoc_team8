@@ -35,7 +35,7 @@ test("action scoring distinguishes independent official checks from caller-suppl
   const trapped = evaluatePhoneCase(state("card_return", "sender"));
   assert.equal(safe.status, "good");
   assert.equal(trapped.status, "caution");
-  assert.match(trapped.detail, /독립적/);
+  assert.match(trapped.detail, /직접 찾은 공식 번호/);
   assert.equal(safe.identity, "fraud");
   assert.equal(safe.coverage, "request_reached");
 });
